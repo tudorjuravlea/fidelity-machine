@@ -1,0 +1,5 @@
+node_modules/
+.render/
+.report/
+*.log
+.DS_Store

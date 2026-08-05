@@ -1,0 +1,854 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "design-lock.schema.json",
+  "title": "design-lock.json — frozen single source of truth for one design-system skill",
+  "description": "One-way derived from the design-system source (Figma MCP capture or reference images). NEVER hand-edited downstream: to change a token, screen, or threshold, edit the lock and re-derive tokens.css / tailwind fragment / renders. Scripts read this file; the model reads this file; nothing else is authoritative.",
+  "type": "object",
+  "required": [
+    "meta",
+    "tokens",
+    "fonts",
+    "screens",
+    "caps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "name",
+        "capturedAt",
+        "chromiumBuild"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Design-system name, e.g. 'acme-banking'"
+        },
+        "figmaProject": {
+          "type": "string",
+          "description": "Figma project URL (informational — not consumable by MCP tools)"
+        },
+        "figmaFiles": {
+          "type": "array",
+          "description": "Node-specific sources actually captured",
+          "items": {
+            "type": "object",
+            "required": [
+              "fileKey"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "fileKey": {
+                "type": "string"
+              },
+              "nodeIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\d+[:-]\\d+$"
+                }
+              },
+              "role": {
+                "enum": [
+                  "tokens",
+                  "components",
+                  "screens"
+                ]
+              }
+            }
+          }
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date"
+        },
+        "chromiumBuild": {
+          "type": "string",
+          "description": "Pinned Playwright Chromium build id used for ALL renders and any self-rendered references, e.g. 'chromium-1228'. A build change invalidates the noise-floor calibration."
+        },
+        "noiseFloorPct": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Measured irreducible diff (identical-content control render). Thresholds must sit above this. Set by scripts/verify.mjs --calibrate."
+        },
+        "provenance": {
+          "type": "object",
+          "description": "Derivation receipt written by scripts/capture-figma.mjs after emitting the derived token artifacts (CONTRACT.md §Provenance). When present, adherence-lint re-derives every hash offline: a mismatch means a derived artifact was hand-edited or the lock's tokens drifted after derivation. Optional — a lock without it predates the chain (single WARN, never a hard failure).",
+          "additionalProperties": false,
+          "required": [
+            "generatedAt",
+            "lockTokensHash",
+            "artifacts"
+          ],
+          "properties": {
+            "generatedAt": {
+              "type": "string",
+              "description": "ISO-8601 timestamp of the derive run."
+            },
+            "lockTokensHash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "description": "sha256 of the canonically serialized tokens section at derive time."
+            },
+            "artifacts": {
+              "type": "object",
+              "description": "lock-relative artifact path → sha256 of its bytes at derive time.",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "description": "The token layer, derived from Figma get_variable_defs (or reference tear-down). Emitted one-way into assets/tokens.css and assets/tailwind.tokens.cjs by the capture flow — hand-editing those outputs is banned.",
+      "required": [
+        "colors"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "type": "object",
+          "required": [
+            "light"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/semanticColors"
+            },
+            "dark": {
+              "$ref": "#/$defs/semanticColors"
+            }
+          }
+        },
+        "spacing": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "The complete allowed spacing scale in px. Any spacing value not in this list is drift."
+        },
+        "radii": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "role → px, e.g. control: 6, container: 12"
+        },
+        "typography": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "family",
+              "sizePx",
+              "weight",
+              "lineHeight"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "family": {
+                "type": "string"
+              },
+              "sizePx": {
+                "type": "number"
+              },
+              "weight": {
+                "type": "integer"
+              },
+              "lineHeight": {
+                "type": "number"
+              },
+              "letterSpacingEm": {
+                "type": "number"
+              }
+            }
+          },
+          "description": "role (display|heading|subheading|body|body-sm|caption|label) → spec. Roles are the 7-name scale; never invent alternates."
+        },
+        "elevation": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "level → exact box-shadow string. Pick ONE strategy; never mix."
+        },
+        "motion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "durationsMs": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "easings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "componentMap": {
+      "type": "object",
+      "description": "figmaNodeId → verified library component (self-bootstrapped Phase A, or Code Connect). Presence here routes a node to Mode A.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "importPath",
+          "componentName"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "importPath": {
+            "type": "string"
+          },
+          "componentName": {
+            "type": "string"
+          },
+          "propMapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "variantProps": {
+            "type": "object",
+            "description": "Variant prop name -> allowed values (array of strings) OR the single pinned/verified value (string or boolean, matching Figma variant/boolean props).",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          "sourceSha": {
+            "type": "string",
+            "description": "Git SHA (or content hash) of the component source at verification time. Drift vs current → staleness warning; Mode A must re-confirm against a fresh reference."
+          },
+          "verifiedDiffPct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "globalPct achieved when this component last passed its pixel gate; explicit null = not yet verified."
+          },
+          "componentKey": {
+            "type": "string",
+            "description": "Figma library componentKey captured at verification time (library-lineage scoped — re-resolve live per target file before any push)."
+          },
+          "verifiedAt": {
+            "type": "string",
+            "description": "Date of the last passed component pixel gate."
+          },
+          "fixtureScreen": {
+            "description": "Verification fixture screen id, or an object describing the fixture binding."
+          },
+          "coverage": {
+            "type": "string",
+            "description": "Which variants/states the verification covered."
+          },
+          "verifiedWorstTile": {
+            "type": "number",
+            "description": "Worst tile fraction at the last passed gate."
+          },
+          "diagnosis": {
+            "type": "string",
+            "description": "Honest note on residual diff sources when not fully converged."
+          },
+          "verifiedAgainstNode": {
+            "type": "string",
+            "description": "Figma nodeId the verification reference came from."
+          },
+          "specBuilt": {
+            "type": "boolean",
+            "description": "Anatomy spec exists in components/."
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Component passed its pixel gate."
+          },
+          "lastNumbers": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Last gate numbers {globalPct, worstTile, rounds}; explicit null = not yet verified.",
+            "additionalProperties": true
+          },
+          "notConverged": {
+            "type": "boolean",
+            "description": "True when the component ships below its cap with a diagnosis — reported honestly, never silently."
+          }
+        }
+      }
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "family",
+          "files",
+          "fontChecks"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "family": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths to bundled woff2 files, relative to the lock"
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "fontChecks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "document.fonts.check() strings render.mjs must assert before shooting, e.g. '700 48px \"Brand Sans\"'"
+          }
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "mode",
+          "captureWidth",
+          "captureHeight",
+          "dpr",
+          "colorScheme",
+          "url"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "A",
+              "B1",
+              "B2"
+            ],
+            "description": "A = composed from verified componentMap; B1 = generated from tokens with Figma geometry ground truth; B2 = generated from tokens with image-only reference (no geometry gate; mandatory human worst-region review)"
+          },
+          "referenceImage": {
+            "type": "string",
+            "description": "Path to the reference PNG. Provenance rule: must come from Figma's renderer (get_screenshot at original_* dims) or a real branded capture — NEVER from our own Chromium render of generated output (both-fell-back hole), except for the calibration control screen."
+          },
+          "captureWidth": {
+            "type": "integer"
+          },
+          "captureHeight": {
+            "type": "integer"
+          },
+          "dpr": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "colorScheme": {
+            "enum": [
+              "light",
+              "dark"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "URL (or file:// path) render.mjs loads. Page must set [data-render-ready] when settled."
+          },
+          "clip": {
+            "$ref": "#/$defs/rect"
+          },
+          "maskedRegions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "rect",
+                "reason"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "rect": {
+                  "$ref": "#/$defs/rect"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 8
+                }
+              }
+            },
+            "description": "Dynamic-content rects zeroed in BOTH buffers before diffing. reason is required; total masked area is budget-capped by the lint (≤15% of frame)."
+          },
+          "figIds": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "figmaNodeId",
+                "domId"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "figmaNodeId": {
+                  "type": "string"
+                },
+                "domId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "DOM id carrying data-fig-id; explicit null on component-fixture screens (the fixture IS the component — no sub-region)."
+                },
+                "rect": {
+                  "$ref": "#/$defs/rect",
+                  "description": "Ground-truth CSS-px rect from Figma get_metadata (modes A/B1)"
+                }
+              }
+            }
+          },
+          "passThreshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Max globalPct (0–1). Hard-capped by caps.maxPassThreshold per mode — the lint refuses a looser value."
+          },
+          "tileCeiling": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Max per-64px-tile diff density (0–1). Catches concentrated failures a global average hides."
+          },
+          "geometryTolerancePx": {
+            "type": "number",
+            "description": "Max |Δ| per box edge for geometry.mjs (modes A/B1)"
+          },
+          "stateContract": {
+            "type": "string",
+            "description": "Which state/variant this frame represents (empty vs populated, logged-in vs out). Prevents state-mismatch false diffs."
+          },
+          "locales": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Locales this screen must render without overflow; verify runs the LONGEST one. Default from content.locales."
+          },
+          "lockedStrings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Content lock (CONTRACT.md §Content lock): strings that must each appear VERBATIM in this screen's visible source text, in this relative order. The content gate for referenceless/net-new screens — pixel gates only protect screens WITH a reference. Enforced by adherence-lint (section 'content-lock'): absent → no finding; present and violated → ERROR."
+          },
+          "netNew": {
+            "type": "boolean",
+            "description": "True marks a net-new screen: designed in-system with NO external reference (CONTRACT.md §Content lock). Drops the referenceImage/passThreshold/tileCeiling requirements. Such screens participate in adherence-lint (content-lock, disclosures, source adherence) and render, but the pixel/geometry gates and verify.mjs are not defined for them — gates 1–2 plus visual review carry them, reported plainly."
+          },
+          "notConverged": {
+            "type": "boolean",
+            "description": "Screen ships not-converged (CONTRACT loop discipline): report the residual plainly, never loosen the cap."
+          },
+          "lastResult": {
+            "type": "object",
+            "description": "Last verify numbers {globalPct, worstTile, maskedPct, rounds, verifiedAt}.",
+            "additionalProperties": true
+          },
+          "diagnosis": {
+            "type": "string",
+            "description": "Residual-diff diagnosis for a not-converged screen."
+          },
+          "note": {
+            "type": "string",
+            "description": "Free working note on the screen."
+          }
+        },
+        "if": {
+          "not": {
+            "required": [
+              "netNew"
+            ],
+            "properties": {
+              "netNew": {
+                "const": true
+              }
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "referenceImage": {},
+            "passThreshold": {},
+            "tileCeiling": {}
+          },
+          "required": [
+            "referenceImage",
+            "passThreshold",
+            "tileCeiling"
+          ]
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "Microcopy layer (plan Part 5). Banking overlay values are DRAFTS pending Legal/Compliance — anything in disclosureInventory ships flagged, never silently.",
+      "additionalProperties": false,
+      "properties": {
+        "voiceChart": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "concept",
+              "do",
+              "dont"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "concept": {
+                "type": "string"
+              },
+              "characteristics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "do": {
+                "type": "string"
+              },
+              "dont": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "e.g. ['ro', 'en'] — first entry is the native/primary copy language"
+        },
+        "register": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ro": {
+              "enum": [
+                "tu",
+                "dvs"
+              ]
+            },
+            "legalRo": {
+              "enum": [
+                "impersonal"
+              ]
+            }
+          }
+        },
+        "formats": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "decimal": {
+              "type": "string"
+            },
+            "thousands": {
+              "type": "string"
+            },
+            "currencyMicrocopy": {
+              "type": "string"
+            },
+            "currencyLegal": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "time": {
+              "enum": [
+                "24h",
+                "12h"
+              ]
+            }
+          }
+        },
+        "bannedJargon": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "term",
+                "replacement"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "term": {
+                  "type": "string"
+                },
+                "replacement": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "description": "locale → [{term, replacement}]. Literal blocklist greps for adherence-lint; a hit blocks with the suggested replacement."
+        },
+        "disclosureInventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "flow",
+              "mustContain"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "flow": {
+                "type": "string",
+                "description": "Screen id or flow name"
+              },
+              "mustContain": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Substrings/patterns whose ABSENCE blocks the content gate (fees, DAE/APR, retention, consent). ⚠ Legal: drafts, never machine-paraphrased."
+              }
+            }
+          }
+        },
+        "diacritics": {
+          "type": "boolean",
+          "description": "false = the target backend REJECTS locale special characters (e.g. Romanian comma-below): generated copy must be plain-ASCII and the ro-diacritics lint check inverts to ERROR on any special character. Absent/true = full diacritics expected."
+        }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule"
+        ],
+        "description": "Optional `when`: a precondition regex — the grep is only enforced in screen-source files matching it (e.g. 'data-chart' scopes chart rules to screens containing charts). Absent = unconditional.",
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "A non-optional signature treatment — break it and the output stops reading as this system"
+          },
+          "grep": {
+            "type": "string",
+            "description": "Optional literal/regex check adherence-lint can run mechanically"
+          },
+          "when": {
+            "type": "string",
+            "description": "Precondition regex scoping the grep to matching screen-source files; no matching files = signature out of scope, not violated"
+          }
+        }
+      }
+    },
+    "donts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden": {
+      "type": "object",
+      "description": "Values that must NEVER appear in generated source — plausible substitutes from adjacent brands (a lookalike font family, a near-miss hex). The tokens section says what to use; this says what a convincing-but-wrong output would use. Enforced by adherence-lint (section 'forbidden-substitutes'); absent → silent.",
+      "additionalProperties": false,
+      "properties": {
+        "fontFamilies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Font family names banned from generated source."
+        },
+        "hexColors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Hex color strings banned from generated source."
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Durable ledger of user mandates and interpretations (CONTRACT.md §Decisions ledger). Every ruling that shapes generation is recorded as a DEC-* entry, never only as prose. Superseded entries are marked deprecated, never deleted.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "scope",
+          "decision",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^DEC-",
+            "description": "Stable ledger id, e.g. 'DEC-001'."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD the decision was made."
+          },
+          "scope": {
+            "type": "string",
+            "description": "What the ruling governs — a screen id, token group, component, or 'global'."
+          },
+          "decision": {
+            "type": "string",
+            "description": "The ruling itself, stated as an enforceable sentence."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why the ruling was made — optional but recommended."
+          },
+          "status": {
+            "enum": [
+              "approved",
+              "deprecated"
+            ],
+            "description": "Deprecate superseded rulings and record the replacement; never delete history."
+          }
+        }
+      }
+    },
+    "caps": {
+      "type": "object",
+      "description": "HARD ceilings the lint enforces on the lock itself — a screen cannot be forced to pass by loosening its thresholds past these.",
+      "required": [
+        "maxPassThreshold",
+        "maxTileCeiling",
+        "maxMaskedAreaPct"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "maxPassThreshold": {
+          "type": "object",
+          "required": [
+            "A",
+            "B1",
+            "B2"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "A": {
+              "type": "number"
+            },
+            "B1": {
+              "type": "number"
+            },
+            "B2": {
+              "type": "number"
+            }
+          }
+        },
+        "maxTileCeiling": {
+          "type": "number"
+        },
+        "maxMaskedAreaPct": {
+          "type": "number"
+        }
+      }
+    },
+    "imagery": {
+      "type": "object",
+      "description": "Imagery policy layer: tiered sourcing rules (captured assets first, derived compositions PoC-only, abstract motifs on secondary surfaces only), size classes, provenance and audit notes. Consumed by the imagery-provenance lint check and the per-system SKILL.md; shape is skill-owned working doctrine.",
+      "properties": {
+        "policy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sizeClasses": {},
+        "provenance": {},
+        "manifest": {},
+        "audit": {}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "rect": {
+      "type": "object",
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      }
+    },
+    "semanticColors": {
+      "type": "object",
+      "description": "Semantic slots only — components never consume primitives directly. Values are exact hex/oklch strings from the source.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
