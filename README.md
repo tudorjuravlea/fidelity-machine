@@ -1,7 +1,7 @@
 # fidelity-machine
 
 ```
-░▒▓█  F1DΞL17Y::MΔCH1NΞ █▓▒░
+░▒▓█  F1DΞL17Y::MΔCH1NΞ  █▓▒░
 ```
 
 **AI can finally prototype in your design system, but only if something refuses the results that drift off it. This is that something.**
