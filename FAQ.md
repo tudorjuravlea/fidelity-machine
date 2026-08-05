@@ -42,7 +42,7 @@ A tiny synthetic design system (`fixtures/golden/`) that ships with the machine,
 
 ## Does it run on Windows?
 
-Not tested yet. macOS and Linux are the supported platforms. The scripts use portable Node APIs, so Windows may work, but "may work" is not a support statement, and we will not claim it until CI proves it.
+Partially, and we only claim what CI proves. The static gates (contract enforcement, schema validation, release hygiene) pass on Windows in an experimental CI lane. The render and pixel pipeline is not tested there, so macOS and Linux remain the supported platforms for full verification. When the pixel path earns a green Windows lane, this answer will change.
 
 ## How is this different from a design-token repository?
 
