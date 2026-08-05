@@ -1,0 +1,24 @@
+{
+  "name": "fidelity-machine",
+  "private": true,
+  "description": "fidelity-machine — a machine-verified ship gate for design-system work: capture a frozen design lock, generate visuals against it, and refuse anything off-system (render, geometry, pixel-diff, content and microcopy lint).",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "^0.28.1",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.61.1",
+    "pngjs": "^7.0.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  },
+  "version": "0.9.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tudorjuravlea/fidelity-machine.git"
+  }
+}

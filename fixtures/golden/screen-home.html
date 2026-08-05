@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Golden fixture — accounts home</title>
+<style>
+  /* Tokens — the ONLY place raw values are allowed (mirrors assets/tokens.css derivation). */
+  :root {
+    --background: #F7F6F3;
+    --surface1: #FFFFFF;
+    --border: #E4E1DA;
+    --text1: #1C1B18;
+    --text2: #6B675E;
+    --accent: #0F5132;
+    --accent-subtle: #E7F0EB;
+    --error: #8A2A2A;
+    --radius-control: 8px;
+    --radius-container: 16px;
+    --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+    --shadow-1: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.06), 0 2px 4px 0 rgba(0,0,0,0.04);
+  }
+  * { margin: 0; box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    background: var(--background); color: var(--text1);
+    font-size: 15px; line-height: 1.45;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: var(--space-8) var(--space-6); overflow-x: hidden; width: 100%; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { color: var(--text2); margin-top: var(--space-2); text-wrap: pretty; }
+  .card {
+    background: var(--surface1); border-radius: var(--radius-container);
+    box-shadow: var(--shadow-1); padding: var(--space-6); margin-top: var(--space-6);
+  }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .balance { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); }
+  .btn {
+    display: inline-block; margin-top: var(--space-4);
+    background: var(--accent); color: #fff; border: 0;
+    border-radius: var(--radius-control); padding: 10px var(--space-4);
+    font-size: 15px; font-weight: 600; font-family: inherit;
+  }
+  .tx { border-top: 1px solid var(--border); padding: var(--space-3) 0; display: flex; justify-content: space-between; min-height: 44px; align-items: center; }
+  .tx:first-of-type { border-top: 0; }
+  .amount-out { font-variant-numeric: tabular-nums; }
+  .amount-in { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .note { margin-top: var(--space-3); font-size: 13px; color: var(--text2); text-wrap: pretty; }
+</style>
+</head>
+<body>
+<main>
+  <header data-fig-id="1:100">
+    <h1 data-slot="title">Conturile tale</h1>
+    <p class="sub" data-slot="label">Bine ai venit înapoi, Maria.</p>
+  </header>
+
+  <section class="card" data-fig-id="1:200" aria-label="Cont curent">
+    <div class="row">
+      <div>
+        <div class="label" data-slot="label">Cont curent · RON</div>
+        <div class="balance" data-slot="label" data-mask="balance">12.480,50 lei</div>
+      </div>
+    </div>
+    <button class="btn" data-slot="cta">Trimite bani</button>
+    <p class="note" data-slot="tooltip">Poți anula o plată programată oricând, până în ziua plății.</p>
+  </section>
+
+  <section class="card" data-fig-id="1:300" aria-label="Tranzacții recente">
+    <div class="label" data-slot="label">Tranzacții recente</div>
+    <div class="tx" data-fig-id="1:310">
+      <span>Cafenea Origo</span><span class="amount-out" data-mask="tx">−18,00 lei</span>
+    </div>
+    <div class="tx" data-fig-id="1:320">
+      <span>Salariu · Firma SRL</span><span class="amount-in" data-mask="tx">+7.200,00 lei</span>
+    </div>
+    <div class="tx" data-fig-id="1:330">
+      <span>Abonament transport</span><span class="amount-out" data-mask="tx">−80,00 lei</span>
+    </div>
+  </section>
+</main>
+<script>
+  // Deterministic-readiness contract: signal only after fonts are settled.
+  document.fonts.ready.then(() => {
+    requestAnimationFrame(() => document.documentElement.setAttribute('data-render-ready', ''));
+  });
+</script>
+</body>
+</html>

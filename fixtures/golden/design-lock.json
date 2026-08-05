@@ -1,0 +1,220 @@
+{
+  "meta": {
+    "name": "golden-fixture",
+    "capturedAt": "2026-07-21",
+    "chromiumBuild": "chromium-1228",
+    "noiseFloorPct": 0
+  },
+  "tokens": {
+    "colors": {
+      "light": {
+        "background": "#F7F6F3",
+        "surface1": "#FFFFFF",
+        "border": "#E4E1DA",
+        "text1": "#1C1B18",
+        "text2": "#6B675E",
+        "accent": "#0F5132",
+        "accent-subtle": "#E7F0EB",
+        "error": "#8A2A2A"
+      }
+    },
+    "spacing": [
+      8,
+      12,
+      16,
+      24,
+      32
+    ],
+    "radii": {
+      "control": 8,
+      "container": 16
+    },
+    "typography": {
+      "heading": {
+        "family": "Helvetica Neue",
+        "sizePx": 26,
+        "weight": 700,
+        "lineHeight": 1.2,
+        "letterSpacingEm": -0.01
+      },
+      "body": {
+        "family": "Helvetica Neue",
+        "sizePx": 15,
+        "weight": 400,
+        "lineHeight": 1.45
+      },
+      "label": {
+        "family": "Helvetica Neue",
+        "sizePx": 12,
+        "weight": 400,
+        "lineHeight": 1.3
+      }
+    },
+    "elevation": {
+      "raised": "0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.06), 0 2px 4px 0 rgba(0,0,0,0.04)"
+    }
+  },
+  "componentMap": {},
+  "fonts": [
+    {
+      "family": "Helvetica Neue",
+      "files": [],
+      "weights": [
+        400,
+        600,
+        700
+      ],
+      "fontChecks": [
+        "700 26px \"Helvetica Neue\"",
+        "400 15px \"Helvetica Neue\""
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "home",
+      "mode": "B2",
+      "referenceImage": "reference/home.png",
+      "captureWidth": 720,
+      "captureHeight": 640,
+      "dpr": 1,
+      "colorScheme": "light",
+      "url": "screen-home.html",
+      "maskedRegions": [
+        {
+          "rect": {
+            "x": 48,
+            "y": 150,
+            "width": 300,
+            "height": 44
+          },
+          "reason": "account balance — dynamic amount"
+        }
+      ],
+      "figIds": [
+        {
+          "figmaNodeId": "1:100",
+          "domId": "1:100"
+        },
+        {
+          "figmaNodeId": "1:200",
+          "domId": "1:200"
+        },
+        {
+          "figmaNodeId": "1:300",
+          "domId": "1:300"
+        }
+      ],
+      "passThreshold": 0.005,
+      "tileCeiling": 0.4,
+      "geometryTolerancePx": 2,
+      "stateContract": "logged-in, populated accounts, 3 recent transactions",
+      "locales": [
+        "ro",
+        "en"
+      ]
+    }
+  ],
+  "content": {
+    "voiceChart": [
+      {
+        "concept": "Trustworthy",
+        "characteristics": [
+          "plain",
+          "calm"
+        ],
+        "do": "Transferul ajunge mâine, până la 18:00.",
+        "dont": "Transferuri fulger! ⚡"
+      },
+      {
+        "concept": "Clear under stress",
+        "characteristics": [
+          "direct",
+          "consequence-first"
+        ],
+        "do": "Plata nu mai poate fi anulată după trimitere.",
+        "dont": "Te rugăm să verifici detaliile tranzacției."
+      }
+    ],
+    "locales": [
+      "ro",
+      "en"
+    ],
+    "register": {
+      "ro": "tu",
+      "legalRo": "impersonal"
+    },
+    "formats": {
+      "decimal": ",",
+      "thousands": ".",
+      "currencyMicrocopy": "lei",
+      "currencyLegal": "RON",
+      "date": "DD.MM.YYYY",
+      "time": "24h"
+    },
+    "bannedJargon": {
+      "ro": [
+        {
+          "term": "Fonduri insuficiente",
+          "replacement": "Nu ai suficienți bani în acest cont"
+        },
+        {
+          "term": "Stornare",
+          "replacement": "Returnarea banilor"
+        },
+        {
+          "term": "Beneficiar",
+          "replacement": "Persoana către care trimiți banii"
+        },
+        {
+          "term": "Autentificare",
+          "replacement": "Confirmă că ești tu"
+        }
+      ],
+      "en": [
+        {
+          "term": "Insufficient funds",
+          "replacement": "You don't have enough money in this account"
+        },
+        {
+          "term": "Reversal",
+          "replacement": "Refund"
+        },
+        {
+          "term": "Beneficiary",
+          "replacement": "The person you're paying"
+        }
+      ]
+    },
+    "disclosureInventory": [
+      {
+        "flow": "home",
+        "mustContain": [
+          "Poți anula o plată programată"
+        ]
+      }
+    ]
+  },
+  "signatures": [
+    {
+      "rule": "Balances and amounts always tabular-nums",
+      "grep": "tabular-nums"
+    },
+    {
+      "rule": "One accent action per screen; accent is the deep green, never a second hue"
+    }
+  ],
+  "donts": [
+    "No gradients",
+    "No pure #000 text"
+  ],
+  "caps": {
+    "maxPassThreshold": {
+      "A": 0.002,
+      "B1": 0.005,
+      "B2": 0.005
+    },
+    "maxTileCeiling": 0.4,
+    "maxMaskedAreaPct": 0.15
+  }
+}
