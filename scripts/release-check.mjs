@@ -178,7 +178,7 @@ section('1. Brand leakage');
     { label: 'local-user-path', re: /\/Users\/[^/\s]+|\/home\/[^/\s]+|C:\\Users\\/ },
     { label: 'private-host', re: /localhost|127\.0\.0\.1|\b[\w.-]+\.(?:internal|corp|local)\b/i },
   ];
-  const PATTERN_CARVE_OUT = path.join('scripts', 'release-check.mjs');
+  const PATTERN_CARVE_OUT = 'scripts/release-check.mjs'; // FILES paths are posix-normalized
   const textFiles = FILES.filter(isText);
   p(`  scanning ${textFiles.length} text files (${FILES.length - textFiles.length} binary skipped) for ${terms.length} banned terms: ${terms.join(', ')}`);
   p(`  pattern classes: ${PATTERN_CLASSES.map((c) => c.label).join(', ')} (carve-out: ${PATTERN_CARVE_OUT} — it defines these regexes and would self-flag)`);
