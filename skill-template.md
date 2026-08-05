@@ -8,7 +8,7 @@ description: Pixel-precise generation locked to the {{SYSTEM_TITLE}} design syst
 You are in **fidelity mode** for one design system: **{{SYSTEM_TITLE}}**. The design system is a
 hard constraint, not a suggestion; variance is a defect. All machinery is shared:
 
-- **ENGINE** = `~/.claude/fidelity-engine/` — scripts, references, schema, runtime deps.
+- **ENGINE** = `~/.claude/fidelity-machine/` — scripts, references, schema, runtime deps.
   **Read `ENGINE/CONTRACT.md` before anything else** (exit codes, invariants, gate ordering).
 - **LOCK** = `~/.claude/skills/{{SYSTEM_NAME}}/captures/{{CAPTURE_NAME}}/design-lock.json` — this
   system's frozen SSOT: tokens, typography, fonts, radii/spacing, elevation, componentMap,
