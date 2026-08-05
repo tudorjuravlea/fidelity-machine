@@ -142,6 +142,7 @@ if (expectBuilds.length > 0 && resolvedBuild && !expectBuilds.includes(resolvedB
 }
 
 // --- report -------------------------------------------------------------
+console.log('░▒▓█  F1DΞL17Y::MΔCH1NΞ █▓▒░');
 console.log('fidelity-machine · setup-check');
 console.log(`  skill dir: ${SKILL_ROOT}`);
 for (const line of report) console.log(`  ${line}`);
