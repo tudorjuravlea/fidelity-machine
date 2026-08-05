@@ -11,7 +11,7 @@ its own thin skill (slash command + lock + fonts + captures) scaffolded from the
 template. Fix a script → every system benefits; add a system → scaffold + capture, no code.
 
 ```
-~/.claude/fidelity-engine/           # THE ENGINE — shared, not a skill, never registers
+~/.claude/fidelity-machine/           # THE ENGINE — shared, not a skill, never registers
 ├── CONTRACT.md                      # this file
 ├── design-lock.schema.json          # JSON Schema for every design-lock.json (the SSOT shape)
 ├── skill-template.md                # per-system SKILL.md template ({{SYSTEM_NAME}} etc.)
@@ -56,7 +56,7 @@ for components with no spec — and each such gap is a capture task to name in t
 license to guess. Specs record Figma-verbatim values (paddings, radii, type roles, variable slots)
 and are one-way captures: to change one, re-capture from Figma, never hand-tune.
 
-Scaffold a new system: `node ~/.claude/fidelity-engine/scripts/new-system.mjs --name <kebab> [--title "…"]`,
+Scaffold a new system: `node ~/.claude/fidelity-machine/scripts/new-system.mjs --name <kebab> [--title "…"]`,
 then run the capture flow (references/spec-capture.md) into its `captures/` dir.
 
 **Fixtures (component pixel-verification):** `build-component-fixture.mjs` bundles a React

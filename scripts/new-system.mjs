@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // new-system.mjs — scaffold a per-design-system fidelity skill bound to the shared engine.
 //
-//   node ~/.claude/fidelity-engine/scripts/new-system.mjs --name tatra-mobile \
+//   node ~/.claude/fidelity-machine/scripts/new-system.mjs --name tatra-mobile \
 //        [--title "Tatra Banka Mobile"] [--capture tatra-mobile]
 //
 // Creates ~/.claude/skills/<name>/ with a SKILL.md instantiated from the engine's
