@@ -56,6 +56,22 @@ your-brand skill/          <- your lock, fonts, captures, references (private, y
 
 A release gate inside the machine (`release-check`) proves the public layer contains zero brand traces: it scans for banned terms, credential patterns, and private paths on every run.
 
+## How this is different
+
+Most tools in the "AI + design" space are not competitors of this machine. They sit at other points of the workflow, and most of them combine well with it.
+
+| Category | What it does well | What it does not do |
+|---|---|---|
+| **Prompt-to-UI generators** | Produce screens and variants fast, from a text prompt | Verify anything. The output *looks* like your system; nothing measures whether it *is* |
+| **Design-token pipelines** (Style Dictionary, Tokens Studio and friends) | Define and distribute your tokens as data | Check the produced artifact. A perfect token file cannot stop a screen from ignoring it |
+| **Design-file linters** (Figma plugins) | Catch off-system values inside the design file | Check what actually ships. The drift between the file and the artifact is exactly where brands dissolve |
+| **Brand portals and PDF guidelines** | Document the rules for humans | Enforce them. A guideline nobody re-reads is a wish, not a system |
+| **fidelity-machine** | Renders the produced artifact, measures it against the frozen lock (geometry, pixels, type, color, copy), and refuses what fails | Generate or design anything by itself |
+
+The relationship with generators is the one worth underlining: **use any generator you like. This is the gate its output must pass.** The faster your team generates, the more you need the layer that says no.
+
+One honest acknowledgment: the idea has been attempted before. A small project called *driftguard* described itself as a deterministic design-system compliance engine and went quiet at version 0.1.1. The thesis was right. This is that thesis carried through: a full pipeline, a contract that enforces itself, and gates that are proven able to fail before they are trusted to pass.
+
 ## How it works
 
 1. **Capture:** an AI agent reads your design system (from Figma via MCP, or from reference images) and compiles it into `design-lock.json`: colors per theme, the complete spacing scale, type roles, radii, elevation, mandated copy, banned jargon, brand signatures, hard don'ts. The lock is the mold. It is frozen: derived files are hash-chained to it, and hand-editing them fails the gate.
