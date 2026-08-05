@@ -1,0 +1,70 @@
+# CI: the machine's own gates, run on every change.
+# Two honest scopes:
+#   - static gates run everywhere (contract enforcement, schema validity, release hygiene)
+#   - the pixel self-test runs on macOS only: the golden reference screenshot was captured
+#     on macOS, and font antialiasing is platform-specific. A cross-platform pixel claim
+#     needs a per-platform reference, not a looser threshold (CONTRACT.md: thresholds are law).
+#   - Windows is experimental: failures there are informative, not blocking, until the
+#     platform is genuinely supported.
+name: gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-gates:
+    name: static gates (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install pinned Chromium (Linux needs system deps)
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      - name: Install pinned Chromium
+        if: runner.os == 'macOS'
+        run: npx playwright install chromium
+      - run: node scripts/setup-check.mjs
+      - run: node scripts/contract-guard.mjs
+      - run: node scripts/release-check.mjs
+
+  pixel-self-test:
+    name: pixel self-test (macOS, reference platform)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: node scripts/contract-guard.mjs --self-test
+
+  windows-experimental:
+    name: windows (experimental, non-blocking)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/contract-guard.mjs
+      - run: node scripts/release-check.mjs --skip-fresh

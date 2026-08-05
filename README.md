@@ -6,6 +6,8 @@ fidelity-machine locks your design system into a frozen, machine-readable mold. 
 
 ![The gate catching an off-system color with the exact file, line and rule, then passing after the fix](docs/demo.gif)
 
+New here? Take the 15-minute [guided tour](GUIDE.md): you break the practice system on purpose and watch the gate catch you. Questions first? Read the [FAQ](FAQ.md).
+
 ---
 
 ## Why this exists
