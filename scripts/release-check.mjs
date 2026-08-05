@@ -134,7 +134,7 @@ function walk(dir = ENGINE, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git') walk(full, out); }
-    else if (e.isFile()) out.push(path.relative(ENGINE, full));
+    else if (e.isFile()) out.push(path.relative(ENGINE, full).split(path.sep).join('/'));
   }
   return out.sort();
 }
@@ -146,7 +146,7 @@ const FILES = walk();
 function walkSymlinks(dir = ENGINE, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isSymbolicLink()) out.push(path.relative(ENGINE, full));
+    if (e.isSymbolicLink()) out.push(path.relative(ENGINE, full).split(path.sep).join('/'));
     else if (e.isDirectory() && e.name !== 'node_modules' && e.name !== '.git') walkSymlinks(full, out);
   }
   return out.sort();
@@ -222,7 +222,7 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   const SHIP_BASENAMES = new Set(['LICENSE', 'NOTICE', '.gitignore', '.npmignore']);
   // Reviewed binary carve-outs: the golden fixture's reference screenshots, and the README
   // demo GIF(s) under docs/ — each only when the magic bytes match and the size is sane.
-  const REVIEWED_PNG_DIR = path.join('fixtures', 'golden', 'reference');
+  const REVIEWED_PNG_DIR = 'fixtures/golden/reference'; // FILES paths are posix-normalized
   const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const MAX_REVIEWED_PNG_BYTES = 5 * 1024 * 1024;
   const REVIEWED_GIF_DIR = 'docs';
