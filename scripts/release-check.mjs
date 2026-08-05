@@ -218,13 +218,16 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   // DEFAULT-DENY: everything that ships must be an allowlisted text suffix, an allowlisted
   // extensionless basename, or the one reviewed binary carve-out below. Anything else fails
   // BY NAME — new file types enter the release surface only by a conscious allowlist edit.
-  const SHIP_SUFFIXES = new Set(['.mjs', '.md', '.json', '.cjs', '.css', '.html']);
+  const SHIP_SUFFIXES = new Set(['.mjs', '.md', '.json', '.cjs', '.css', '.html', '.yml']);
   const SHIP_BASENAMES = new Set(['LICENSE', 'NOTICE', '.gitignore', '.npmignore']);
-  // Reviewed binary carve-out: the golden fixture's reference screenshots only, and only
-  // when they really are PNGs (magic bytes) under a sane size cap.
+  // Reviewed binary carve-outs: the golden fixture's reference screenshots, and the README
+  // demo GIF(s) under docs/ — each only when the magic bytes match and the size is sane.
   const REVIEWED_PNG_DIR = path.join('fixtures', 'golden', 'reference');
   const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const MAX_REVIEWED_PNG_BYTES = 5 * 1024 * 1024;
+  const REVIEWED_GIF_DIR = 'docs';
+  const GIF_MAGICS = [Buffer.from('GIF87a'), Buffer.from('GIF89a')];
+  const MAX_REVIEWED_GIF_BYTES = 10 * 1024 * 1024;
 
   const symlinks = walkSymlinks();
   if (symlinks.length) {
@@ -235,6 +238,7 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
 
   const denied = [];
   let reviewedPngs = 0;
+  let reviewedGifs = 0;
   for (const rel of FILES) {
     const ext = path.extname(rel).toLowerCase();
     if (ext === '.png' && path.dirname(rel) === REVIEWED_PNG_DIR) {
@@ -250,6 +254,19 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
       } else reviewedPngs++;
       continue;
     }
+    if (ext === '.gif' && path.dirname(rel) === REVIEWED_GIF_DIR) {
+      const data = readFileSync(path.join(ENGINE, rel));
+      if (!GIF_MAGICS.some((m) => data.subarray(0, m.length).equals(m))) {
+        bad++;
+        fail(`reviewed GIF ${rel} does not start with a GIF signature`,
+          'a mislabeled binary is unreviewable — replace it with a real GIF or delete it');
+      } else if (data.length > MAX_REVIEWED_GIF_BYTES) {
+        bad++;
+        fail(`reviewed GIF ${rel} is ${(data.length / 1048576).toFixed(2)} MB (cap ${MAX_REVIEWED_GIF_BYTES / 1048576} MB)`,
+          'shrink the demo — a README GIF over 10 MB punishes every visitor');
+      } else reviewedGifs++;
+      continue;
+    }
     if (ext ? SHIP_SUFFIXES.has(ext) : SHIP_BASENAMES.has(path.basename(rel))) continue;
     denied.push(rel);
   }
@@ -259,7 +276,7 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
       `the engine ships scripts + docs + one small fixture (${[...SHIP_SUFFIXES].join(' ')}, ` +
       `${[...SHIP_BASENAMES].join('/')}, reviewed ${path.join(REVIEWED_PNG_DIR, '*.png')}) — delete the file, ` +
       'or extend the allowlist in release-check.mjs as a conscious review decision');
-  } else pass(`every shipped file is allowlisted (default-deny; ${reviewedPngs} reviewed PNG(s) magic-byte verified)`);
+  } else pass(`every shipped file is allowlisted (default-deny; ${reviewedPngs} reviewed PNG(s) + ${reviewedGifs} reviewed GIF(s) magic-byte verified)`);
 
   const flag = (list, label, fix) => {
     if (list.length) { bad += list.length; fail(`${label}: ${list.join(', ')}`, fix); }

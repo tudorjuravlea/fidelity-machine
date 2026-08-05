@@ -4,6 +4,8 @@
 
 fidelity-machine locks your design system into a frozen, machine-readable mold. Then it lets an AI agent produce screens, social visuals, decks, and poster artwork *through* that mold, with a verification gate that measures every result and rejects anything off-system. Pixel by pixel. Word by word.
 
+![The gate catching an off-system color with the exact file, line and rule, then passing after the fix](docs/demo.gif)
+
 ---
 
 ## Why this exists
