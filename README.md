@@ -1,5 +1,9 @@
 # fidelity-machine
 
+```
+░▒▓█  F1DΞL17Y::MΔCH1NΞ █▓▒░
+```
+
 **AI can finally prototype in your design system, but only if something refuses the results that drift off it. This is that something.**
 
 fidelity-machine locks your design system into a frozen, machine-readable mold. Then it lets an AI agent produce screens, social visuals, decks, and poster artwork *through* that mold, with a verification gate that measures every result and rejects anything off-system. Pixel by pixel. Word by word.
