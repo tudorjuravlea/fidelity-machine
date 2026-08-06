@@ -110,7 +110,6 @@
       "geometryTolerancePx": 2,
       "stateContract": "logged-in, populated accounts, 3 recent transactions",
       "locales": [
-        "ro",
         "en"
       ]
     }
@@ -123,8 +122,8 @@
           "plain",
           "calm"
         ],
-        "do": "Transferul ajunge mâine, până la 18:00.",
-        "dont": "Transferuri fulger! ⚡"
+        "do": "Your transfer arrives tomorrow by 6:00 PM.",
+        "dont": "Lightning-fast transfers! ⚡"
       },
       {
         "concept": "Clear under stress",
@@ -132,45 +131,22 @@
           "direct",
           "consequence-first"
         ],
-        "do": "Plata nu mai poate fi anulată după trimitere.",
-        "dont": "Te rugăm să verifici detaliile tranzacției."
+        "do": "A payment cannot be canceled after you send it.",
+        "dont": "Please verify your transaction details."
       }
     ],
     "locales": [
-      "ro",
       "en"
     ],
-    "register": {
-      "ro": "tu",
-      "legalRo": "impersonal"
-    },
     "formats": {
-      "decimal": ",",
-      "thousands": ".",
-      "currencyMicrocopy": "lei",
-      "currencyLegal": "RON",
-      "date": "DD.MM.YYYY",
-      "time": "24h"
+      "decimal": ".",
+      "thousands": ",",
+      "currencyMicrocopy": "$",
+      "currencyLegal": "USD",
+      "date": "MM/DD/YYYY",
+      "time": "12h"
     },
     "bannedJargon": {
-      "ro": [
-        {
-          "term": "Fonduri insuficiente",
-          "replacement": "Nu ai suficienți bani în acest cont"
-        },
-        {
-          "term": "Stornare",
-          "replacement": "Returnarea banilor"
-        },
-        {
-          "term": "Beneficiar",
-          "replacement": "Persoana către care trimiți banii"
-        },
-        {
-          "term": "Autentificare",
-          "replacement": "Confirmă că ești tu"
-        }
-      ],
       "en": [
         {
           "term": "Insufficient funds",
@@ -190,7 +166,7 @@
       {
         "flow": "home",
         "mustContain": [
-          "Poți anula o plată programată"
+          "You can cancel a scheduled payment"
         ]
       }
     ]

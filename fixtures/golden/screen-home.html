@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Golden fixture — accounts home</title>
+<title>Golden fixture: accounts home</title>
 <style>
   /* Tokens — the ONLY place raw values are allowed (mirrors assets/tokens.css derivation). */
   :root {
@@ -53,31 +53,31 @@
 <body>
 <main>
   <header data-fig-id="1:100">
-    <h1 data-slot="title">Conturile tale</h1>
-    <p class="sub" data-slot="label">Bine ai venit înapoi, Maria.</p>
+    <h1 data-slot="title">Your accounts</h1>
+    <p class="sub" data-slot="label">Welcome back, Maria.</p>
   </header>
 
-  <section class="card" data-fig-id="1:200" aria-label="Cont curent">
+  <section class="card" data-fig-id="1:200" aria-label="Checking account">
     <div class="row">
       <div>
-        <div class="label" data-slot="label">Cont curent · RON</div>
-        <div class="balance" data-slot="label" data-mask="balance">12.480,50 lei</div>
+        <div class="label" data-slot="label">Checking account · USD</div>
+        <div class="balance" data-slot="label" data-mask="balance">$12,480.50</div>
       </div>
     </div>
-    <button class="btn" data-slot="cta">Trimite bani</button>
-    <p class="note" data-slot="tooltip">Poți anula o plată programată oricând, până în ziua plății.</p>
+    <button class="btn" data-slot="cta">Send money</button>
+    <p class="note" data-slot="tooltip">You can cancel a scheduled payment any time until the payment day.</p>
   </section>
 
-  <section class="card" data-fig-id="1:300" aria-label="Tranzacții recente">
-    <div class="label" data-slot="label">Tranzacții recente</div>
+  <section class="card" data-fig-id="1:300" aria-label="Recent transactions">
+    <div class="label" data-slot="label">Recent transactions</div>
     <div class="tx" data-fig-id="1:310">
-      <span>Cafenea Origo</span><span class="amount-out" data-mask="tx">−18,00 lei</span>
+      <span>Origo Coffee</span><span class="amount-out" data-mask="tx">−$18.00</span>
     </div>
     <div class="tx" data-fig-id="1:320">
-      <span>Salariu · Firma SRL</span><span class="amount-in" data-mask="tx">+7.200,00 lei</span>
+      <span>Salary · Acme Ltd</span><span class="amount-in" data-mask="tx">+$7,200.00</span>
     </div>
     <div class="tx" data-fig-id="1:330">
-      <span>Abonament transport</span><span class="amount-out" data-mask="tx">−80,00 lei</span>
+      <span>Transit pass</span><span class="amount-out" data-mask="tx">−$80.00</span>
     </div>
   </section>
 </main>
