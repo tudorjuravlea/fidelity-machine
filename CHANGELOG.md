@@ -26,6 +26,10 @@ Public launch preparation.
   series color discipline, data honesty rules, dashboard composition), and
   references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
   dark-slide derivation). skill-template.md now routes generators to them per artifact type.
+- references/ia-and-navigation.md: information architecture and navigation rules for
+  multi-screen surfaces, adapted from ia-practitioner by Sidhanth Povil (MIT, credited in
+  NOTICE): seeking modes, classification-scheme selection, structural budgets, navigation
+  kit and principles, label rules tied to the lock's content vocabulary, and gate hooks.
 
 ### Changed
 - Golden fixture is English-native: en locale, USD formats, English voice chart, jargon
