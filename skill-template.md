@@ -58,7 +58,8 @@ interactive states designed from lock tokens; honor the screen's `stateContract`
 Figma export artifacts (micro-skews, `data-node-id`, expiring asset URLs, empty-string variables).
 Surface craft, loaded per artifact type: diagrams → `ENGINE/references/diagram-craft.md`;
 charts and dashboards → `ENGINE/references/dataviz-craft.md`; slide decks and editorial
-figure pages → `ENGINE/references/slides-and-decks.md`.
+figure pages → `ENGINE/references/slides-and-decks.md`; multi-screen structure and
+navigation → `ENGINE/references/ia-and-navigation.md`.
 
 ## 4. Microcopy pass (after layout, before gates)
 
