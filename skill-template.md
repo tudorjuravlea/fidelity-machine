@@ -56,6 +56,9 @@ lock first). Instrument structure: `data-fig-id`, `data-render-ready` after font
 — precedence: system constraints > signatures/donts > craft heuristics; novelty stays OFF. All
 interactive states designed from lock tokens; honor the screen's `stateContract`. Never reproduce
 Figma export artifacts (micro-skews, `data-node-id`, expiring asset URLs, empty-string variables).
+Surface craft, loaded per artifact type: diagrams → `ENGINE/references/diagram-craft.md`;
+charts and dashboards → `ENGINE/references/dataviz-craft.md`; slide decks and editorial
+figure pages → `ENGINE/references/slides-and-decks.md`.
 
 ## 4. Microcopy pass (after layout, before gates)
 
