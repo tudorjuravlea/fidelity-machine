@@ -20,6 +20,12 @@ Public launch preparation.
 - setup-check now prints the project wordmark banner as its first line.
 - release-check: reviewed-GIF carve-out for docs/*.gif (magic-byte checked, 10 MB cap),
   .yml added to the ship allowlist, .git excluded from tree walks.
+- Surface-craft references for three new artifact classes, adapted from diagram-design by
+  Cathryn Lavery (MIT, credited in NOTICE): references/diagram-craft.md (connector rules,
+  complexity budgets, semantic node treatments), references/dataviz-craft.md (chart specs,
+  series color discipline, data honesty rules, dashboard composition), and
+  references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
+  dark-slide derivation). skill-template.md now routes generators to them per artifact type.
 
 ### Changed
 - Golden fixture is English-native: en locale, USD formats, English voice chart, jargon
