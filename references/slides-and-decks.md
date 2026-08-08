@@ -12,7 +12,10 @@ under a lock. Pair with diagram-craft.md and dataviz-craft.md for the figures th
 
 - **One idea per slide.** The slide title states the takeaway as a sentence, not a topic
   ("Retention doubles after the first saved search", not "Retention"). If a slide needs two
-  ideas, it is two slides.
+  ideas, it is two slides. Match word intensity to actual magnitude: "collapses" over a
+  3% dip reads as spin and costs the whole deck its credibility.
+- **A deck that never states its ask ends without an outcome.** Somewhere before the
+  close, one slide names the decision or action requested, with the trade-offs.
 - **A deck has one visual system.** Same tokens, same type roles, same figure grammar on
   every slide. Register the deck's slides as screens sharing one lock; a per-slide style
   change is drift, and the gate should catch it.
@@ -76,6 +79,8 @@ slide declares its scheme; mixing schemes within one slide is a lint error.
    dataviz-craft.md.
 4. Gate per slide (lint, self-critique, render, pixel where a reference exists), then a
    deck pass: same tokens throughout, accent used for the same job, headline grammar
-   consistent, footers sequential.
+   consistent, footers sequential. Every data slide also passes the out-of-context test:
+   understandable by someone who missed the presentation, with its source cited, units
+   and rounding consistent, sort order intentional, and outliers annotated.
 5. Export: render each slide screen to PNG at the deck canvas; assemble in the delivery
    tool. The verified artifact is the HTML slide; the export is a projection of it.
