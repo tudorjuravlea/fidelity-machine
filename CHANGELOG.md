@@ -26,6 +26,13 @@ Public launch preparation.
   series color discipline, data honesty rules, dashboard composition), and
   references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
   dark-slide derivation). skill-template.md now routes generators to them per artifact type.
+- dataviz-craft.md and slides-and-decks.md strengthened with rules from the
+  data-visualization literature (Few, Knaflic, Cairo, Wilke, Schwabish, Zelazny):
+  question-driven chart selection with slope, distribution, composition, dumbbell and
+  Sankey rows; dual-axis ban; proportional ink; small-multiples contract; color-alone
+  ban with CVD guidance; comparison-point and actionability rules for dashboard widgets;
+  verifier-vs-decider audience mode; title magnitude discipline; the deck-level ask
+  slide; and the out-of-context test in the deck gate.
 - references/ia-and-navigation.md: information architecture and navigation rules for
   multi-screen surfaces, adapted from ia-practitioner by Sidhanth Povil (MIT, credited in
   NOTICE): seeking modes, classification-scheme selection, structural budgets, navigation

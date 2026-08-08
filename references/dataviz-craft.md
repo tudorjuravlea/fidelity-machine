@@ -6,18 +6,29 @@ fixed order, honest data or no chart.
 
 Adapted from `diagram-design` by Cathryn Lavery (MIT, github.com/cathrynlavery/diagram-design),
 re-expressed for lock-driven generation and extended with dashboard composition rules.
+Data-honesty, emphasis, and metric rules additionally informed by the data-visualization
+literature (Few, Knaflic, Cairo, Wilke, Schwabish, Zelazny).
 
 ## Chart selection
 
-| Showing | Use |
+Choose by the question the reader is asking, never by the shape of the data.
+
+| The question | Use |
 |---|---|
-| Discrete quantities across categories | Bar (vertical default; horizontal when labels are long or 8+ categories) |
-| Continuous trend over time or index | Line |
-| Distribution / correlation of two variables | Scatter |
-| 3-5 entities scored on 3-5 normalized criteria | Radar |
+| Which is bigger, across categories | Bar (horizontal when labels are long or 8+ categories) |
+| Where is it heading | Line |
+| Change between exactly two points | Slope, not grouped bars |
+| Did the gap change (levels vs change) | Grouped bars → dumbbell (gap is the focus) → variance bars (only change matters) |
+| How is it spread | Histogram (shape) or box plot (compare groups), never a bar of means |
+| Composition, few parts with one dominant | Pie or donut at 5 slices or fewer; otherwise treemap or stacked bar |
+| Do these move together | Scatter; bubble adds a third variable |
+| Where geographically | Choropleth, always normalized by population or area |
+| Where did the volume go | Sankey |
+| 3-5 entities on 3-5 normalized criteria | Radar |
 | Tasks and phases on a calendar | Gantt |
 | Two-axis positioning or four named scenarios | Quadrant (see slides-and-decks.md) |
 | A single number that matters | Stat tile, not a chart |
+| Exact values needed for a decision | Table, not a chart |
 
 If a 3-column table communicates the same thing, use the table.
 
@@ -32,6 +43,14 @@ If a 3-column table communicates the same thing, use the table.
 - Every printable number on a chart must come from the source data or a verified derivation.
   No invented statistics, ever.
 - Captions state what the data is and its period. Illustrative examples say so.
+- **Never a dual axis.** Two metrics on two scales get small multiples or a common index;
+  a dual axis lets the designer pick the story.
+- Proportional ink: shaded area is proportional to value. Bars must start at zero; dots
+  may float on a truncated axis because they carry no area.
+- Small multiples share identical axes and scale across panels; only the focal data
+  changes; each panel headlines its own takeaway.
+- Show uncertainty when it would change the decision; prefer rates over counts unless
+  the count is the story.
 
 ## Series color discipline
 
@@ -47,6 +66,12 @@ If a 3-column table communicates the same thing, use the table.
   or UI chrome as extra accent colors.
 - Dark mode: flip ink-derived rgba values at the same opacities; bump the accent slightly
   brighter so it reads on dark paper. Both palettes live in the lock, per color scheme.
+- **Meaning is never carried by color alone** (roughly 1 in 12 men has a color-vision
+  difference): pair color with position, shape, a label, or a direct annotation. Red vs
+  green is never the sole distinction; state deltas in text as well as color.
+- Prefer direct labels on series ends over a legend when 3 or fewer series; keep the
+  legend strip for denser charts. A legend forces the reader to commute; a direct label
+  does not.
 
 ## Chart anatomy specs
 
@@ -80,7 +105,14 @@ A dashboard is a screen in the lock like any other, with extra density disciplin
   exactly one element the accent.
 - Stat tiles: value in the largest numeric style with tabular figures, label in a small
   tracked uppercase mono, optional delta with its direction stated in text (not color alone).
-  3-5 tiles; vary widths rather than shipping identical cards.
+  3-5 tiles; vary widths rather than shipping identical cards. **Never a bare number
+  without a comparison point**: every measure carries its target, prior period, or norm,
+  or it cannot be read as good or bad.
+- Every widget passes the actionability test: what would the viewer do differently if
+  this number moved? No answer means the widget comes off.
+- Know the audience mode: a verifying audience gets descriptive titles, full detail and
+  error bars, and nothing removed; a deciding audience gets the finding in the title,
+  one highlight with the rest gray, and gridlines, minor ticks, and legends trimmed.
 - Cards: surface fill, 1px hairline border from the lock, small radius, no shadows.
 - All numerals in data contexts use tabular figures; align numbers right in tables.
 - Empty, loading, and error states are designed for every widget; a dashboard that only
