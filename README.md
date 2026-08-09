@@ -209,3 +209,5 @@ All scripts use the same exit codes: `0` = pass, `1` = a real finding, `2` = a s
 ## License
 
 Apache-2.0: see `LICENSE` and `NOTICE`. Contributions welcome. Read `CONTRIBUTING.md` first (three rules: the contract comes first, every check must be able to fail, the machine stays brand-neutral).
+
+**Where to write:** bugs and reproducible failures go to [Issues](../../issues), with the failing command and its full output. Questions, ideas, and screenshots of the gate catching something go to [Discussions](../../discussions).
