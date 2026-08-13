@@ -11,6 +11,9 @@
 //   exit-codes             every process.exit(<literal>) uses a code from CONTRACT's table
 //   spawn-not-import       verify.mjs orchestrates siblings as spawned CLIs, never imports
 //   template-placeholders  skill-template.md {{X}} ↔ new-system.mjs replaceAll set
+//   fault-injection        adherence-lint's a11y checks go RED on a temp copy of the golden
+//                          fixture mutated one defect at a time (a check that cannot fail
+//                          is not a check); the pristine copy must stay clean
 //   self-test (--self-test) run verify.mjs against a TEMP COPY of fixtures/golden, expect 0
 //
 // Deliberately NOT checked here: brand/system-name leakage (release-check's job),
@@ -30,7 +33,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ENGINE_ROOT = path.dirname(SCRIPT_DIR);
 const SECTIONS = [
   'script-inventory', 'docs-drift', 'help-support', 'exit-codes',
-  'spawn-not-import', 'template-placeholders', 'schema-validity', 'self-test',
+  'spawn-not-import', 'template-placeholders', 'schema-validity', 'fault-injection', 'self-test',
 ];
 
 // ---------------------------------------------------------------- findings
@@ -431,6 +434,110 @@ function runSelfTest() {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+// ---------------------------------------------------------------- fault injection
+//
+// A check that cannot fail is not a check. The self-test above proves the golden fixture
+// PASSES; this proves the a11y section still goes RED on each defect it claims to catch.
+// Both directions are needed: a section accidentally reduced to a no-op keeps every green
+// result green, and nothing else in the suite would notice.
+//
+// Each case mutates a temp copy of the fixture, runs adherence-lint, and requires an a11y
+// ERROR quoting the expected evidence. The mutation itself is asserted to have applied, so
+// a stale selector reports as a broken test rather than silently proving nothing.
+
+const A11Y_FAULTS = [
+  { name: 'heading-order',
+    from: '<p class="sub" data-slot="label">Welcome back, Maria.</p>',
+    to: '<h3 class="sub" data-slot="label">Welcome back, Maria.</h3>',
+    expect: 'heading jumps h1 to h3' },
+  { name: 'img-alt',
+    from: '<button class="btn" data-slot="cta">Send money</button>',
+    to: '<img src="chart.png"><button class="btn" data-slot="cta">Send money</button>',
+    expect: '<img> has no alt attribute' },
+  { name: 'positive-tabindex',
+    from: '<button class="btn" data-slot="cta">',
+    to: '<button class="btn" tabindex="3" data-slot="cta">',
+    expect: 'tabindex="3"' },
+  { name: 'unlabelled-field',
+    from: '<button class="btn" data-slot="cta">Send money</button>',
+    to: '<input type="text" placeholder="Amount"><button class="btn" data-slot="cta">Send money</button>',
+    expect: '<input> has no label' },
+  { name: 'nameless-control',
+    from: '<button class="btn" data-slot="cta">Send money</button>',
+    to: '<button class="btn" data-slot="cta"><svg viewBox="0 0 1 1"></svg></button>',
+    expect: 'has no accessible name' },
+  { name: 'no-focus-visible',
+    from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
+    to: '',
+    expect: 'no :focus-visible rule in the scanned source' },
+  { name: 'outline-removed',
+    from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
+    to: '  .btn { outline: none; }\n',
+    expect: '"outline: none"' },
+  { name: 'motion-without-reduced-guard',
+    from: '    font-size: 15px; font-weight: 600; font-family: inherit;',
+    to: '    font-size: 15px; font-weight: 600; font-family: inherit; transition: opacity 200ms;',
+    expect: 'prefers-reduced-motion' },
+];
+
+function runFaultInjection() {
+  const goldenDir = path.join(ENGINE_ROOT, 'fixtures', 'golden');
+  const screenRel = 'screen-home.html';
+  const screenSrc = path.join(goldenDir, screenRel);
+  if (!fs.existsSync(path.join(goldenDir, 'design-lock.json')) || !fs.existsSync(screenSrc)) {
+    add('SKIP', 'fault-injection', 'fixtures/golden', 'golden fixture incomplete — nothing to inject faults into');
+    return;
+  }
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fidelity-fault-inject-'));
+  try {
+    fs.cpSync(goldenDir, tmp, { recursive: true });
+    const lockArg = path.join(tmp, 'design-lock.json');
+    const screen = path.join(tmp, screenRel);
+    const pristine = fs.readFileSync(screen, 'utf8');
+    const lint = () => spawnSync(process.execPath,
+      [path.join(SCRIPT_DIR, 'adherence-lint.mjs'), '--lock', lockArg],
+      { encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
+
+    // Control: the unmutated copy must be free of a11y findings, or every red below is noise.
+    const base = lint();
+    if (base.status !== 0) {
+      add('ERROR', 'fault-injection', 'fixtures/golden',
+        `adherence-lint exits ${base.status} on the pristine fixture (expected 0) — fault injection cannot attribute a failure to its mutation\n${tail(base)}`);
+      return;
+    }
+    // Finding lines only — the run always prints an "a11y  ok" section-summary row.
+    const a11yFindings = (out) => (out ?? '').split('\n').filter((l) => /^\[(?:ERROR|WARN)\]\s+a11y\b/.test(l));
+    const stray = a11yFindings(base.stdout);
+    if (stray.length) {
+      add('ERROR', 'fault-injection', 'fixtures/golden',
+        `the a11y section reports ${stray.length} finding(s) on the pristine golden fixture — false positives make the section untrustworthy\n      | ${stray[0]}`);
+    }
+
+    for (const f of A11Y_FAULTS) {
+      if (!pristine.includes(f.from)) {
+        add('ERROR', 'fault-injection', `fixtures/golden/${screenRel}`,
+          `fault "${f.name}" no longer applies: its anchor text is absent from the fixture, so this check is currently proven by nothing. Re-anchor the mutation.`);
+        continue;
+      }
+      fs.writeFileSync(screen, pristine.replace(f.from, f.to));
+      const res = lint();
+      const out = `${res.stdout ?? ''}${res.stderr ?? ''}`;
+      const fired = out.split('\n').some((l) => l.includes('[ERROR]') && l.includes('a11y') && l.includes(f.expect));
+      if (res.status === 0) {
+        add('ERROR', 'fault-injection', `a11y/${f.name}`,
+          `injected defect "${f.name}" but adherence-lint still exits 0 — this check cannot fail, so its green result proves nothing`);
+      } else if (!fired) {
+        add('ERROR', 'fault-injection', `a11y/${f.name}`,
+          `injected defect "${f.name}" failed the lint, but no a11y ERROR quoted ${JSON.stringify(f.expect)} — the failure came from a different check, so this one is still unproven\n${tail(res)}`);
+      }
+      fs.writeFileSync(screen, pristine);
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 // ---------------------------------------------------------------- main
 
 async function main() {
@@ -450,6 +557,7 @@ async function main() {
   checkSpawnNotImport(scripts);
   checkTemplatePlaceholders(scripts);
   await checkSchemaValidity(args.lock);
+  runFaultInjection();
   if (args.selfTest) runSelfTest();
 
   // ---- report (mirrors adherence-lint.mjs conventions)
