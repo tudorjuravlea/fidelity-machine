@@ -445,26 +445,30 @@ function runSelfTest() {
 // ERROR quoting the expected evidence. The mutation itself is asserted to have applied, so
 // a stale selector reports as a broken test rather than silently proving nothing.
 
+// Anchors are STRUCTURAL, never fixture copy: the same golden screen ships with different
+// microcopy per tree (the public one is English-native, others are not). Anchoring on a
+// sentence silently unanchors every downstream tree, which the guard below then reports as
+// "proven by nothing" rather than passing.
 const A11Y_FAULTS = [
   { name: 'heading-order',
-    from: '<p class="sub" data-slot="label">Welcome back, Maria.</p>',
-    to: '<h3 class="sub" data-slot="label">Welcome back, Maria.</h3>',
+    from: '<p class="sub" data-slot="label">',
+    to: '<h3>Overview</h3><p class="sub" data-slot="label">',
     expect: 'heading jumps h1 to h3' },
   { name: 'img-alt',
-    from: '<button class="btn" data-slot="cta">Send money</button>',
-    to: '<img src="chart.png"><button class="btn" data-slot="cta">Send money</button>',
+    from: '<button class="btn" data-slot="cta">',
+    to: '<img src="chart.png"><button class="btn" data-slot="cta">',
     expect: '<img> has no alt attribute' },
   { name: 'positive-tabindex',
     from: '<button class="btn" data-slot="cta">',
     to: '<button class="btn" tabindex="3" data-slot="cta">',
     expect: 'tabindex="3"' },
   { name: 'unlabelled-field',
-    from: '<button class="btn" data-slot="cta">Send money</button>',
-    to: '<input type="text" placeholder="Amount"><button class="btn" data-slot="cta">Send money</button>',
+    from: '<button class="btn" data-slot="cta">',
+    to: '<input type="text" placeholder="Amount"><button class="btn" data-slot="cta">',
     expect: '<input> has no label' },
   { name: 'nameless-control',
-    from: '<button class="btn" data-slot="cta">Send money</button>',
-    to: '<button class="btn" data-slot="cta"><svg viewBox="0 0 1 1"></svg></button>',
+    from: '<button class="btn" data-slot="cta">',
+    to: '<button class="btn"><svg viewBox="0 0 1 1"></svg></button><button class="btn" data-slot="cta">',
     expect: 'has no accessible name' },
   { name: 'no-focus-visible',
     from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
