@@ -4,7 +4,7 @@
 // Lints three layers, in CONTRACT.md gate order:
 //   LOCK INVARIANTS   caps-enforcement · mask-budget · schema-sanity   (on the lock itself)
 //   SOURCE ADHERENCE  raw-hex · css-vars · tokens-only-spacing · placeholders · em-dash ·
-//                     banned-fonts · contrast · transition-all ·
+//                     banned-fonts · contrast · transition-all · a11y ·
 //                     forbidden-substitutes                            (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
 //                     sentence-length · color-only-status · content-lock ·
@@ -54,7 +54,7 @@ const VOID_TAGS = new Set(['input', 'img', 'br', 'hr', 'meta', 'link', 'area', '
 const SECTIONS = [
   'schema-sanity', 'caps-enforcement', 'mask-budget',                                   // lock
   'raw-hex', 'css-vars', 'tokens-only-spacing', 'placeholders', 'em-dash',              // source
-  'banned-fonts', 'contrast', 'transition-all', 'forbidden-substitutes',
+  'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
   'banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',             // microcopy
   'sentence-length', 'color-only-status', 'content-lock', 'signatures', 'imagery-provenance',
 ];
@@ -606,6 +606,169 @@ function checkTransitionAll(files, rel) {
   }
 }
 
+// ---------------------------------------------------------------- a11y (semantic · keyboard · motion)
+//
+// The mechanical half of an accessibility review. Contrast is NOT here — it is its own
+// section, computed on lock tokens (checkContrast). These are the WCAG failures a static
+// scan can prove from source without a browser or a judgment call:
+//   semantic  heading-order jumps · <img> with no alt · unlabelled field · positive tabindex ·
+//             control with no accessible name
+//   keyboard  interactive source with no :focus-visible rule · outline removed with no replacement
+//   motion    transition/animation with no prefers-reduced-motion guard
+//
+// Everything a static scan CANNOT decide is deliberately absent: whether alt text is
+// meaningful, whether focus order matches visual order, whether an error message says what
+// to do. Those stay in the human pass (references/... and the KB's accessibility file).
+// A green a11y section means "no mechanical defect found", never "accessible".
+
+// Blank out non-content regions but keep byte offsets, so lineOf() stays accurate.
+const blankNonContent = (html) => stripHtmlComments(html)
+  .replace(/<head[\s\S]*?<\/head>/gi, spaceFill)
+  .replace(/<script[\s\S]*?<\/script>/gi, spaceFill)
+  .replace(/<style[\s\S]*?<\/style>/gi, spaceFill);
+
+function tagAttr(tag, name) { // '' when present-but-empty, null when absent
+  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+  return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null;
+}
+const hasAccessibleNameAttr = (tag) =>
+  ['aria-label', 'aria-labelledby', 'title'].some((a) => (tagAttr(tag, a) ?? '').trim() !== '');
+
+function checkA11y(files, htmlFiles, rel) {
+  // CSS evidence is pooled across the scanned set: a screen may keep its focus and
+  // reduced-motion rules in a sibling stylesheet rather than its own <style> block.
+  const cssOf = (f) => f.ext === '.css' ? [{ css: stripCssComments(f.content), offset: 0 }]
+    : f.ext === '.html' ? styleBlocks(f.content).map((b) => ({ css: stripCssComments(b.css), offset: b.offset }))
+    : [];
+  const allCss = files.flatMap((f) => cssOf(f).map((b) => b.css)).join('\n');
+  const hasFocusVisible = /:focus-visible\b/.test(allCss);
+  const hasReducedMotionGuard = /@media[^{]*prefers-reduced-motion/i.test(allCss);
+
+  // ---- keyboard: outline removed with nothing put back (any source file)
+  for (const f of files) {
+    for (const { css, offset } of cssOf(f)) {
+      let m;
+      const re = /outline\s*:\s*(none|0)(?![\w.%-])/gi;
+      while ((m = re.exec(css))) {
+        if (hasFocusVisible) continue; // a replacement exists somewhere in the set
+        add('ERROR', 'a11y', rel(f.abs),
+          `"outline: ${m[1]}" with no :focus-visible rule anywhere in the source — keyboard users lose the focus indicator (WCAG 2.4.7)`,
+          lineOf(f.content, offset + m.index));
+      }
+    }
+  }
+
+  // ---- motion: any real transition/animation obliges a reduced-motion guard
+  if (!hasReducedMotionGuard) {
+    for (const f of files) {
+      let reported = false;
+      for (const { css, offset } of cssOf(f)) {
+        let m;
+        // a duration token proves it actually animates; `transition: none` does not match
+        const re = /\b(transition(?:-duration)?|animation(?:-duration)?)\s*:\s*([^;{}]*?\d*\.?\d+m?s\b[^;{}]*)/gi;
+        while ((m = re.exec(css)) && !reported) {
+          reported = true;
+          add('ERROR', 'a11y', rel(f.abs),
+            `"${m[1]}: ${m[2].trim().replace(/\s+/g, ' ')}" but no @media (prefers-reduced-motion: reduce) block in the source — motion must have a reduced variant (WCAG 2.3.3)`,
+            lineOf(f.content, offset + m.index));
+        }
+      }
+    }
+  }
+
+  for (const f of htmlFiles) {
+    const body = blankNonContent(f.content);
+    const at = (i) => lineOf(f.content, i);
+    let m;
+
+    // ---- semantic: heading order may descend freely but only ascend one level at a time
+    let prevLevel = 0;
+    const hRe = /<h([1-6])\b/gi;
+    while ((m = hRe.exec(body))) {
+      const level = Number(m[1]);
+      if (prevLevel && level > prevLevel + 1) {
+        add('ERROR', 'a11y', rel(f.abs),
+          `heading jumps h${prevLevel} to h${level} — screen-reader users navigate by this outline, so levels cannot be skipped (WCAG 1.3.1)`, at(m.index));
+      }
+      prevLevel = level;
+    }
+
+    // ---- semantic: every <img> declares alt (alt="" is the legitimate decorative marker)
+    const imgRe = /<img\b[^>]*>/gi;
+    while ((m = imgRe.exec(body))) {
+      if (tagAttr(m[0], 'alt') === null) {
+        add('ERROR', 'a11y', rel(f.abs),
+          `<img> has no alt attribute — use alt="…" for meaningful images or alt="" for decorative ones (WCAG 1.1.1)`, at(m.index));
+      }
+    }
+
+    // ---- semantic: positive tabindex
+    const tabRe = /\btabindex\s*=\s*["']?(\d+)/gi;
+    while ((m = tabRe.exec(body))) {
+      if (Number(m[1]) > 0) {
+        add('ERROR', 'a11y', rel(f.abs),
+          `tabindex="${m[1]}" — positive values reorder the whole document's tab sequence; use 0 or restructure the DOM (WCAG 2.4.3)`, at(m.index));
+      }
+    }
+
+    // ---- semantic: every field carries a name
+    const labelFor = new Set();
+    const forRe = /<label\b[^>]*\bfor\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+    while ((m = forRe.exec(body))) labelFor.add((m[1] ?? m[2] ?? m[3] ?? '').trim());
+    const labelSpans = [];
+    const wrapRe = /<label\b[^>]*>[\s\S]*?<\/label>/gi;
+    while ((m = wrapRe.exec(body))) labelSpans.push([m.index, m.index + m[0].length]);
+    const wrapped = (i) => labelSpans.some(([a, b]) => i >= a && i < b);
+
+    const SELF_NAMING = new Set(['hidden', 'submit', 'button', 'reset']);
+    const fieldRe = /<(input|select|textarea)\b[^>]*>/gi;
+    while ((m = fieldRe.exec(body))) {
+      const tag = m[0];
+      if (m[1].toLowerCase() === 'input') {
+        const type = (tagAttr(tag, 'type') ?? 'text').trim().toLowerCase();
+        if (SELF_NAMING.has(type)) continue; // value/content supplies the name
+        if (type === 'image') { // named by alt, same rule as <img>
+          if (tagAttr(tag, 'alt') === null && !hasAccessibleNameAttr(tag)) {
+            add('ERROR', 'a11y', rel(f.abs),
+              `<input type="image"> has no alt attribute — it is a control and needs a name (WCAG 1.1.1)`, at(m.index));
+          }
+          continue;
+        }
+      }
+      const id = (tagAttr(tag, 'id') ?? '').trim();
+      if ((id && labelFor.has(id)) || hasAccessibleNameAttr(tag) || wrapped(m.index)) continue;
+      add('ERROR', 'a11y', rel(f.abs),
+        `<${m[1].toLowerCase()}> has no label — needs <label for="…">, a wrapping <label>, or aria-label; a placeholder is not a label (WCAG 3.3.2)`, at(m.index));
+    }
+
+    // ---- semantic: controls with no accessible name (icon-only buttons and links)
+    const ctlRe = /<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+    while ((m = ctlRe.exec(body))) {
+      const [tag, attrs, inner] = [m[1].toLowerCase(), m[2], m[3]];
+      if (tag === 'a' && tagAttr('<a' + attrs + '>', 'href') === null) continue; // not a control
+      const text = decodeEntities(inner.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+      if (text) continue;
+      const openTag = '<' + tag + attrs + '>';
+      if (hasAccessibleNameAttr(openTag)) continue;
+      const img = inner.match(/<img\b[^>]*>/i);
+      if (img && (tagAttr(img[0], 'alt') ?? '').trim() !== '') continue; // named by its image
+      add('ERROR', 'a11y', rel(f.abs),
+        `<${tag}> has no accessible name — an icon-only control needs aria-label or visually-hidden text (WCAG 4.1.2)`,
+        at(m.index));
+    }
+
+    // ---- keyboard: interactive markup obliges a visible focus style
+    const interactive = /<(?:button|select|textarea)\b/i.test(body)
+      || /<a\b[^>]*\bhref\s*=/i.test(body)
+      || /<input\b(?![^>]*\btype\s*=\s*["']?hidden\b)/i.test(body)
+      || /\btabindex\s*=/i.test(body);
+    if (interactive && !hasFocusVisible) {
+      add('ERROR', 'a11y', rel(f.abs),
+        `interactive elements but no :focus-visible rule in the scanned source — every control needs a visible keyboard focus style (WCAG 2.4.7)`, 1);
+    }
+  }
+}
+
 // Optional top-level lock.forbidden = { fontFamilies: [], hexColors: [] } — explicit
 // adjacent-brand substitutes (the near-miss font or palette a generator reaches for when
 // the real one is unavailable). Absent → silent, no finding of any level.
@@ -994,6 +1157,7 @@ function main() {
   checkBannedFonts(lock, lockLabel, files, rel);
   checkContrast(lock, lockLabel);
   checkTransitionAll(files, rel);
+  checkA11y(files, htmlFiles, rel);
   checkForbiddenSubstitutes(lock, files, rel);
 
   // ---- MICROCOPY GATE

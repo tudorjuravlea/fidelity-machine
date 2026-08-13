@@ -26,6 +26,26 @@ Public launch preparation.
   series color discipline, data honesty rules, dashboard composition), and
   references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
   dark-slide derivation). skill-template.md now routes generators to them per artifact type.
+- adherence-lint: an `a11y` section covering the mechanical half of an accessibility
+  review, all at ERROR: heading-order jumps, `<img>` with no alt, unlabelled fields,
+  positive tabindex, controls with no accessible name, interactive source with no
+  `:focus-visible` rule, `outline: none` with no replacement, and transition/animation
+  with no `prefers-reduced-motion` guard. Contrast was already covered by its own section
+  and is not duplicated here. What a static scan cannot decide (whether alt text is
+  meaningful, whether focus order matches visual order) is deliberately absent: a green
+  a11y section means "no mechanical defect found", never "accessible".
+  **Breaking for existing consumers**: screens that animate without a reduced-motion guard,
+  or that ship interactive controls with no focus style, now fail the gate.
+- contract-guard: a `fault-injection` section that mutates a temp copy of the golden
+  fixture one defect at a time and requires each a11y check to go red, plus a control
+  asserting the pristine fixture stays clean. Runs on every invocation, no browser needed.
+  A check that cannot fail is not a check, and nothing else in the suite would notice a
+  section accidentally reduced to a no-op.
+- fixtures/golden/screen-home.html gained a `:focus-visible` rule. The fixture shipped a
+  button with no keyboard focus style, which the new check correctly rejected. Inserted
+  after the `.btn` block so `screen-home.html:42` still points at the line GUIDE.md and the
+  demo GIF cite, and the rule does not render unfocused, so the golden reference PNG is
+  unchanged (proven by the pixel self-test).
 - references/variations.md: how to produce a set of alternative solutions to the same
   problem inside a locked system. Declared axes instead of undeclared restyling, the
   substantive-change test, restrained-to-bold ordering, and the rule that every variation
