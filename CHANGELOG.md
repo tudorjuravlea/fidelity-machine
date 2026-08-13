@@ -26,6 +26,13 @@ Public launch preparation.
   series color discipline, data honesty rules, dashboard composition), and
   references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
   dark-slide derivation). skill-template.md now routes generators to them per artifact type.
+- references/variations.md: how to produce a set of alternative solutions to the same
+  problem inside a locked system. Declared axes instead of undeclared restyling, the
+  substantive-change test, restrained-to-bold ordering, and the rule that every variation
+  is still a lock screen: lint-clean, full disclosure inventory, own self-critique, and an
+  explicit statement of which gates ran (a net-new variation has no reference, so the pixel
+  gate does not apply to it). Adapted from claude-design-system-prompt by Trystan-SA (MIT,
+  credited in NOTICE); routed from skill-template.md.
 - dataviz-craft.md and slides-and-decks.md strengthened with rules from the
   data-visualization literature (Few, Knaflic, Cairo, Wilke, Schwabish, Zelazny):
   question-driven chart selection with slope, distribution, composition, dumbbell and

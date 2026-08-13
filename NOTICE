@@ -12,3 +12,7 @@ Copyright (c) 2025 Cathryn Lavery, MIT License
 references/ia-and-navigation.md adapts information-architecture guidance from ia-practitioner,
 Copyright (c) 2025 Sidhanth Povil, MIT License
 (https://github.com/sidhanth-povil/ia-practitioner).
+
+references/variations.md adapts design guidance from claude-design-system-prompt,
+Copyright (c) 2026 Trystan-SA, MIT License
+(https://github.com/Trystan-SA/claude-design-system-prompt).
