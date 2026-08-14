@@ -141,5 +141,5 @@ layout slack or a Concise copy pass, **never** by cutting a mandatory disclosure
 | One solid region ~100% diff | Wrong color token (surface/background hex) | 1 — computed-style spot-audit vs lock hex; fix the token |
 | Masked region still diffing | Mask rect doesn't actually cover it | 1 — check rect against `diff.png`; fix the rect in the lock |
 | Lint rejects the lock itself | Threshold past cap, or Σ masks > 15% | 1 — tighten thresholds / shrink masks; caps never move |
-| Everything degrades after env change | Installed Chromium ≠ `meta.chromiumBuild` | warn — re-pin the build; re-run `--calibrate`; re-check floor |
+| Everything degrades after env change | Installed Chromium ≠ `meta.chromiumBuild` | exit 2 (hard stop) — re-pin the build; re-run `--calibrate`; re-check floor |
 | Plateau near `noiseFloorPct`, still failing | Threshold set at/too close to the floor | STOP — recalibrate; set threshold above floor, within caps |

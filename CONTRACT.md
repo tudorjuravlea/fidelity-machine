@@ -104,7 +104,7 @@ are created next to the lock.
 
 ## Determinism invariants (render.mjs owns these; others assume them)
 
-1. Pinned Chromium: launch the build recorded in `meta.chromiumBuild`; mismatch → warn loudly in the report.
+1. Pinned Chromium: launch the build recorded in `meta.chromiumBuild`; mismatch → exit 2 (setup error), naming both the expected and resolved build and pointing at `setup-check.mjs` — a different build invalidates the noise-floor calibration and every stored reference, so continuing would produce a meaningless diff. Absent `meta.chromiumBuild` is not checked here (nothing to disagree with).
 2. Viewport = `captureWidth × captureHeight` at `deviceScaleFactor = dpr`; screenshot `scale: dpr === 1 ? 'css' : 'device'` so output PNG dims === reference PNG dims exactly.
 3. Freeze clock + RNG via `addInitScript`; park mouse at bottom-right corner; `caret: 'hide'`.
 4. `reducedMotion: 'reduce'`, screenshot `animations: 'disabled'`, and `await document.getAnimations().map(a => a.finish())`.
