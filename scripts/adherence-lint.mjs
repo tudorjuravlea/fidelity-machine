@@ -139,7 +139,14 @@ function walkSourceFiles(dir) {
       // skips .render/.report too; components-fixtures/ is GENERATED demo scaffolding
       // (build-component-fixture.mjs output) that reproduces reference chrome — the shipped
       // artifact is the library component source, which IS linted (CONTRACT §Fixtures).
-      if (entry.startsWith('.') || entry === 'node_modules' || entry === 'components-fixtures') continue;
+      // dist/ holds generated distributables (standalone self-contained bundles of screens
+      // that are already linted from their own sources) — same class as components-fixtures.
+      if (entry.startsWith('.') || entry === 'node_modules' || entry === 'components-fixtures' || entry === 'dist') continue;
+      // *.preview.html are GENERATED self-contained bundles of a screen that is already
+      // linted from its own source file. Scanning them is redundant (every finding would
+      // be reported twice) and pathological: the CSS/hex scanners degrade superlinearly on
+      // inlined multi-hundred-KB documents, which stalled full-directory runs for minutes.
+      if (entry.endsWith('.preview.html')) continue;
       const p = join(d, entry);
       let st;
       try { st = statSync(p); } catch { continue; }
