@@ -93,10 +93,12 @@ Resolve every decision in this fixed order; higher always beats lower:
 ### Accessibility floor + states
 - WCAG AA: body text ≥4.5:1 against the ACTUAL rendered background it sits on, not the token
   in isolation. Visible focus on every interactive element.
-- Hit areas by surface class, read from the screen's `captureWidth` and never guessed
-  (`references/surface-classes.md`): **touch ≥44×44px** (WCAG 2.5.5 AAA, and the minimum on
-  both mobile platforms); **pointer ≥24×24px** (WCAG 2.5.8 AA floor), in practice 24–32px for
-  icon and toolbar controls on a dense surface. A smaller visual control extends its hit area
+- Hit areas by **input class, not by width** (`references/surface-classes.md`): **touch
+  ≥44×44px** (WCAG 2.5.5, and the minimum on both mobile platforms) for anything a finger can
+  reach, including tablets in landscape, which exceed most desktop breakpoints; **pointer
+  ≥24×24px** (WCAG 2.5.8 AA floor, 24–32px practical) only when the surface is genuinely
+  pointer-only. Undeclared resolves to touch: 44px on a desktop is roomy, 24px on a touch
+  screen is unusable. A smaller visual control extends its hit area
   (inset pseudo-element); two hit areas never overlap. The captured system outranks these
   defaults: if the reference ships 28px controls, reproduce 28px and note it, never inflate
   toward the heuristic and call it fidelity.

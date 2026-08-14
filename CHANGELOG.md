@@ -52,11 +52,15 @@ Public launch preparation.
   unchanged (proven by the pixel self-test).
 - references/surface-classes.md: the engine generates for phones, desktop apps and websites
   from the same lock and previously had no notion of which, so mobile-shaped defaults reached
-  pointer surfaces by omission. The class is now **derived from `screens[].captureWidth`, never
-  guessed** (touch under 600, hybrid to 1023, pointer 1024 and up), and the table names what
-  inverts: hover becomes the primary affordance, the target floor drops from 44px to 24px,
-  navigation becomes persistent, density rises, and keyboard becomes a primary input. Adapted
-  from genjutsu (MIT, credited in NOTICE); routed from skill-template.md section 1.
+  pointer surfaces by omission. It separates two questions that had been conflated: **what the
+  user touches the screen with** decides target sizes and whether hover is load-bearing, while
+  **how wide the screen is** decides layout, density and navigation pattern. Target floors
+  follow the input class and never the width, because every common tablet in landscape (1180 to
+  1366px) is wider than most desktop breakpoints while remaining a pure touch device, so a
+  width-keyed rule would hand a finger-operated screen a 24px target and the gates would
+  certify it. An undeclared class resolves upward to touch, since 44px on a pointer surface is
+  merely roomy while 24px on a touch surface is unusable. Adapted from genjutsu (MIT, credited
+  in NOTICE); routed from skill-template.md section 1.
 - taste-and-composition: the hit-area rule said `≥44×44px touch, ≥40×40px dense desktop`. The
   desktop figure was a number picked once for mobile-era work: WCAG 2.5.8 sets the pointer
   floor at 24×24 and real dense desktop systems run 24 to 32px icon buttons, so a faithfully
