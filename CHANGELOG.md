@@ -27,15 +27,19 @@ Public launch preparation.
   references/slides-and-decks.md (deck grammar, editorial page anatomy, 2x2 variants,
   dark-slide derivation). skill-template.md now routes generators to them per artifact type.
 - adherence-lint: an `a11y` section covering the mechanical half of an accessibility
-  review, all at ERROR: heading-order jumps, `<img>` with no alt, unlabelled fields,
-  positive tabindex, controls with no accessible name, interactive source with no
-  `:focus-visible` rule, `outline: none` with no replacement, and transition/animation
-  with no `prefers-reduced-motion` guard. Contrast was already covered by its own section
-  and is not duplicated here. What a static scan cannot decide (whether alt text is
-  meaningful, whether focus order matches visual order) is deliberately absent: a green
-  a11y section means "no mechanical defect found", never "accessible".
-  **Breaking for existing consumers**: screens that animate without a reduced-motion guard,
-  or that ship interactive controls with no focus style, now fail the gate.
+  review. Seven ERROR checks, each a defect with one correct fix: heading-order jumps,
+  `<img>` with no alt, unlabelled fields, positive tabindex, controls with no accessible
+  name, interactive source with no `:focus-visible` rule, and `outline: none` with no
+  replacement. One WARN check, advisory by design: transition or animation with no
+  `prefers-reduced-motion` guard. That one is a judgment call rather than a defect (how
+  much movement is too much depends on how far it moves and how often it fires, which
+  source alone cannot decide), so it reports and lets the author decide instead of
+  blocking a screen over a 150ms fade. Contrast was already covered by its own section and
+  is not duplicated here. What a static scan cannot decide (whether alt text is meaningful,
+  whether focus order matches visual order) is deliberately absent: a green a11y section
+  means "no mechanical defect found", never "accessible".
+  **Breaking for existing consumers**: screens that ship interactive controls with no
+  focus style now fail the gate. Motion without a reduced variant only warns.
 - contract-guard: a `fault-injection` section that mutates a temp copy of the golden
   fixture one defect at a time and requires each a11y check to go red, plus a control
   asserting the pristine fixture stays clean. Runs on every invocation, no browser needed.

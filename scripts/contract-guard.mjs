@@ -478,7 +478,10 @@ const A11Y_FAULTS = [
     from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
     to: '  .btn { outline: none; }\n',
     expect: '"outline: none"' },
-  { name: 'motion-without-reduced-guard',
+  // Advisory by design: this one must fire as a WARN and must NOT change the exit code.
+  // Proving that is the point — a check silently promoted to ERROR would start blocking
+  // every prototype that fades anything, and nothing else here would notice.
+  { name: 'motion-without-reduced-guard', level: 'WARN',
     from: '    font-size: 15px; font-weight: 600; font-family: inherit;',
     to: '    font-size: 15px; font-weight: 600; font-family: inherit; transition: opacity 200ms;',
     expect: 'prefers-reduced-motion' },
@@ -527,13 +530,18 @@ function runFaultInjection() {
       fs.writeFileSync(screen, pristine.replace(f.from, f.to));
       const res = lint();
       const out = `${res.stdout ?? ''}${res.stderr ?? ''}`;
-      const fired = out.split('\n').some((l) => l.includes('[ERROR]') && l.includes('a11y') && l.includes(f.expect));
-      if (res.status === 0) {
+      const level = f.level ?? 'ERROR';
+      const fired = out.split('\n').some((l) => l.includes(`[${level}]`) && l.includes('a11y') && l.includes(f.expect));
+      if (level === 'ERROR' && res.status === 0) {
         add('ERROR', 'fault-injection', `a11y/${f.name}`,
           `injected defect "${f.name}" but adherence-lint still exits 0 — this check cannot fail, so its green result proves nothing`);
       } else if (!fired) {
         add('ERROR', 'fault-injection', `a11y/${f.name}`,
-          `injected defect "${f.name}" failed the lint, but no a11y ERROR quoted ${JSON.stringify(f.expect)} — the failure came from a different check, so this one is still unproven\n${tail(res)}`);
+          `injected defect "${f.name}" produced no a11y ${level} quoting ${JSON.stringify(f.expect)} — this check is unproven\n${tail(res)}`);
+      } else if (level === 'WARN' && res.status !== 0) {
+        // An advisory check that blocks is as wrong as a blocking check that does not.
+        add('ERROR', 'fault-injection', `a11y/${f.name}`,
+          `"${f.name}" is advisory but adherence-lint exited ${res.status} — a WARN-level check must not change the exit code, or every screen with motion starts failing the gate\n${tail(res)}`);
       }
       fs.writeFileSync(screen, pristine);
     }
