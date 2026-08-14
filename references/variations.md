@@ -98,3 +98,25 @@ and B is the only option where that number is the dominant element" is a recomme
 
 Record what the reviewer picked and why. The next screen in the same system inherits that
 decision instead of re-litigating it.
+
+## Showing the set
+
+A variation set is approved by looking at it, so how it is shown is part of the method.
+
+**Ask once how the reviewer wants to see options, then stop asking.** Inline, as a file to
+open, or described in text. The answer holds for the whole session; announce the mode in one
+line at later gates rather than reopening the question. Re-asking every time is what makes
+people stop asking for options at all.
+
+**Show only values that are in the lock or in the annotation.** A number visible in a
+comparison that was not in the thing being approved creates a second, unvalidated spec, and
+that is the one the reviewer remembers. This is the same rule the whole engine runs on: the
+lock is the authority, and anything shown as if it were authoritative has to come from it.
+
+**A comparison bundle is throwaway.** It exists to carry the decision, not to become the
+implementation. The winning option ships from its own verified source, never by lifting
+markup out of the bundle.
+
+**If a variation animates, show its reduced-motion state next to it.** The degraded version
+is part of the design being approved, and it is the item most often skipped and most likely
+to change the decision.
