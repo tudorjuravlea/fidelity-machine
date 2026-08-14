@@ -1,7 +1,7 @@
 {
   "name": "fidelity-machine",
   "private": true,
-  "description": "fidelity-machine — a machine-verified ship gate for design-system work: capture a frozen design lock, generate visuals against it, and refuse anything off-system (render, geometry, pixel-diff, content and microcopy lint).",
+  "description": "fidelity-machine \u2014 a machine-verified ship gate for design-system work: capture a frozen design lock, generate visuals against it, and refuse anything off-system (render, geometry, pixel-diff, content and microcopy lint).",
   "type": "module",
   "dependencies": {
     "esbuild": "^0.28.1",
@@ -15,7 +15,7 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1"
   },
-  "version": "0.9.0",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
