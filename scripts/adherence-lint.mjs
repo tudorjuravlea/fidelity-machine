@@ -614,7 +614,9 @@ function checkTransitionAll(files, rel) {
 //   semantic  heading-order jumps · <img> with no alt · unlabelled field · positive tabindex ·
 //             control with no accessible name
 //   keyboard  interactive source with no :focus-visible rule · outline removed with no replacement
-//   motion    transition/animation with no prefers-reduced-motion guard
+//   motion    transition/animation with no prefers-reduced-motion guard — WARN, advisory
+//             only: how much movement is too much is a judgment call, so it reports and
+//             lets the author decide instead of blocking a screen over a 150ms fade
 //
 // Everything a static scan CANNOT decide is deliberately absent: whether alt text is
 // meaningful, whether focus order matches visual order, whether an error message says what
@@ -658,7 +660,12 @@ function checkA11y(files, htmlFiles, rel) {
     }
   }
 
-  // ---- motion: any real transition/animation obliges a reduced-motion guard
+  // ---- motion: advisory only, deliberately NOT blocking.
+  // Every other check here is a defect with one correct fix. This one is a judgment call:
+  // whether a given motion needs a reduced variant depends on how much it moves and how
+  // often it fires, which source alone cannot decide. Blocking on it would stop prototypes
+  // over a 150ms fade, so it reports and lets the author decide. WCAG 2.3.3 still wants the
+  // variant; the gate just does not hold the screen hostage for it.
   if (!hasReducedMotionGuard) {
     for (const f of files) {
       let reported = false;
@@ -668,8 +675,8 @@ function checkA11y(files, htmlFiles, rel) {
         const re = /\b(transition(?:-duration)?|animation(?:-duration)?)\s*:\s*([^;{}]*?\d*\.?\d+m?s\b[^;{}]*)/gi;
         while ((m = re.exec(css)) && !reported) {
           reported = true;
-          add('ERROR', 'a11y', rel(f.abs),
-            `"${m[1]}: ${m[2].trim().replace(/\s+/g, ' ')}" but no @media (prefers-reduced-motion: reduce) block in the source — motion must have a reduced variant (WCAG 2.3.3)`,
+          add('WARN', 'a11y', rel(f.abs),
+            `something on this screen moves ("${m[1]}: ${m[2].trim().replace(/\s+/g, ' ')}") and the source has no @media (prefers-reduced-motion: reduce) block — advisory, not blocking: for full WCAG 2.3.3 compliance, offer a version with less movement`,
             lineOf(f.content, offset + m.index));
         }
       }
