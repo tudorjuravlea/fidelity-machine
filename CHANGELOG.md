@@ -124,12 +124,19 @@ Public launch preparation.
   kit and principles, label rules tied to the lock's content vocabulary, and gate hooks.
 
 ### Changed
+- adherence-lint no longer walks `dist/` or `*.preview.html`. Both are generated,
+  self-contained bundles of screens already linted from their own sources, so scanning them
+  reported every finding twice and fed multi-hundred-KB inlined documents to scanners that
+  degrade superlinearly. Measured on a real capture: a full-directory run that previously did
+  not finish in five minutes now completes in **0.9 seconds**. Backported from a private
+  install. Being precise, because the number invites the wrong conclusion: this stops feeding
+  the scanners pathological input, it does not fix the superlinear behaviour, and a genuinely
+  large source file outside those paths still takes minutes.
 - Golden fixture is English-native: en locale, USD formats, English voice chart, jargon
   list and disclosure inventory; pixel reference recaptured. Fixture line numbers are
   preserved so GUIDE references stay exact.
 - CI runs on Node 22.
 
-### Changed
 - A Chromium build mismatch is now **exit 2 (setup error) instead of a warning**, matching the
   behaviour the studio forks have shipped since July. A different build rasterizes text,
   antialiasing and compositing differently, which invalidates both the noise-floor calibration
