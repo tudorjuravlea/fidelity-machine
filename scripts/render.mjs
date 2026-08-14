@@ -105,17 +105,21 @@ function checkChromiumBuild(lock) {
   }
   const buildDirActual = extractBuildDir(executablePath);
   const expected = lock.meta?.chromiumBuild;
-  let warning = null;
+  // A different Chromium build rasterizes text, antialiasing and compositing differently: it
+  // invalidates the noise-floor calibration (meta.noiseFloorPct) AND every stored reference
+  // image, so continuing would produce a meaningless diff. That is a setup problem for a human
+  // to fix (install the pinned build, or re-pin and recalibrate), never a fidelity finding,
+  // hence exit 2 rather than a warning. Absence of meta.chromiumBuild is a different situation
+  // (nothing to disagree with), so it is left alone here; a missing required field is already
+  // caught by design-lock.schema.json and adherence-lint's schema-sanity section.
   if (expected && !buildDirActual.includes(expected)) {
-    warning =
-      `!!! CHROMIUM BUILD MISMATCH !!! lock meta.chromiumBuild="${expected}" but the actual ` +
-      `launched build dir is "${buildDirActual}" (executable: ${executablePath}). Renders are NOT ` +
-      'guaranteed pixel-comparable to references captured under the pinned build, and ' +
-      'meta.noiseFloorPct calibration is invalid for this binary. Install the pinned build ' +
-      '(npx playwright install chromium) or re-pin the lock and re-run verify.mjs --calibrate.';
-    console.error(warning); // loud on stderr, AND recorded in the geometry json below
+    fail(EXIT.SETUP,
+      `exit 2 (setup/usage error): CHROMIUM BUILD MISMATCH — lock meta.chromiumBuild="${expected}" but the ` +
+      `resolved build is "${buildDirActual}" (executable: ${executablePath}). Run ` +
+      'scripts/setup-check.mjs, then either install the pinned build ' +
+      '(npx playwright install chromium) or re-pin the lock and re-run verify.mjs --calibrate.');
   }
-  return { executablePath, buildDirActual, expected: expected ?? null, warning };
+  return { executablePath, buildDirActual, expected: expected ?? null, warning: null };
 }
 
 // -------------------------------------------------- in-page determinism (invariant 3)

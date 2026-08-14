@@ -129,6 +129,15 @@ Public launch preparation.
   preserved so GUIDE references stay exact.
 - CI runs on Node 22.
 
+### Changed
+- A Chromium build mismatch is now **exit 2 (setup error) instead of a warning**, matching the
+  behaviour the studio forks have shipped since July. A different build rasterizes text,
+  antialiasing and compositing differently, which invalidates both the noise-floor calibration
+  and every stored reference image, so continuing produced a diff that looked authoritative and
+  meant nothing. That is a setup problem for a human to fix, never a fidelity finding. Absent
+  `meta.chromiumBuild` is still not checked here, since there is nothing to disagree with.
+  CONTRACT.md determinism invariant 1 and references/pixel-diff-tuning.md updated to match.
+
 ### Fixed
 - Windows portability in release-check: walked paths are posix-normalized and every
   constant compared against them uses forward slashes, including the scanner's own
