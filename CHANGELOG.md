@@ -50,6 +50,25 @@ Public launch preparation.
   after the `.btn` block so `screen-home.html:42` still points at the line GUIDE.md and the
   demo GIF cite, and the rule does not render unfocused, so the golden reference PNG is
   unchanged (proven by the pixel self-test).
+- references/motion-craft.md: the engine has carried `tokens.motion.durationsMs` and
+  `tokens.motion.easings` in the lock schema since the beginning, and the lint has enforced
+  motion rules for as long, with no reference explaining either. This closes that: durations
+  and curves are read from the lock by name (a hard-coded 250ms is the same defect class as a
+  hard-coded hex), spring-for-spatial and tween-for-effects explains why a system's standard
+  curve looks as it does, exits are never staggered, and the reduced variant is designed rather
+  than derived. Two rules the pipeline needed and nobody had written: **the pixel gate cannot
+  see motion**, so a green diff never implies the animation was reviewed, and **motion must not
+  be in flight at capture**, or the diff is nondeterministic and the failure masquerades as a
+  flaky threshold. Includes the native-to-web translation layer, since a prototype of a native
+  app is HTML while the system it reproduces is specified for Android or Apple.
+- references/modern-css.md: scroll-driven animations, view transitions, `@starting-style`,
+  anchor positioning and container queries, with the layered fallback ladder (start visible,
+  then enhance) that prevents the blank-page failure where content begins at opacity 0 and the
+  animation never runs. Two traps specific to this pipeline: the pinned render browser confirms
+  a feature works in that build and nowhere else, so support decisions are never made by
+  observing a green diff; and only the container-query branch that applies at the capture
+  viewport is ever pixel-verified. Deliberately ships no browser-support table, because a stale
+  one gets believed.
 - references/scope-contract.md: size a request before running the pipeline on it, and state
   what the work will do in a form the gates can check afterwards. Four tiers (Touch, Region,
   Screen, Set) select a proportionate gate set, but the compliance floor (content lint plus
