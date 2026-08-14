@@ -20,6 +20,7 @@ Copyright (c) 2026 Trystan-SA, MIT License
 references/variations.md also adapts preview-gate guidance,
 references/scope-contract.md adapts the scope-and-thesis stages,
 references/modern-css.md adapts progressive-enhancement guidance, and
-references/motion-craft.md adapts cross-platform motion guidance, from genjutsu,
+references/motion-craft.md adapts cross-platform motion guidance, and
+references/surface-classes.md adapts desktop-surface guidance, from genjutsu,
 Copyright (c) 2026 Adrien Thevon, MIT License
 (https://github.com/AThevon/genjutsu).
