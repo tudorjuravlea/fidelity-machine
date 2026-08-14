@@ -24,10 +24,12 @@ overwrite a lock (`capture-figma.mjs --merge`). Setup unverified → `ENGINE/scr
 
 ## 1. Route every node — Mode A / B1 / B2
 
-**Read the surface class first.** `screens[].captureWidth` decides it: touch under 600,
-hybrid 600 to 1023, pointer 1024 and up. Hit-area floors, navigation pattern, density and the
-motion budget all invert between touch and pointer, and hover is load-bearing on pointer
-surfaces rather than decorative. Never infer the class from the system's name. Full table:
+**Read the surface class first, and read it from INPUT, not width.** Anything a finger can
+reach is touch and keeps a 44px target floor, including tablets in landscape, which are wider
+than most desktop breakpoints; 24px applies only to genuinely pointer-only surfaces, and an
+undeclared class resolves upward to touch. `screens[].captureWidth` decides the *layout*
+inversions instead: navigation pattern, density, and the motion budget. Hover is load-bearing
+on pointer surfaces rather than decorative. Full method:
 `ENGINE/references/surface-classes.md`.
 
 **Size the request before routing anything in it.** Touch (one property on one element) /

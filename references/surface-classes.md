@@ -1,31 +1,60 @@
 # Surface classes: touch and pointer
 
 The engine generates screens for phones, desktop apps and websites from the same lock. Several
-craft rules invert between them, and the inversion is not a judgment call: it is read from the
-screen's declared capture width.
+craft rules invert between them, and getting the split wrong is a usability defect the gates
+cannot see.
 
-Nothing in the engine previously distinguished the two, so mobile-shaped defaults were applied
-to desktop surfaces by omission.
+Two different questions are involved and they have two different answers. **What the user
+touches the screen with** decides target sizes and whether hover is load-bearing. **How wide
+the screen is** decides layout, density and navigation pattern. Conflating them is the trap
+this file exists to prevent, because tablets in landscape are wider than most desktop
+breakpoints while remaining pure touch devices.
 
-## Derive the class, never guess it
+## The class is about input, not about width
 
-`screens[].captureWidth` is in the lock schema. Use it.
+The class that matters is **what the user touches the screen with**. Width is only a proxy for
+it, and the proxy breaks badly:
 
-| captureWidth | Class | Primary input |
+| Device | Portrait | Landscape |
 |---|---|---|
-| Up to 599 | **Touch** | Finger |
-| 600 to 1023 | **Hybrid** | Either. Design for touch, allow pointer refinements |
-| 1024 and up | **Pointer** | Mouse, trackpad, keyboard |
+| iPad Pro 12.9 | 1024 | **1366** |
+| iPad Pro 11 | 834 | **1194** |
+| iPad 10.9 | 820 | **1180** |
 
-A screen with no `captureWidth` is a capture gap for anything in this file. Ask, or read it
-from the reference image dimensions, but do not assume.
+Every common tablet in landscape sits above 1024 while remaining a pure touch device. Any rule
+that reads "1024 and up means pointer" hands a finger-operated screen a 24px target, which is
+a usability failure the machine would have certified.
+
+**So classify by input, declared at capture time.** The captured system knows what it is: a
+mobile banking app is touch, an internal admin console is pointer, a public website is usually
+both. That is a property of the system and the screen's intent, not of the number of pixels
+being rendered.
+
+| Class | Means | Target floor |
+|---|---|---|
+| **Touch** | Reachable by finger at any width: phone, tablet in either orientation, touchscreen laptop, kiosk | **44x44px** |
+| **Pointer** | Mouse, trackpad and keyboard only, with no touch story | **24x24px** (WCAG 2.5.8), 24 to 32px practical for icon and toolbar controls |
+| **Both** | A responsive site served to phones and desktops alike | **44x44px** on every breakpoint a touch device can reach |
+
+**When the class is not declared, resolve upward to touch.** The failure modes are asymmetric:
+a 44px target on a pointer surface is merely roomy, while a 24px target on a touch surface is
+unusable. Ambiguity is never a reason to choose the smaller floor.
+
+**What `captureWidth` is actually for.** It tells you which breakpoint you are rendering, which
+is what decides layout, density and navigation pattern below. It does not tell you what the
+user's hand is doing. Use it for the layout inversions, never for the target floor.
+
+Width as a last-resort inference, when nothing else is known: under 600 is certainly touch;
+600 to 1366 is ambiguous because tablets occupy it in both orientations; above 1366 is probably
+pointer, though a touchscreen laptop is still possible. Every band except the first resolves
+upward under the rule above.
 
 ## What inverts
 
 | | Touch | Pointer |
 |---|---|---|
 | Primary affordance signal | Target size and label | **Hover** |
-| Target floor | 44x44px (WCAG 2.5.5 AAA, and both mobile platform minimums) | **24x24px** (WCAG 2.5.8 AA), practically 24 to 32px for icon and toolbar controls |
+| Target floor | 44x44px, and see the input rule above: this follows the input class, never the width | **24x24px** (WCAG 2.5.8 AA) only when the surface is genuinely pointer-only |
 | Navigation | Bottom tabs; a hidden menu is acceptable | **Persistent**. A hamburger on a wide viewport hides navigation there is room for |
 | Density | Generous, one decision per screen | **High**, many decisions per viewport |
 | Base grid | 4 to 8px | 8px |
