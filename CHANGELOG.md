@@ -50,6 +50,11 @@ Public launch preparation.
   after the `.btn` block so `screen-home.html:42` still points at the line GUIDE.md and the
   demo GIF cite, and the rule does not render unfocused, so the golden reference PNG is
   unchanged (proven by the pixel self-test).
+- references/variations.md gained a "Showing the set" section: ask once how the reviewer
+  wants to see options and keep that mode for the session, show only values that are in the
+  lock or the annotation (anything else becomes a second unvalidated spec), treat the
+  comparison bundle as throwaway, and show a variation's reduced-motion state beside it.
+  Adapted from genjutsu by Adrien Thevon (MIT, credited in NOTICE).
 - references/variations.md: how to produce a set of alternative solutions to the same
   problem inside a locked system. Declared axes instead of undeclared restyling, the
   substantive-change test, restrained-to-bold ordering, and the rule that every variation

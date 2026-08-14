@@ -16,3 +16,7 @@ Copyright (c) 2025 Sidhanth Povil, MIT License
 references/variations.md adapts design guidance from claude-design-system-prompt,
 Copyright (c) 2026 Trystan-SA, MIT License
 (https://github.com/Trystan-SA/claude-design-system-prompt).
+
+references/variations.md also adapts preview-gate guidance from genjutsu,
+Copyright (c) 2026 Adrien Thevon, MIT License
+(https://github.com/AThevon/genjutsu).
