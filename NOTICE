@@ -17,6 +17,7 @@ references/variations.md adapts design guidance from claude-design-system-prompt
 Copyright (c) 2026 Trystan-SA, MIT License
 (https://github.com/Trystan-SA/claude-design-system-prompt).
 
-references/variations.md also adapts preview-gate guidance from genjutsu,
+references/variations.md also adapts preview-gate guidance, and
+references/scope-contract.md adapts the scope-and-thesis stages, from genjutsu,
 Copyright (c) 2026 Adrien Thevon, MIT License
 (https://github.com/AThevon/genjutsu).

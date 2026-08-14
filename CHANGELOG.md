@@ -50,6 +50,17 @@ Public launch preparation.
   after the `.btn` block so `screen-home.html:42` still points at the line GUIDE.md and the
   demo GIF cite, and the rule does not render unfocused, so the golden reference PNG is
   unchanged (proven by the pixel self-test).
+- references/scope-contract.md: size a request before running the pipeline on it, and state
+  what the work will do in a form the gates can check afterwards. Four tiers (Touch, Region,
+  Screen, Set) select a proportionate gate set, but the compliance floor (content lint plus
+  the disclosure inventory) runs at every tier and never scales down. The contract itself is
+  INTENT with no adjectives, CHANGES, USES by token name, and FROZEN, which makes it
+  falsifiable: after the gates pass, the diff is checked against the contract, so a change
+  outside CHANGES is reported as scope creep and anything in FROZEN that moved is a failure
+  regardless of what the gates scored. Closes a real hole, since a gate suite answers "is this
+  output legal" and nothing previously answered "is this the output that was asked for".
+  Adapted from the scope-and-thesis stages of genjutsu's cast (MIT, credited in NOTICE);
+  routed from skill-template.md section 1, and its reporting rule folded into section 6.
 - references/variations.md gained a "Showing the set" section: ask once how the reviewer
   wants to see options and keep that mode for the session, show only values that are in the
   lock or the annotation (anything else becomes a second unvalidated spec), treat the

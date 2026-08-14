@@ -24,6 +24,17 @@ overwrite a lock (`capture-figma.mjs --merge`). Setup unverified → `ENGINE/scr
 
 ## 1. Route every node — Mode A / B1 / B2
 
+**Size the request before routing anything in it.** Touch (one property on one element) /
+Region / Screen / Set. Write the scope contract first — INTENT in one sentence with no
+adjectives, CHANGES, USES (token names, never values), FROZEN (always includes every
+disclosure string and every element not in CHANGES) — then run the gate set for that tier.
+The compliance floor (content lint + disclosure inventory) runs at every tier including Touch
+and never scales down; only geometry, pixel and the full self-critique are proportionate. After
+the gates pass, check the diff against the contract: anything changed that is not in CHANGES is
+scope creep, and anything in FROZEN that moved is a failure whatever the gates scored. Report
+the tier and every skipped gate with its reason. Full method:
+`ENGINE/references/scope-contract.md`.
+
 Per region: in the lock's `componentMap` → **Mode A**, compose the real component, never restyle
 it. Figma geometry+variables exist → **Mode B1**, generate from lock tokens + captured anatomy. Image
 only → **Mode B2**, pixel gate + mandatory human worst-region review. Details:
@@ -91,10 +102,13 @@ looser gate.
 
 ## 6. Reporting
 
-Per screen: mode per region; `<spec_adherence>` summary; microcopy table (all locales,
-`⚠ Legal` flags); taste scores with evidence; verify numbers (globalPct, worstTile, rounds);
-and anything unverified, stated plainly. A screen that didn't converge ships as "not converged"
-or not at all.
+Per screen: the scope tier and its contract; mode per region; `<spec_adherence>` summary;
+microcopy table (all locales, `⚠ Legal` flags); taste scores with evidence; verify numbers
+(globalPct, worstTile, rounds); **every gate that did not run, with its reason**; and anything
+unverified, stated plainly. A screen that didn't converge ships as "not converged" or not at all.
+
+"Passed" is never a complete report at any tier below Screen, because a proportionate gate set
+verified proportionately. Name what ran (`ENGINE/references/scope-contract.md` §5).
 
 Every shipped screen also reports a production status: **`production-ready`** (every input
 verified), **`concept-ready`** naming the remaining clearances (draft disclosure, unlicensed
