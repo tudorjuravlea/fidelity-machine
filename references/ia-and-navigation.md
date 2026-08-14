@@ -71,7 +71,9 @@ Principles, all checkable on a rendered screen:
 
 1. Users always know where they are: active states, breadcrumbs, and a page title that
    matches the navigation label that led there. A nav/H1 mismatch creates doubt.
-2. No hover-only navigation; everything reachable on touch.
+2. No hover-only navigation. On touch there is no hover at all; on pointer surfaces a
+   hover-only menu is unreachable by keyboard. Everything must be reachable by tap AND
+   by keyboard.
 3. Every page offers a clear next step. A page without a primary action is a dead end.
 4. Balanced pathways: too many paths cause choice paralysis, too few cause dead ends.
    Fewer, clearer items usually outperform more.
@@ -103,7 +105,7 @@ dead end: always offer revision, tips, a browse path, and a human contact.
 | More than 8 top-level items | Decision paralysis |
 | Nav label differs from page heading | Users doubt their location |
 | Junk-drawer categories, quick links | Structural failure made visible |
-| Hover-dependent menus | Unusable on touch |
+| Hover-dependent menus | Unusable on touch, unreachable by keyboard |
 | Pages without a next step | Dead ends |
 | Footer as the only navigation | Users do not scroll to find nav |
 

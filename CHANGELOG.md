@@ -50,6 +50,21 @@ Public launch preparation.
   after the `.btn` block so `screen-home.html:42` still points at the line GUIDE.md and the
   demo GIF cite, and the rule does not render unfocused, so the golden reference PNG is
   unchanged (proven by the pixel self-test).
+- references/surface-classes.md: the engine generates for phones, desktop apps and websites
+  from the same lock and previously had no notion of which, so mobile-shaped defaults reached
+  pointer surfaces by omission. The class is now **derived from `screens[].captureWidth`, never
+  guessed** (touch under 600, hybrid to 1023, pointer 1024 and up), and the table names what
+  inverts: hover becomes the primary affordance, the target floor drops from 44px to 24px,
+  navigation becomes persistent, density rises, and keyboard becomes a primary input. Adapted
+  from genjutsu (MIT, credited in NOTICE); routed from skill-template.md section 1.
+- taste-and-composition: the hit-area rule said `≥44×44px touch, ≥40×40px dense desktop`. The
+  desktop figure was a number picked once for mobile-era work: WCAG 2.5.8 sets the pointer
+  floor at 24×24 and real dense desktop systems run 24 to 32px icon buttons, so a faithfully
+  captured system would have sat permanently in violation of the engine's own rule, which is
+  how a guideline gets ignored. Now keyed by surface class and anchored to the WCAG level
+  rather than to a chosen number, with the captured system explicitly outranking the default.
+- ia-and-navigation: the hover-only navigation ban was justified only as "unusable on touch".
+  On a pointer surface the failure is that it is unreachable by keyboard. Both are now stated.
 - references/motion-craft.md: the engine has carried `tokens.motion.durationsMs` and
   `tokens.motion.easings` in the lock schema since the beginning, and the lint has enforced
   motion rules for as long, with no reference explaining either. This closes that: durations

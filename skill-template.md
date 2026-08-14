@@ -24,6 +24,12 @@ overwrite a lock (`capture-figma.mjs --merge`). Setup unverified → `ENGINE/scr
 
 ## 1. Route every node — Mode A / B1 / B2
 
+**Read the surface class first.** `screens[].captureWidth` decides it: touch under 600,
+hybrid 600 to 1023, pointer 1024 and up. Hit-area floors, navigation pattern, density and the
+motion budget all invert between touch and pointer, and hover is load-bearing on pointer
+surfaces rather than decorative. Never infer the class from the system's name. Full table:
+`ENGINE/references/surface-classes.md`.
+
 **Size the request before routing anything in it.** Touch (one property on one element) /
 Region / Screen / Set. Write the scope contract first — INTENT in one sentence with no
 adjectives, CHANGES, USES (token names, never values), FROZEN (always includes every
