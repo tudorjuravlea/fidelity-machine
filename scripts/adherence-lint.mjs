@@ -57,6 +57,7 @@ const SECTIONS = [
   'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
   'banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',             // microcopy
   'sentence-length', 'color-only-status', 'content-lock', 'signatures', 'imagery-provenance',
+  'figid-coverage',                                                                     // gate integrity
 ];
 
 // ---------------------------------------------------------------- findings (hue model)
@@ -1056,6 +1057,41 @@ function checkImageryProvenance(lock, files, rel) {
   }
 }
 
+function checkFigIdCoverage(lock, lockDir, lockLabel, rel) {
+  // Gate integrity. A screen that declares figIds is asking the geometry gate to resolve them,
+  // and render.mjs resolves them with document.querySelector(`[data-fig-id="${domId}"]`). So a
+  // null domId queries [data-fig-id="null"] and a fixture without the attribute matches nothing.
+  // Either way geometry reports "missing" and STOPS — the pixel diff, which is the check that
+  // actually compares the design, never runs. The screen looks verified while nothing was
+  // compared. That silence is the defect; this makes it loud, at the gate people actually run.
+  const screens = Array.isArray(lock.screens) ? lock.screens : [];
+  let declared = 0;
+  for (const s of screens) {
+    const figIds = Array.isArray(s.figIds) ? s.figIds : [];
+    if (!figIds.length) continue;
+    const srcPath = s.url ? resolve(lockDir, s.url) : null;
+    const html = srcPath && existsSync(srcPath) ? readFileSync(srcPath, 'utf8') : null;
+    for (const f of figIds) {
+      declared++;
+      if (!f.domId) {
+        add('ERROR', 'figid-coverage', lockLabel,
+          `screen "${s.id}" declares figId "${f.figmaNodeId}" with no domId — render.mjs will query [data-fig-id="null"], geometry reports "missing", and the pixel diff never runs. Set domId (conventionally the figmaNodeId) and tag the element.`);
+        continue;
+      }
+      // Deliberately a substring test, not `data-fig-id="<id>"`. These fixtures are
+      // client-rendered: the id reaches the DOM as a JSX prop, so the literal attribute never
+      // appears in source. Testing for the attribute form reports found-at-render elements as
+      // missing. Whether the element truly resolves is the render dump's job (geometry.mjs);
+      // all this can honestly assert is that the id is referenced by the source at all.
+      if (html && !html.includes(f.domId)) {
+        add('ERROR', 'figid-coverage', rel(srcPath),
+          `screen "${s.id}" declares figId domId "${f.domId}" but that id appears nowhere in this file — nothing can carry data-fig-id="${f.domId}", so geometry blocks before the pixel diff and this screen is never actually compared`);
+      }
+    }
+  }
+  if (!declared) add('SKIP', 'figid-coverage', '(lock)', 'no screen declares figIds');
+}
+
 function checkSignatures(lock, files) {
   const signatures = Array.isArray(lock.signatures) ? lock.signatures : [];
   // Signature greps target GENERATED SCREEN SOURCE (.html/.jsx/.tsx), not derived token assets —
@@ -1184,6 +1220,7 @@ function main() {
   checkContentLock(lock, lockDir, srcDir, rel);
   checkSignatures(lock, files);
   checkImageryProvenance(lock, files, rel);
+  checkFigIdCoverage(lock, lockDir, lockLabel, rel);
 
   // ---- report
   console.log('adherence-lint — static gate');
