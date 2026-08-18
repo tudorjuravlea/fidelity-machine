@@ -51,3 +51,7 @@ Tokens describe your system; they cannot check the output. You can have a perfec
 ## The agent says a screen is fine. The machine says it is not. Who wins?
 
 The machine. That is the entire point. Agents are confident; measurements are correct. The findings go back to the agent with the file, line, and rule, and the loop continues until the machine is satisfied or reports honestly that it cannot converge.
+
+## Why not perceptual diffing?
+
+Perceptual similarity measures are engineered to tolerate exactly the differences this machine hunts. A perceptual hash reduces a screen to a grayscale frequency signature, erasing a radius that is almost right, a gray that is almost warm, a headline font that is almost yours, and a disclaimer that quietly vanished. Those are the four failures the README opens with. Adopting one would install the blindness this machine exists to remove.
