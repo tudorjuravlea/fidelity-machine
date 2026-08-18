@@ -70,6 +70,27 @@ state is almost never "the same thing, slower":
 - Layout must not shift when motion is off. A reduced-motion path that changes the composition
   is a second design, not a fallback.
 
+Mature design systems ship exactly two strategies for this, and which one applies depends on how
+the animation was authored:
+
+1. **A dedicated reduced variant of the animation itself.** Where the asset or component can
+   express a motion-off state, select that variant rather than suppressing playback. This is the
+   preferred form: the animation's own author decided what the still frame should be.
+2. **Swap in a static asset.** Where no reduced variant exists, render a still image or plain
+   element in place of the animated one.
+
+Two rules govern both. **The reduced path lands on the final state, never a paused mid-frame** —
+a spinner frozen mid-rotation or a checkmark stopped half-drawn reads as broken, not as calm.
+And **gate the re-trigger paths too**: it is not enough to skip the initial animation if a state
+change later re-fires it. Anything that replays, restarts or re-enters the animation must check
+the same flag.
+
+Systems that take this seriously expose motion as a **per-instance flag defaulting to a global
+switch**, so a whole surface can be calmed at once while an individual component can still opt
+out. If you are translating from such a system, that global is the signal that reduced motion is
+a product feature there, not a courtesy — match it rather than treating the media query as the
+whole story.
+
 The lint reports motion with no `prefers-reduced-motion` guard as a WARN rather than an ERROR,
 because how much movement is too much is a judgment call. The WARN is advisory about the
 threshold, never about whether the variant is required.
