@@ -7,12 +7,13 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Fixed
 
-- **Brand leakage in `new-system.mjs`.** The usage comment used a real bank's name as its
-  example system (`--name acme-banking`, `--title "Acme Banking"`), shipped publicly since
-  2026-08-06. Replaced with `acme-banking`, matching the neutral example used elsewhere. The
+- **Brand leakage in `new-system.mjs`.** The usage comment used a real bank as its example
+  system name. Replaced with `acme-banking`, the neutral example used elsewhere in the docs. The
   built-in leakage sweep could not know that term; it surfaced only when `release-check` was run
   with an explicit `--ban`. **Run the sweep with the specific brand names you have worked with
-  recently, not just the defaults** — that is what `--ban`/`--ban-file` are for.
+  recently, not just the defaults** — that is what `--ban`/`--ban-file` are for. Note also that a
+  sweep is only valid for the tree it ran against: re-run it after the last edit, including edits
+  to this file.
 
 ### Changed
 
