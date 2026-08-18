@@ -28,6 +28,21 @@ longest locale.
 - **Errors read with their field** — structure so label + message announce sensibly
   together: "Error: Email must include @".
 - Add ARIA labels only when the visible context alone isn't enough.
+- **An accessible name is not a test hook.** These are two different jobs and each element that
+  needs both gets both, in separate attributes. The assistive-tech name (`aria-label`, or better,
+  real visible text) is written for a person and is translated; the automation identifier
+  (`data-testid` or equivalent) is a stable machine key, never translated, never read aloud.
+  Design systems that keep this straight declare them as separate fields with different types —
+  the identifier always present and defaulted, the label optional and set only where the visible
+  context is insufficient. Overloading one attribute for both jobs produces either brittle tests
+  that break on a copy edit, or names read aloud that were written for a test runner.
+- **Announce state changes, do not merely render them.** Loading, error, success and
+  selection changes need a live region or an appropriate state attribute, not just new pixels.
+- **Decorative means silent** — decorative imagery, dividers, separators and background shapes
+  are hidden from assistive tech, not merely unlabelled.
+- Recurring pitfalls worth checking by name: an icon inside a labelled button that repeats the
+  label instead of being hidden; placeholder text read redundantly alongside the field label;
+  list numbering announced separately from the item content.
 
 ### Cognitive accessibility
 - **Sentence length 8–14 words** (8 → ~100% comprehension, 14 → ~90%); this tightens the

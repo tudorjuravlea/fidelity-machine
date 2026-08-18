@@ -3,6 +3,32 @@
 All notable changes to fidelity-machine are documented here. Versioning follows semver;
 lock-impacting changes are classified per CONTRACT.md §Change classes.
 
+## Unreleased
+
+### Fixed
+
+- **Brand leakage in `new-system.mjs`.** The usage comment used a real bank's name as its
+  example system (`--name acme-banking`, `--title "Acme Banking"`), shipped publicly since
+  2026-08-06. Replaced with `acme-banking`, matching the neutral example used elsewhere. The
+  built-in leakage sweep could not know that term; it surfaced only when `release-check` was run
+  with an explicit `--ban`. **Run the sweep with the specific brand names you have worked with
+  recently, not just the defaults** — that is what `--ban`/`--ban-file` are for.
+
+### Changed
+
+- `references/motion-craft.md` — reduced motion now documents the two strategies mature systems
+  actually ship (a dedicated reduced variant of the animation vs swapping in a static asset),
+  plus the two rules governing both: land on the final state rather than a paused mid-frame, and
+  gate the re-trigger paths, not just the initial play. Notes the per-instance-flag-over-global
+  pattern as the signal that reduced motion is a product feature rather than a courtesy.
+- `references/microcopy-a11y-i18n.md` — the accessible name and the automation identifier are
+  two different fields with different lifecycles: one written for a person and translated, one a
+  stable machine key never announced. Plus announcing state changes, silencing decorative
+  elements, and three named pitfalls.
+
+Both references stay byte-identical across all three trees (engine + two studios); verified by
+hash after propagation.
+
 ## 1.0.0 — 2026-08-14
 
 First stable release. The gate is proven by tests that are themselves tested.
