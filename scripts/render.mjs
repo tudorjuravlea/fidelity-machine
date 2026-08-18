@@ -306,11 +306,20 @@ async function main() {
       return { figmaNodeId, domId, found: true, rect: { x: r.x, y: r.y, width: r.width, height: r.height } };
     }), figIds);
 
+    // The real laid-out height, so a consumer can tell a full capture from a clipped one.
+    // captureHeight is an instruction, not an observation: a screen whose content runs past it
+    // is silently cropped, and every gate downstream then passes on an image that is missing
+    // whatever fell below the fold. One screen here declared 1600 against a real 2106 and had
+    // been scoring green for weeks without its only primary action in frame.
+    const documentHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
+
     const geometry = {
       screenId: screen.id,
       mode: screen.mode ?? null,
       url,
       frozenClock: FROZEN_CLOCK_ISO,
+      documentHeight,
+      captureClipsContent: documentHeight > screen.captureHeight,
       viewport: {
         width: screen.captureWidth,
         height: screen.captureHeight,

@@ -473,7 +473,7 @@ const A11Y_FAULTS = [
   { name: 'no-focus-visible',
     from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
     to: '',
-    expect: 'no :focus-visible rule in the scanned source' },
+    expect: 'no :focus-visible rule in this file or a shared stylesheet' },
   { name: 'outline-removed',
     from: '  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }\n',
     to: '  .btn { outline: none; }\n',
@@ -506,6 +506,15 @@ function runFaultInjection() {
       [path.join(SCRIPT_DIR, 'adherence-lint.mjs'), '--lock', lockArg],
       { encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
 
+    // Timing guard. The lint on this fixture is milliseconds of work; a wall-clock second is
+    // three orders of magnitude of headroom, so this fires only on an algorithmic regression,
+    // never on a slow machine or a cold cache. It exists because one unanchored regex prelude
+    // ([^{}]* restarting at every offset) once made a 1.5 MB file take 145 seconds while a
+    // 618 KB file took 223 ms — a shape no per-section timer would have made obvious, but a
+    // CPU profile named in one run. Treat a failure here as "go profile", not "raise the bound".
+    const budgetMs = 1000;
+    const t0 = Date.now();
+
     // Control: the unmutated copy must be free of a11y findings, or every red below is noise.
     const base = lint();
     if (base.status !== 0) {
@@ -513,6 +522,12 @@ function runFaultInjection() {
         `adherence-lint exits ${base.status} on the pristine fixture (expected 0) — fault injection cannot attribute a failure to its mutation\n${tail(base)}`);
       return;
     }
+    const baseMs = Date.now() - t0;
+    if (baseMs > budgetMs) {
+      add('ERROR', 'fault-injection', 'fixtures/golden',
+        `adherence-lint took ${baseMs} ms on the golden fixture (budget ${budgetMs} ms) — this fixture is a few KB, so anything near a second means an algorithmic regression. Profile it (node --cpu-prof) rather than raising the budget.`);
+    }
+
     // Finding lines only — the run always prints an "a11y  ok" section-summary row.
     const a11yFindings = (out) => (out ?? '').split('\n').filter((l) => /^\[(?:ERROR|WARN)\]\s+a11y\b/.test(l));
     const stray = a11yFindings(base.stdout);
@@ -550,6 +565,80 @@ function runFaultInjection() {
   }
 }
 
+// A11y evidence is per file, and only a MULTI-FILE fixture can prove it. The single-file
+// loop above cannot express this, and that gap let a real bug live: the a11y booleans were
+// pooled across the entire scanned set, so one guard in one screen muted the rule for every
+// other screen in the directory. A capture went from 45 warnings to 37 on a single added
+// guard and read as seven fixes, while a screen that genuinely animated with no guard at all
+// quietly stopped being reported. Two properties are asserted here, and they pull in opposite
+// directions on purpose: an inline guard must NOT vouch for a sibling, and a shared
+// stylesheet MUST vouch for everyone (that is why the pooling existed in the first place).
+const PROBE_ANIMATES = '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+  '<title>Scope probe</title><style>\n  .probe { transition: opacity 200ms; }\n</style>' +
+  '</head><body><div class="probe">probe</div></body></html>\n';
+const PROBE_GUARDED = PROBE_ANIMATES.replace('</style>',
+  '  @media (prefers-reduced-motion: reduce) { .probe { transition: none; } }\n</style>');
+
+function runA11yScopingInjection() {
+  const goldenDir = path.join(ENGINE_ROOT, 'fixtures', 'golden');
+  if (!fs.existsSync(path.join(goldenDir, 'design-lock.json'))) {
+    add('SKIP', 'fault-injection', 'fixtures/golden', 'golden lock missing — a11y scoping unproven');
+    return;
+  }
+
+  // Returns the motion-warning lines for a scenario, keyed by the file each names.
+  const motionWarnings = (probes) => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fidelity-a11y-scope-'));
+    try {
+      fs.cpSync(goldenDir, tmp, { recursive: true });
+      for (const [name, body] of Object.entries(probes)) fs.writeFileSync(path.join(tmp, name), body);
+      const res = spawnSync(process.execPath,
+        [path.join(SCRIPT_DIR, 'adherence-lint.mjs'), '--lock', path.join(tmp, 'design-lock.json')],
+        { encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
+      return `${res.stdout ?? ''}${res.stderr ?? ''}`.split('\n')
+        .filter((l) => /^\[WARN\]\s+a11y\b/.test(l) && l.includes('prefers-reduced-motion'));
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  };
+
+  // Scenario 1 — one guarded screen must not vouch for an unguarded sibling.
+  const mixed = motionWarnings({ 'probe-guarded.html': PROBE_GUARDED, 'probe-bare.html': PROBE_ANIMATES });
+  const namesBare = mixed.some((l) => l.includes('probe-bare.html'));
+  const namesGuarded = mixed.some((l) => l.includes('probe-guarded.html'));
+  if (!namesBare) {
+    add('ERROR', 'fault-injection', 'a11y/scoping-inline',
+      'an unguarded animating screen was NOT reported while a sibling screen carried a guard — a11y evidence is pooling across files again, so one guard anywhere mutes the rule everywhere'
+      + (mixed.length ? `\n      | ${mixed[0]}` : '\n      | (no motion warnings at all)'));
+  }
+  if (namesGuarded) {
+    add('ERROR', 'fault-injection', 'a11y/scoping-inline',
+      `a screen carrying its own reduced-motion guard was still reported — the per-file check no longer sees a file's own <style> block\n      | ${mixed.find((l) => l.includes('probe-guarded.html'))}`);
+  }
+
+  // Scenario 2 — a SHARED stylesheet must still vouch for every screen that could link it.
+  // Without this the fix for scenario 1 would over-correct into false positives on any
+  // project that keeps its motion rules in a sibling .css rather than inline.
+  const SHEET = '@media (prefers-reduced-motion: reduce) { .probe { transition: none; } }\n';
+  const linked = PROBE_ANIMATES.replace('<style>',
+    '<link rel="stylesheet" href="probe-shared.css"><style>');
+  const shared = motionWarnings({ 'probe-linked.html': linked, 'probe-shared.css': SHEET });
+  if (shared.length) {
+    add('ERROR', 'fault-injection', 'a11y/scoping-shared',
+      `a screen LINKS a stylesheet carrying the reduced-motion guard and was still reported — the check now false-positives on projects that keep motion rules in a sibling .css\n      | ${shared[0]}`);
+  }
+
+  // Scenario 3 — a stylesheet nobody links must NOT vouch for anything. Counting every .css
+  // in the scanned set was the original pooling bug wearing a smaller hat: one guard in an
+  // orphan stylesheet silenced the gate for ten screens that never referenced it.
+  const orphan = motionWarnings({ 'probe-bare.html': PROBE_ANIMATES, 'probe-orphan.css': SHEET });
+  if (!orphan.some((l) => l.includes('probe-bare.html'))) {
+    add('ERROR', 'fault-injection', 'a11y/scoping-orphan',
+      'a stylesheet that no screen links silenced the motion rule — unlinked CSS is being counted as evidence, so one line in an orphan file mutes the gate'
+      + (orphan.length ? `\n      | ${orphan[0]}` : '\n      | (no motion warnings at all)'));
+  }
+}
+
 // ---------------------------------------------------------------- main
 
 async function main() {
@@ -570,6 +659,7 @@ async function main() {
   checkTemplatePlaceholders(scripts);
   await checkSchemaValidity(args.lock);
   runFaultInjection();
+  runA11yScopingInjection();
   if (args.selfTest) runSelfTest();
 
   // ---- report (mirrors adherence-lint.mjs conventions)

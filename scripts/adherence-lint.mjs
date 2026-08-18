@@ -116,8 +116,14 @@ const stripHtmlComments = (s) => s.replace(/<!--[\s\S]*?-->/g, spaceFill);
 // Blank out :root / [data-theme] rule blocks — the only scopes where raw values are legal.
 // Flat blocks only (token scopes carry declarations, not nested rules); a :root inside
 // @media still matches because the prelude cannot cross the @media's opening brace.
+// The (?<![^{}]) pin is a performance guard, not a semantic change: the prelude [^{}]*
+// cannot cross a brace, so a match starting anywhere inside a brace-free run also matches
+// from that run's first character — the leftmost match therefore always begins at offset 0
+// or just after a brace. The pin forbids only start positions the engine could never have
+// used. Without it the engine restarts the greedy prelude at every offset, which is
+// O(run^2) per brace-free run and stalled 1.5 MB of markup for ~145 seconds.
 const stripTokenScopes = (s) =>
-  s.replace(/[^{}]*(?::root\b|\[data-theme[^\]]*\])[^{}]*\{[^{}]*\}/g, spaceFill);
+  s.replace(/(?<![^{}])[^{}]*(?::root\b|\[data-theme[^\]]*\])[^{}]*\{[^{}]*\}/g, spaceFill);
 const stripJsComments = (s) =>
   stripCssComments(s).replace(/(^|[^\S\n])\/\/[^\n]*/g, spaceFill); // '//' after whitespace only, so 'https://' survives
 
@@ -650,9 +656,52 @@ function checkA11y(files, htmlFiles, rel) {
   const cssOf = (f) => f.ext === '.css' ? [{ css: stripCssComments(f.content), offset: 0 }]
     : f.ext === '.html' ? styleBlocks(f.content).map((b) => ({ css: stripCssComments(b.css), offset: b.offset }))
     : [];
-  const allCss = files.flatMap((f) => cssOf(f).map((b) => b.css)).join('\n');
-  const hasFocusVisible = /:focus-visible\b/.test(allCss);
-  const hasReducedMotionGuard = /@media[^{]*prefers-reduced-motion/i.test(allCss);
+  // Pooling is scoped, not global. A rule in a SHARED stylesheet legitimately covers every
+  // screen that could link it, so .css evidence counts for all files. A rule inside ONE html
+  // file's own <style> block covers only that file — pooling those made a single guard mute
+  // the rule for every other screen in the directory, so a run could go from 45 warnings to 37
+  // on one added guard and read as seven fixes. It also hid a screen that genuinely animates
+  // under prefers-reduced-motion and had no guard at all.
+  // A stylesheet only vouches for a screen that actually LINKS it. Counting every .css in
+  // the scanned set was the same blindness as pooling, merely narrower: a guard appended to
+  // an orphan stylesheet no screen references silenced the gate for all of them. Evidence has
+  // to reach the file it excuses.
+  const FOCUS_VISIBLE = /:focus-visible\b/;
+  const REDUCED_MOTION = /@media[^{]*prefers-reduced-motion/i;
+  const cssFiles = files.filter((f) => f.ext === '.css');
+  // Memoised: cssOf re-parses the whole file, and these are called once per finding, not once
+  // per file. Recomputing made a 392 KB file with many `outline: none` rules ~30x slower —
+  // the same shape of bug as the regex this file just had removed.
+  const ownCssMemo = new Map();
+  const ownCss = (f) => {
+    if (!ownCssMemo.has(f.abs)) ownCssMemo.set(f.abs, cssOf(f).map((b) => b.css).join('\n'));
+    return ownCssMemo.get(f.abs);
+  };
+  const linkedCssMemo = new Map();
+  const linkedCss = (f) => {
+    if (!linkedCssMemo.has(f.abs)) {
+      let text = '';
+      if (f.ext !== '.css' && cssFiles.length) {
+        const hrefs = [...f.content.matchAll(/<link\b[^>]*\bhref\s*=\s*["']([^"'?#]+\.css)/gi)]
+          .map((m) => m[1].replace(/^\.?\//, ''));
+        if (hrefs.length) {
+          text = cssFiles.filter((c) => hrefs.some((h) => c.abs.endsWith(h)))
+            .map((c) => ownCss(c)).join('\n');
+        }
+      }
+      linkedCssMemo.set(f.abs, text);
+    }
+    return linkedCssMemo.get(f.abs);
+  };
+  // Cache the VERDICT, not the text. These are asked once per finding, so returning a freshly
+  // concatenated copy of a file's whole CSS each time is O(filesize) per finding — the same
+  // trap the memo above avoids one level down.
+  const verdict = (memo, re) => (f) => {
+    if (!memo.has(f.abs)) memo.set(f.abs, re.test(ownCss(f)) || re.test(linkedCss(f)));
+    return memo.get(f.abs);
+  };
+  const hasFocusVisibleFor = verdict(new Map(), FOCUS_VISIBLE);
+  const hasReducedMotionGuardFor = verdict(new Map(), REDUCED_MOTION);
 
   // ---- keyboard: outline removed with nothing put back (any source file)
   for (const f of files) {
@@ -660,7 +709,7 @@ function checkA11y(files, htmlFiles, rel) {
       let m;
       const re = /outline\s*:\s*(none|0)(?![\w.%-])/gi;
       while ((m = re.exec(css))) {
-        if (hasFocusVisible) continue; // a replacement exists somewhere in the set
+        if (hasFocusVisibleFor(f)) continue; // replacement in a shared stylesheet, or in this file
         add('ERROR', 'a11y', rel(f.abs),
           `"outline: ${m[1]}" with no :focus-visible rule anywhere in the source — keyboard users lose the focus indicator (WCAG 2.4.7)`,
           lineOf(f.content, offset + m.index));
@@ -674,8 +723,9 @@ function checkA11y(files, htmlFiles, rel) {
   // often it fires, which source alone cannot decide. Blocking on it would stop prototypes
   // over a 150ms fade, so it reports and lets the author decide. WCAG 2.3.3 still wants the
   // variant; the gate just does not hold the screen hostage for it.
-  if (!hasReducedMotionGuard) {
+  {
     for (const f of files) {
+      if (hasReducedMotionGuardFor(f)) continue;
       let reported = false;
       for (const { css, offset } of cssOf(f)) {
         let m;
@@ -777,9 +827,9 @@ function checkA11y(files, htmlFiles, rel) {
       || /<a\b[^>]*\bhref\s*=/i.test(body)
       || /<input\b(?![^>]*\btype\s*=\s*["']?hidden\b)/i.test(body)
       || /\btabindex\s*=/i.test(body);
-    if (interactive && !hasFocusVisible) {
+    if (interactive && !hasFocusVisibleFor(f)) {
       add('ERROR', 'a11y', rel(f.abs),
-        `interactive elements but no :focus-visible rule in the scanned source — every control needs a visible keyboard focus style (WCAG 2.4.7)`, 1);
+        `interactive elements but no :focus-visible rule in this file or a shared stylesheet — every control needs a visible keyboard focus style (WCAG 2.4.7)`, 1);
     }
   }
 }
