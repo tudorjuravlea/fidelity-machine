@@ -3,3 +3,4 @@ node_modules/
 .report/
 *.log
 .DS_Store
+project-memory/
