@@ -4,3 +4,9 @@ node_modules/
 *.log
 .DS_Store
 project-memory/
+
+# local handover notes, never pushed
+HANDOVER.md
+
+# local session state, never pushed
+.omc/
