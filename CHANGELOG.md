@@ -14,6 +14,13 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   recently, not just the defaults** — that is what `--ban`/`--ban-file` are for. Note also that a
   sweep is only valid for the tree it ran against: re-run it after the last edit, including edits
   to this file.
+- **`release-check` went red on `.omc/` local session state.** A local dev plugin writes
+  per-session JSON under `.omc/` at the repo root, and those files carry absolute machine paths,
+  so the local-user-path pattern class failed the brand-leakage lane on a tree that ships none of
+  it: the directory is gitignored and regenerates every session. `walk()` and `walkSymlinks()`
+  now skip `.omc` alongside `node_modules` and `.git`. Same class as the `.git` exclusion: local
+  tooling state is not release surface. Proven in both directions, green with `.omc/` present and
+  containing machine paths, still red on a machine path planted in a scanned file.
 
 ### Changed
 

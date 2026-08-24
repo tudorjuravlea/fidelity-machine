@@ -129,25 +129,26 @@ const warn = (m, fix) => { p(`  WARN  ${m}`); if (fix) p(`        Fix: ${fix}`);
 const fail = (m, fix) => { findings++; p(`  FAIL  ${m}`); if (fix) p(`        Fix: ${fix}`); };
 const section = (t) => p(`\n── ${t} ${'─'.repeat(Math.max(2, 66 - t.length))}`);
 
-/** Every file under the engine, node_modules excluded, as engine-relative paths. */
+/** Every file under the engine, local tooling state (node_modules, .git, .omc) excluded,
+ *  as engine-relative paths. */
 function walk(dir = ENGINE, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git') walk(full, out); }
+    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git' && e.name !== '.omc') walk(full, out); }
     else if (e.isFile()) out.push(path.relative(ENGINE, full).split(path.sep).join('/'));
   }
   return out.sort();
 }
 const FILES = walk();
 
-/** Every symlink under the engine (node_modules excluded) — walk() skips them silently,
+/** Every symlink under the engine (same exclusions as walk()) — walk() skips them silently,
  *  so the clean-tree gate hunts them explicitly: a symlink can smuggle out-of-tree content
  *  into a release and always requires manual review. */
 function walkSymlinks(dir = ENGINE, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
     if (e.isSymbolicLink()) out.push(path.relative(ENGINE, full).split(path.sep).join('/'));
-    else if (e.isDirectory() && e.name !== 'node_modules' && e.name !== '.git') walkSymlinks(full, out);
+    else if (e.isDirectory() && e.name !== 'node_modules' && e.name !== '.git' && e.name !== '.omc') walkSymlinks(full, out);
   }
   return out.sort();
 }
