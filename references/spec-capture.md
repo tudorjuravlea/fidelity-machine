@@ -164,6 +164,25 @@ When Figma MCP access is impossible (no auth path, exported mocks, live-product 
 4. Declare the rung (ladder below). Every captured value states its source rung; rung-6
    values are flagged to Tudor as fallback, never presented as brand truth.
 
+Authentic assets (B2 only; adapted from screenshot-to-code, MIT,
+github.com/abi/screenshot-to-code):
+
+- Imagery that exists in the reference — logo, hero photo, illustration, product shot — is
+  EXTRACTED, not redrawn: crop it at native resolution into `reference/assets/`, named by
+  content hash (`asset_<sha256[:24]>.png`), and reuse it verbatim. Generating a lookalike
+  of a real mark is invention wearing a fidelity costume; the tear-down sheet's
+  measure-don't-guess rule applies to pixels, not just values.
+- Inspect every crop against its reference region before it enters a screen — wrong-region
+  extraction is silent and survives the pixel gate (the wrong asset diffs clean against
+  itself).
+- Un-extractable imagery (occluded, or the asset IS the background) gets a Derived Design
+  entry like any unobserved component: `Source: "Not found — occluded"` → what was
+  generated in its place → `Justified by:`.
+- The hash makes verbatim use checkable: the asset's hash filename must appear in the
+  generated markup. Absent → something re-encoded or redrew it on the way through. Never
+  embed the whole reference (or a large slice of it) as an image standing in for coded
+  layout — that is the screenshot-as-background cheat by another name.
+
 ## Context priority ladder — declare which rung, per value
 
 | Rung | Source | Use |

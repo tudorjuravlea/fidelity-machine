@@ -24,3 +24,8 @@ references/motion-craft.md adapts cross-platform motion guidance, and
 references/surface-classes.md adapts desktop-surface guidance, from genjutsu,
 Copyright (c) 2026 Adrien Thevon, MIT License
 (https://github.com/AThevon/genjutsu).
+
+references/taste-and-composition.md, references/spec-capture.md and references/mode-b.md
+adapt render-review and authentic-asset guidance from screenshot-to-code,
+Copyright (c) 2023 Abi Raja, MIT License
+(https://github.com/abi/screenshot-to-code).

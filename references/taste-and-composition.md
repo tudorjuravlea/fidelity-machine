@@ -138,6 +138,16 @@ unexpected layout/typographic/motion move is a defect to flag unless a signature
 Novelty is drift wearing a costume; consistency wins every tie.
 
 Mechanics:
+- **Judge the render, not the source, whenever a render exists.** Hierarchy (squint test),
+  Craft (baselines, gaps), and the transplant test are judgments about what the eye meets —
+  made on a full-page screenshot of the current composition (a prior round's render.mjs
+  artifact, or a quick self-render), never on markup alone when a render is obtainable.
+  Judging from source is the last resort, and the critique must say which medium it used —
+  "scored from render" / "scored from source (no render available)". This does not reorder
+  the gates: the gate *scripts* (render → geometry → diff) still run after the critique; a
+  render viewed here is for seeing, not scoring pixels. (Discipline adapted from
+  screenshot-to-code's `screenshot_preview` contract, MIT, github.com/abi/screenshot-to-code:
+  the model views its own full-page rendering after every change and fixes what it spots.)
 - Every score cites evidence: 30–80 words naming concrete elements, classes, and values
   ("`.balance` uses default numerals, signature requires tabular-nums" — never "feels off").
   Unevidenced scores are void.

@@ -97,7 +97,10 @@ verified, which means it cannot ship:
 
 B2 discipline: without rects the loop is blinder — measure the reference crops in pixels,
 fix toward the REFERENCE, never toward the diff image. State uncertainty ("hover unknown
-from statics") instead of inventing it.
+from statics") instead of inventing it. Each round, view the FULL-PAGE render alongside
+the triplets before choosing the fix: region crops localize error but hide global drift —
+a page that slid 40px reads as five unrelated region failures in the triplets and as one
+obvious offset in the full render (screenshot-to-code's see-your-own-render discipline).
 
 ## Fix loop (verify.mjs enforces it; you cooperate)
 

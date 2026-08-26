@@ -5,6 +5,26 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ## Unreleased
 
+### Added
+
+- **Three reference-level disciplines adapted from screenshot-to-code** (MIT,
+  github.com/abi/screenshot-to-code; security-checked and mined 2026-08-26, notes in the
+  design-KB's `_extraction/screenshot-to-code.md`). No script or contract changes; no change
+  class triggered.
+  - `references/taste-and-composition.md` §3 — critique is judged on a full-page render
+    whenever one is obtainable, and states which medium it scored from; gate script order
+    unchanged.
+  - `references/spec-capture.md` §Fallback B2 — authentic imagery in a reference is extracted
+    at native resolution into `reference/assets/`, content-hash-named
+    (`asset_<sha256[:24]>.png`), inspected against its region, and reused verbatim; the hash
+    filename appearing in generated markup is the verbatim-use check. Un-extractable imagery
+    goes through the existing Derived Design path.
+  - `references/mode-b.md` §B2 discipline — each fix round views the full-page render
+    alongside the worst-region triplets; region crops hide global drift.
+  Evaluated and rejected from the same source (already covered stronger here): networkidle
+  readiness (Invariant 6's `[data-render-ready]` contract), flat max-tool-turns (CONTRACT
+  §Loop control), variant-set doctrine (`references/variations.md`).
+
 ### Fixed
 
 - **Brand leakage in `new-system.mjs`.** The usage comment used a real bank as its example
