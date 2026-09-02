@@ -370,6 +370,36 @@
             "type": "string",
             "description": "Path to the reference PNG. Provenance rule: must come from Figma's renderer (get_screenshot at original_* dims) or a real branded capture — NEVER from our own Chromium render of generated output (both-fell-back hole), except for the calibration control screen."
           },
+          "referenceSource": {
+            "type": "object",
+            "description": "Where referenceImage was exported from. Without this a stale reference and a real drift look identical: the lock records what the CAPTURE was pinned to, but nothing about what the PNG itself was pinned to. Optional — absence is not an error, just an unanswerable question when the two disagree.",
+            "required": [
+              "fileKey",
+              "nodeId"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "fileKey": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{22}$",
+                "description": "Figma file key the reference was exported from."
+              },
+              "nodeId": {
+                "type": "string",
+                "pattern": "^\\d+:\\d+$",
+                "description": "Figma node id (colon form) the reference was exported from."
+              },
+              "exportedAt": {
+                "type": "string",
+                "format": "date",
+                "description": "YYYY-MM-DD the PNG was actually exported. Leave unset rather than guessing — an upper bound (e.g. a git-add date) belongs in note, not here."
+              },
+              "note": {
+                "type": "string",
+                "description": "Free text for anything the four fields above can't say, e.g. how fileKey/nodeId were recovered, or why exportedAt is unknown."
+              }
+            }
+          },
           "captureWidth": {
             "type": "integer"
           },

@@ -39,6 +39,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pixelmatch from 'pixelmatch';
 import pngjs from 'pngjs';
+import { PIXELMATCH_THRESHOLD } from './pixelmatch-threshold.mjs';
 
 const { PNG } = pngjs;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +47,7 @@ const TILE = 64;
 
 // Frozen per CONTRACT.md — do not tune these to make a screen pass.
 const PIXELMATCH_OPTS = {
-  threshold: 0.1,
+  threshold: PIXELMATCH_THRESHOLD,
   includeAA: false,
   alpha: 0.2,
   diffColor: [255, 0, 0],

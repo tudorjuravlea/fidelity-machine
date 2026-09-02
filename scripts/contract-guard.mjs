@@ -11,6 +11,9 @@
 //   exit-codes             every process.exit(<literal>) uses a code from CONTRACT's table
 //   spawn-not-import       verify.mjs orchestrates siblings as spawned CLIs, never imports
 //   template-placeholders  skill-template.md {{X}} ↔ new-system.mjs replaceAll set
+//   reference-source       (--lock only) WARN per screen with referenceImage but no
+//                          referenceSource — a stale reference is indistinguishable from a
+//                          real drift without knowing where the PNG itself came from
 //   fault-injection        adherence-lint's a11y checks go RED on a temp copy of the golden
 //                          fixture mutated one defect at a time (a check that cannot fail
 //                          is not a check); the pristine copy must stay clean
@@ -33,7 +36,8 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ENGINE_ROOT = path.dirname(SCRIPT_DIR);
 const SECTIONS = [
   'script-inventory', 'docs-drift', 'help-support', 'exit-codes',
-  'spawn-not-import', 'template-placeholders', 'schema-validity', 'fault-injection', 'self-test',
+  'spawn-not-import', 'template-placeholders', 'schema-validity', 'reference-source',
+  'fault-injection', 'self-test',
 ];
 
 // ---------------------------------------------------------------- findings
@@ -370,6 +374,32 @@ async function checkSchemaValidity(extraLockPath) {
   }
 }
 
+// ------------------------------------------------------------- reference source
+//
+// referenceSource (design-lock.schema.json) records where a referenceImage PNG was
+// exported from — fileKey + nodeId, optionally exportedAt/note. Without it, a stale
+// reference (exported from an older design-system version than the capture is pinned
+// to) and a real drift look identical: nothing says where to start reconciling them.
+// Advisory only — most locks predate the field, and populating it is investigative
+// work, not something a script can infer — so this is a WARN per screen, never an
+// ERROR, and only runs when --lock is passed (nothing to scan otherwise).
+function checkReferenceSource(extraLockPath) {
+  if (!extraLockPath) return;
+  const abs = path.resolve(extraLockPath);
+  if (!fs.existsSync(abs)) return; // already an ERROR from schema-validity
+  let lock;
+  try { lock = JSON.parse(fs.readFileSync(abs, 'utf8')); }
+  catch { return; } // already an ERROR from schema-validity
+  const screens = Array.isArray(lock.screens) ? lock.screens : [];
+  for (const s of screens) {
+    if (!s || typeof s !== 'object') continue;
+    if (s.referenceImage && !s.referenceSource) {
+      add('WARN', 'reference-source', extraLockPath,
+        `screen ${s.id ?? '?'}: referenceImage has no referenceSource (fileKey+nodeId); a stale reference cannot be told from a real drift`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- self-test
 
 function tail(res, n = 12) {
@@ -658,6 +688,7 @@ async function main() {
   checkSpawnNotImport(scripts);
   checkTemplatePlaceholders(scripts);
   await checkSchemaValidity(args.lock);
+  checkReferenceSource(args.lock);
   runFaultInjection();
   runA11yScopingInjection();
   if (args.selfTest) runSelfTest();

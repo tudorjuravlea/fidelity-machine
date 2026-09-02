@@ -24,6 +24,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 │   ├── capture-figma.mjs            # Figma MCP output → design-lock.json + derived token artifacts (§Provenance)
 │   ├── render.mjs                   # deterministic screenshot + geometry dump
 │   ├── geometry.mjs                 # DOM boxes vs lock figIds rects
+│   ├── pixelmatch-threshold.mjs     # single source for PIXELMATCH_THRESHOLD; diff.mjs and any skill-side colour-drift instrument that must agree with it import this instead of duplicating the literal
 │   ├── diff.mjs                     # pixelmatch gate: global + per-tile + triplet crops
 │   ├── adherence-lint.mjs           # static gate: tokens, fonts, microcopy, jargon, disclosures, caps
 │   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff, loop control
@@ -114,9 +115,10 @@ are created next to the lock.
 
 ## Diff invariants (diff.mjs owns these)
 
-- `pixelmatch(ref, img, diff, W, H, { threshold: 0.1, includeAA: false })`. NEVER raise `threshold` to absorb AA — that hides real color drift; AA is handled structurally by `includeAA: false`.
+- `pixelmatch(ref, img, diff, W, H, { threshold: PIXELMATCH_THRESHOLD (0.1), includeAA: false })`, threshold imported from `pixelmatch-threshold.mjs`. NEVER raise `threshold` to absorb AA — that hides real color drift; AA is handled structurally by `includeAA: false`.
 - Masks zero the SAME rects in BOTH buffers before matching. Every mask has a `reason`. Lint enforces `Σ mask area ≤ caps.maxMaskedAreaPct` of the frame.
 - A `figIds[]` entry with no `rect` is recorded `no-ground-truth` and skipped by geometry. That is legitimate only when the Figma frame and the DOM box genuinely measure different things, and such an entry MUST carry a `reason` saying so. A rect-less entry without a reason is an anchor someone forgot to fill in, and a gate that silently skips every anchor reports `pass` having compared nothing.
+- `referenceSource` (optional, on the screen) records where `referenceImage` itself was exported from: `{ fileKey, nodeId, exportedAt?, note? }`. The lock already pins the CAPTURE to a design-system version; this pins the PNG. Without it, a stale reference and a real drift are indistinguishable — both show up as "the reference disagrees with the tokens" — and the standing rule ("find out which is stale before changing either") has nowhere to start. When the reference and the tokens disagree, `referenceSource` is where you start: resolve `fileKey`/`nodeId` in Figma and compare its current state against what the tokens say. `contract-guard.mjs --lock` WARNs (never errors) on every screen that has a `referenceImage` but no `referenceSource` — most locks predate the field, so this is a visibility gap to close over time, not a blocking gate.
 - `globalPct = diffPixels / (W*H − maskedPx)`.
 - Tiles: 64×64 grid over the diff buffer; `worstTile` = max per-tile diff density over that tile's unmasked pixels.
 - PASS ⇔ `globalPct ≤ screen.passThreshold && worstTile ≤ screen.tileCeiling`.
