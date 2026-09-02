@@ -14,6 +14,8 @@
 //   reference-source       (--lock only) WARN per screen with referenceImage but no
 //                          referenceSource — a stale reference is indistinguishable from a
 //                          real drift without knowing where the PNG itself came from
+//   ratchet                (--lock only) WARN when a ratchet sits on a screen that is not
+//                          notConverged (it never applies) or its recorded best is absurd
 //   permanently-red        (--lock only) WARN per screen whose last N recorded runs
 //                          (.report/<id>.history.json) all fail the pixel gate with no
 //                          ratchet declared; a check red on every run cannot signal a
@@ -40,7 +42,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ENGINE_ROOT = path.dirname(SCRIPT_DIR);
 const SECTIONS = [
   'script-inventory', 'docs-drift', 'help-support', 'exit-codes',
-  'spawn-not-import', 'template-placeholders', 'schema-validity', 'reference-source',
+  'spawn-not-import', 'template-placeholders', 'schema-validity', 'reference-source', 'ratchet',
   'permanently-red', 'fault-injection', 'self-test',
 ];
 
