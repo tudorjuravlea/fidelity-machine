@@ -118,6 +118,17 @@ layout (spacing scale, flex, slack); box right + pixels wrong → color/type/ele
 Mode B2 has no geometry ground truth: triplets arrive unclassified and the worst regions get a
 mandatory human review.
 
+`diff.mjs` also reports coordinates, not just a count: a report-level `extent` (tight bbox +
+centroid + density over every unmasked diff pixel in the whole buffer, absolute device pixels)
+and, per worst tile, the same scoped to that tile as `inner`. Read density against the size of
+its bbox, not on its own: low density spread over a large bbox, a thin diff smeared across a
+big region, reads as scattered rasterizer noise (antialiasing, shadow tails, subpixel glyph
+drift). High density packed into a small bbox reads as one wrong thing: a substituted color,
+a moved or resized element. The centroid is a point, not a region: hand it to
+`document.elementFromPoint(x, y)` (or the equivalent in your inspection tool) against the
+render to land directly on the element responsible, instead of eyeballing the tile crop.
+`extent` is `null` on a passing screen: there is nothing to point at.
+
 ## Loop budget
 
 ≤4 rounds per screen. `verify.mjs` keeps best-so-far; a round that worsens `globalPct` is

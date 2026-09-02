@@ -7,6 +7,16 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **`diff.mjs` findings now carry a coordinate.** Change class: patch (the report gains
+  fields; PASS/FAIL verdict, thresholds and existing fields are unchanged). The report gains a
+  report-level `extent {bbox, centroid, diffPixels, density}` over every unmasked diff pixel in
+  the whole buffer (`null` on a passing screen), and each `worstRegions[]` entry gains the same
+  shape as `inner`, scoped to that tile, both in absolute device-pixel coordinates. Printed as
+  one `extent …` line after `globalPct`/`worstTile`, and appended to each `#n tile` line.
+  Density read against its bbox size tells scattered rasterizer noise (low density, large box)
+  apart from a substituted element (high density, small box) without opening an image first;
+  see `references/pixel-diff-tuning.md` §Reading the evidence.
+
 - **Three reference-level disciplines adapted from screenshot-to-code** (MIT,
   github.com/abi/screenshot-to-code; security-checked and mined 2026-08-26, notes in the
   design-KB's `_extraction/screenshot-to-code.md`). No script or contract changes; no change

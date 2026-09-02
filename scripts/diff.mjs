@@ -32,6 +32,11 @@
  *     tile's unmasked pixels; fully-masked tiles are skipped.
  *   - Evidence: top-5 worst tiles emitted as ref/render/diff crop triplets + one
  *     classification line each, joined with the geometry report when it exists.
+ *   - Coordinates: report-level `extent` (bbox + centroid + density over every unmasked diff
+ *     pixel in the whole buffer, null when there are none) and, per worst tile, `inner` (the
+ *     same, scoped to that tile): a low density over a large bbox reads as scattered
+ *     rasterisation noise, a high density over a small bbox reads as a wrong colour or a
+ *     substituted element. All coordinates are absolute device pixels.
  */
 
 import fs from 'node:fs';
@@ -125,6 +130,11 @@ function readPng(p, what) {
 
 function pct(x) {
   return `${x.toFixed(6)} (${(x * 100).toFixed(4)}%)`;
+}
+
+// Console-only rounding for centroid coordinates; the report.json keeps the exact value.
+function fmtNum(x) {
+  return x.toFixed(1);
 }
 
 function rectsIntersect(a, b) {
@@ -307,28 +317,70 @@ const globalPct = denom > 0 ? diffPixels / denom : 0;
 // ---- 5. 64px tile scan over the diff buffer ---------------------------------
 // A diff pixel is exactly diffColor [255,0,0,255]: unchanged pixels are grayscale
 // (r===g===b) via the alpha option, AA-flagged pixels are yellow — neither collides.
+// While scanning, also accumulate the report-level `extent` (tight bbox + centroid of
+// every unmasked diff pixel in the WHOLE buffer) and, per tile, `inner` (the same, scoped
+// to that tile's own diff pixels). Both bboxes and centroids are in ABSOLUTE device-pixel
+// coordinates (i.e. against the full W×H buffer, never tile-relative); tile-relative would
+// be a trap for anyone reading the report standalone.
 const tiles = [];
+let extMinX = Infinity, extMinY = Infinity, extMaxX = -Infinity, extMaxY = -Infinity;
+let extSumX = 0, extSumY = 0, extN = 0;
 for (let ty = 0; ty < H; ty += TILE) {
   for (let tx = 0; tx < W; tx += TILE) {
     const tw = Math.min(TILE, W - tx);
     const th = Math.min(TILE, H - ty);
     let red = 0;
     let unmasked = 0;
+    let inMinX = Infinity, inMinY = Infinity, inMaxX = -Infinity, inMaxY = -Infinity;
+    let inSumX = 0, inSumY = 0;
     for (let y = ty; y < ty + th; y++) {
       let i = y * W + tx;
       for (let x = tx; x < tx + tw; x++, i++) {
         if (maskBitmap[i]) continue;
         unmasked++;
         const o = i * 4;
-        if (diffPng.data[o] === 255 && diffPng.data[o + 1] === 0 && diffPng.data[o + 2] === 0 && diffPng.data[o + 3] === 255) red++;
+        if (diffPng.data[o] === 255 && diffPng.data[o + 1] === 0 && diffPng.data[o + 2] === 0 && diffPng.data[o + 3] === 255) {
+          red++;
+          if (x < inMinX) inMinX = x;
+          if (x > inMaxX) inMaxX = x;
+          if (y < inMinY) inMinY = y;
+          if (y > inMaxY) inMaxY = y;
+          inSumX += x;
+          inSumY += y;
+          if (x < extMinX) extMinX = x;
+          if (x > extMaxX) extMaxX = x;
+          if (y < extMinY) extMinY = y;
+          if (y > extMaxY) extMaxY = y;
+          extSumX += x;
+          extSumY += y;
+          extN++;
+        }
       }
     }
     if (unmasked === 0) continue; // fully masked tile — skipped entirely
-    tiles.push({ bbox: { x: tx, y: ty, width: tw, height: th }, density: red / unmasked, red, unmasked });
+    const inner = red > 0
+      ? {
+        bbox: { x: inMinX, y: inMinY, width: inMaxX - inMinX + 1, height: inMaxY - inMinY + 1 },
+        centroid: { x: inSumX / red, y: inSumY / red },
+      }
+      : null;
+    tiles.push({ bbox: { x: tx, y: ty, width: tw, height: th }, density: red / unmasked, red, unmasked, inner });
   }
 }
 const worstTile = tiles.reduce((m, t) => Math.max(m, t.density), 0);
 const worst5 = [...tiles].sort((a, b) => b.density - a.density).slice(0, 5).filter((t) => t.density > 0);
+
+// extent: null when the diff buffer has no diff pixels at all (passing screen).
+const extent = extN === 0 ? null : (() => {
+  const bbox = { x: extMinX, y: extMinY, width: extMaxX - extMinX + 1, height: extMaxY - extMinY + 1 };
+  const area = bbox.width * bbox.height;
+  return {
+    bbox,
+    centroid: { x: extSumX / extN, y: extSumY / extN },
+    diffPixels: extN,
+    density: area > 0 ? extN / area : 0,
+  };
+})();
 
 // ---- 6. evidence triplets + classification ----------------------------------
 const geo = loadGeometry(reportDir, screen, dpr);
@@ -349,7 +401,7 @@ for (let n = 0; n < worst5.length; n++) {
   fs.writeFileSync(path.join(lockDir, crops.ref), PNG.sync.write(cropPng(ref, t.bbox)));
   fs.writeFileSync(path.join(lockDir, crops.render), PNG.sync.write(cropPng(img, t.bbox)));
   fs.writeFileSync(path.join(lockDir, crops.diff), PNG.sync.write(cropPng(diffPng, t.bbox)));
-  worstRegions.push({ bbox: t.bbox, density: t.density, diffPixels: t.red, unmaskedPixels: t.unmasked, classification, crops });
+  worstRegions.push({ bbox: t.bbox, density: t.density, diffPixels: t.red, unmaskedPixels: t.unmasked, inner: t.inner, classification, crops });
 }
 
 // ---- 7. report + verdict -----------------------------------------------------
@@ -365,6 +417,7 @@ const report = {
   thresholds: { passThreshold: screen.passThreshold, tileCeiling: screen.tileCeiling },
   dims: { width: W, height: H },
   dpr,
+  extent,
   worstRegions,
 };
 fs.writeFileSync(path.join(reportDir, `${screen.id}.diff.png`), PNG.sync.write(diffPng));
@@ -375,6 +428,12 @@ const tileOk = worstTile <= screen.tileCeiling;
 console.log(`diff: screen '${screen.id}' — ${pass ? 'PASS [exit 0]' : 'FAIL [exit 1 — fidelity failure: fix toward the reference, using the crops below]'}`);
 console.log(`  globalPct ${pct(globalPct)}  vs passThreshold ${screen.passThreshold}  → ${globalOk ? 'ok' : 'FAIL'}`);
 console.log(`  worstTile ${pct(worstTile)}  vs tileCeiling ${screen.tileCeiling}  → ${tileOk ? 'ok' : 'FAIL'}`);
+if (extent) {
+  const e = extent;
+  console.log(`  extent x ${e.bbox.x}..${e.bbox.x + e.bbox.width - 1} y ${e.bbox.y}..${e.bbox.y + e.bbox.height - 1} (${e.bbox.width}x${e.bbox.height}) centroid (${fmtNum(e.centroid.x)},${fmtNum(e.centroid.y)}) density ${e.density.toFixed(4)} over ${e.diffPixels} px`);
+} else {
+  console.log('  extent: none (no diff pixels)');
+}
 console.log(`  maskedPct ${pct(maskedPct)}  (${maskedPx} px, ${(screen.maskedRegions ?? []).length} region(s))`);
 const maskCap = lock.caps?.maxMaskedAreaPct;
 if (typeof maskCap === 'number' && maskedPct > maskCap) {
@@ -385,7 +444,10 @@ if (worstRegions.length === 0) {
 } else {
   for (let n = 0; n < worstRegions.length; n++) {
     const r = worstRegions[n];
-    console.log(`  #${n + 1} tile @ (${r.bbox.x},${r.bbox.y}) ${r.bbox.width}x${r.bbox.height} — density ${r.density.toFixed(6)} — ${r.classification}`);
+    const innerStr = r.inner
+      ? ` inner x ${r.inner.bbox.x}..${r.inner.bbox.x + r.inner.bbox.width - 1} y ${r.inner.bbox.y}..${r.inner.bbox.y + r.inner.bbox.height - 1} centroid (${fmtNum(r.inner.centroid.x)},${fmtNum(r.inner.centroid.y)})`
+      : '';
+    console.log(`  #${n + 1} tile @ (${r.bbox.x},${r.bbox.y}) ${r.bbox.width}x${r.bbox.height} — density ${r.density.toFixed(6)} — ${r.classification}${innerStr}`);
     console.log(`     crops: ${r.crops.ref} | ${r.crops.render} | ${r.crops.diff}`);
   }
 }

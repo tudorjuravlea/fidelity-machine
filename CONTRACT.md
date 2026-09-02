@@ -124,7 +124,7 @@ are created next to the lock.
 - `globalPct = diffPixels / (W*H − maskedPx)`.
 - Tiles: 64×64 grid over the diff buffer; `worstTile` = max per-tile diff density over that tile's unmasked pixels.
 - PASS ⇔ `globalPct ≤ screen.passThreshold && worstTile ≤ screen.tileCeiling`.
-- Evidence: top-5 worst tiles emitted as triplet crops (`ref/`, `render/`, `diff/` per bbox) + one text line each, classified by geometry result when available ("box matches → color/weight, not layout").
+- Evidence: top-5 worst tiles emitted as triplet crops (`ref/`, `render/`, `diff/` per bbox) + one text line each, classified by geometry result when available ("box matches → color/weight, not layout"). The report also carries a report-level `extent {bbox, centroid, diffPixels, density}` over every unmasked diff pixel in the whole buffer (`null` when there are none), and each `worstRegions[]` entry carries the same shape as `inner`, scoped to that tile, both in absolute device-pixel coordinates.
 
 ## Threshold caps (lint-enforced on the lock itself)
 
