@@ -33,6 +33,26 @@ banned everywhere: edit the lock, re-derive.
 - Collect links per role: variables/tokens frame → `role:"tokens"`; component sheet
   frames → `"components"`; each target screen frame → `"screens"`.
 
+## Figma REST fallback, when the MCP seat quota is gone
+
+When the Figma MCP is unreachable for lack of a seat rather than for lack of auth,
+maintainers fall back to the Figma REST API with a personal access token. On the first
+`429`, read the response headers before doing anything else: `Retry-After` gives the wait
+in seconds and `x-figma-rate-limit-type` names which limit tripped. MEASURED 2026-09-02: a
+plan-tier cap returned `429` with `retry-after: 331775` (about 3.8 days) and
+`x-figma-rate-limit-type: low`, while `/v1/me` kept returning 200 the whole time. A 200 on
+`/v1/me` proves only that the token is valid, not that the file endpoints are open; six
+blind retries against a file endpoint over 100 minutes taught nothing that the first
+`Retry-After` header did not already say. If the reported window is longer than the
+session, stop: record the reopen time in the capture notes and stage the scripts to resume
+capture then, rather than spending the session polling a cap that has not lifted.
+
+Handle the token the same way regardless of which path triggered the fallback: read it only
+inside a request header, for example `-H "X-Figma-Token: $(cat <token-file>)"`, with any
+response body written to a file via `-o`, never echoed to the terminal or piped through a
+pager. No token value, no file key, and no brand name belongs in a log, a report, or this
+file.
+
 ## Tool calls per capture role
 
 | Role | Call | Lock destination |
@@ -182,6 +202,18 @@ github.com/abi/screenshot-to-code):
   generated markup. Absent → something re-encoded or redrew it on the way through. Never
   embed the whole reference (or a large slice of it) as an image standing in for coded
   layout — that is the screenshot-as-background cheat by another name.
+
+**Exception, under transforms (MEASURED 2026-09-02).** Verbatim reuse holds only when the
+asset is composited at identity scale on integer device-pixel boundaries. Measured once, on
+one icon: inside a container under `transform: scale(0.9615)` it was replaced with the
+reference's own pixels, and the diff in that region fell from 114px to 66px, not to 0. The
+mechanism is INFERRED from that one case: the compositor resamples a bitmap under a
+non-identity transform, and the same is expected under fractional positioning or a container
+whose layout scale differs from 1, but those were not measured. The honest options in
+that case: reproduce the transform's effect by exporting the asset at its final device size
+and placing it at identity, or accept the residual and record it in the report. Do not treat
+a non-zero diff on a correctly-extracted asset as a wrong-region extraction; check the
+container's computed transform and scale first.
 
 ## Context priority ladder — declare which rung, per value
 

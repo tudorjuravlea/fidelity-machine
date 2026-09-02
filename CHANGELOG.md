@@ -24,6 +24,13 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   Evaluated and rejected from the same source (already covered stronger here): networkidle
   readiness (Invariant 6's `[data-render-ready]` contract), flat max-tool-turns (CONTRACT
   §Loop control), variant-set doctrine (`references/variations.md`).
+- `references/delegation.md`: how to run capture, repair and verification work with cheap
+  agents, generic across packages. States the build-then-attack pattern (a different agent
+  verifies than the one that built), what two rounds of adversarial verification actually
+  caught that the builders missed, a brief template for builders and one for adversaries,
+  and hygiene rules for parallel agents (isolated render copies, no rate-limited API calls
+  inside a parallel agent, computing a fix's ceiling before funding it). Class: patch, no
+  script or contract behavior changes.
 
 ### Fixed
 
@@ -56,6 +63,22 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 Both references stay byte-identical across all three trees (engine + two studios); verified by
 hash after propagation.
+
+- `references/spec-capture.md`: two corrections from measured work on 2026-09-02. Class:
+  patch, correction and clarification, no generated output changes behavior.
+  - §Authentic assets gains an exception, under transforms: verbatim asset reuse holds
+    only at identity scale on integer device-pixel boundaries. An icon composited under
+    `transform: scale(0.9615)` still diffed at 66px after the reference's own pixels were
+    substituted in (down from 114px, not to 0), because the compositor resamples a bitmap
+    under a non-identity transform. States the two honest options: export the asset at
+    final device size and place it at identity, or accept and record the residual.
+  - New §Figma REST fallback, for when the MCP is unreachable for lack of a seat: on the
+    first `429`, read `Retry-After` and `x-figma-rate-limit-type` before retrying. A
+    plan-tier cap returned `retry-after: 331775` (about 3.8 days) while `/v1/me` kept
+    returning 200; a 200 there does not mean the file endpoints are open. States the stop
+    rule (record the reopen time, stage the scripts, do not blind-retry) and the token
+    handling rule (read only inside a header, output only to a file via `-o`, never
+    echoed).
 
 ## 1.0.0 — 2026-08-14
 

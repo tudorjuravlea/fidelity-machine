@@ -35,6 +35,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
     ├── mode-a.md · mode-b.md        # compose-from-library / generate-from-tokens rules
     ├── pixel-diff-tuning.md         # thresholds, masking, noise floor, failure modes
     ├── taste-and-composition.md     # craft heuristics within the system's vocabulary
+    ├── delegation.md                # build-then-attack: running capture/repair/verify with cheap agents
     └── microcopy-*.md               # copy patterns, voice/jargon/localisation, a11y+i18n
 
 ~/.claude/skills/<system-name>/      # ONE PER DESIGN SYSTEM — e.g. acme-banking
