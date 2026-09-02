@@ -7,6 +7,15 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **`scripts/probe-blind-spots.mjs`** (class: minor, new script, no lock impact). Measures a
+  screen's blind spots instead of writing them down: injects a fixed set of faults
+  (font-family swap, letter-spacing, font-weight, +20/+40-per-channel colour shift of the
+  first matching `tokens.colors.light` variable) one at a time into a fresh `os.tmpdir()`
+  copy of the screen, runs `render.mjs` + `diff.mjs` (and `colour-census.mjs` when present)
+  against each, and reports which gate caught it, or that nothing did. Nothing in the
+  caller's tree is written except `.report/<id>.blind-spots.json` next to the lock (or
+  `--out <dir>`). CONTRACT.md §Blind-spot probe; `references/pixel-diff-tuning.md` §Measuring
+  a screen's blind spots.
 - **`diff.mjs` findings now carry a coordinate.** Change class: patch (the report gains
   fields; PASS/FAIL verdict, thresholds and existing fields are unchanged). The report gains a
   report-level `extent {bbox, centroid, diffPixels, density}` over every unmasked diff pixel in

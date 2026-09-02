@@ -151,6 +151,17 @@ physics floor; if it sits well above, the worst triplet is pointing at something
 reread it. Pixel fixes never override the earlier gates: an RO-locale overflow is fixed with
 layout slack or a Concise copy pass, **never** by cutting a mandatory disclosure.
 
+## Measuring a screen's blind spots
+
+Every gate has a blind spot shaped like its metric: `node scripts/probe-blind-spots.mjs --lock
+<lock> --screen <id>` measures a screen's, instead of relying on a hand-maintained note.
+It injects a font-family swap, a letter-spacing shift, a font-weight shift, and a +20/+40-
+per-channel colour shift, one fault at a time into a fresh temp copy, and reports which gate
+(pixel, census when installed, or an earlier gate such as font-parity) caught each, or
+`NONE` when nothing did. Run it after calibrating and setting thresholds, not instead of
+either; a probe result is evidence for a masking or threshold decision, not a substitute for
+CONTRACT.md's caps (§Blind-spot probe, §Threshold caps).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Exit / fix |
