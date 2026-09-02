@@ -46,6 +46,10 @@ const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CHILD_TIMEOUT_MS = 180_000;
 const MAX_ROUNDS = 4;
 const MIN_RELATIVE_IMPROVEMENT = 0.10;
+// Same constant and same meaning as contract-guard.mjs's RED_STREAK_N (permanently-red
+// section): N consecutive recorded runs failing the pixel gate with no ratchet is the
+// point at which the check can no longer distinguish "still stuck" from "got worse".
+const RED_STREAK_N = 5;
 
 const GATE_SCRIPTS = {
   lint: 'adherence-lint.mjs',
@@ -212,8 +216,15 @@ function skippedGate(reason) {
  * History entries are {round, globalPct, worstTile, timestamp:'frozen'} — the timestamp is
  * the literal string 'frozen' on purpose: artifacts stay byte-deterministic across runs.
  * Notices are only produced for screens that did NOT pass (a passing screen ends the loop).
+ *
+ * `gate` carries only what the red-streak check needs (CONTRACT §Diff invariants,
+ * contract-guard.mjs's permanently-red section), not the whole screen object:
+ * { passThreshold, tileCeiling, hasRatchet }. When the entry just appended completes
+ * RED_STREAK_N consecutive failing runs with no ratchet, one more message is pushed so the
+ * loop notices on every run while the streak holds, not only on the next --lock audit.
  */
-function updateHistory(reportDir, screenId, globalPct, worstTile, screenPassed) {
+function updateHistory(reportDir, screenId, globalPct, worstTile, screenPassed, gate = {}) {
+  const { passThreshold, tileCeiling, hasRatchet } = gate;
   const historyPath = path.join(reportDir, `${screenId}.history.json`);
   let history = readJsonSafe(historyPath);
   if (!Array.isArray(history)) history = [];
@@ -239,6 +250,13 @@ function updateHistory(reportDir, screenId, globalPct, worstTile, screenPassed) 
     }
     if (history.length >= MAX_ROUNDS) {
       messages.push(`STOP: fix budget exhausted (${history.length} rounds >= ${MAX_ROUNDS}) — stop and report to the user; never thin-retry into invention`);
+    }
+    if (!hasRatchet && typeof passThreshold === 'number' && typeof tileCeiling === 'number') {
+      const valid = history.filter((e) => e && Number.isFinite(e.globalPct) && Number.isFinite(e.worstTile));
+      const lastN = valid.slice(-RED_STREAK_N);
+      if (lastN.length === RED_STREAK_N && lastN.every((e) => e.globalPct > passThreshold || e.worstTile > tileCeiling)) {
+        messages.push(`RED STREAK: ${RED_STREAK_N} consecutive failing runs and no ratchet; this check can no longer signal a regression (see contract-guard permanently-red)`);
+      }
     }
   }
   const best = priorBest === null ? globalPct : Math.min(priorBest, globalPct);
@@ -421,7 +439,12 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     // Loop-control bookkeeping — only rounds that produced a measurement count.
     let loop;
     if (typeof globalPct === 'number' && Number.isFinite(globalPct)) {
-      const { round, best, messages, historyPath } = updateHistory(reportDir, id, globalPct, worstTile, pass);
+      const gate = {
+        passThreshold: screen.passThreshold,
+        tileCeiling: screen.tileCeiling,
+        hasRatchet: screen.notConverged === true && !!screen.ratchet,
+      };
+      const { round, best, messages, historyPath } = updateHistory(reportDir, id, globalPct, worstTile, pass, gate);
       loop = { round, bestGlobalPct: best, messages, history: path.relative(lockDir, historyPath) };
     } else {
       loop = { note: 'no fidelity measurement this round (blocked before the diff gate) — history not appended' };

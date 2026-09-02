@@ -17,6 +17,18 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   apart from a substituted element (high density, small box) without opening an image first;
   see `references/pixel-diff-tuning.md` §Reading the evidence.
 
+- **contract-guard: a `permanently-red` section (`--lock` only).** A gate lies three ways:
+  it compares nothing and says pass, its metric has a blind spot where the defects live, or
+  it is red on every run with no ratchet, so a new regression looks identical to the old
+  known failure and nobody looks again. This catches the third. It reads
+  `.report/<id>.history.json` next to the lock and WARNs per screen whose last 5 recorded
+  runs all fail the pixel gate (`globalPct > passThreshold` or `worstTile > tileCeiling`)
+  with no `notConverged` + `ratchet` declared. `verify.mjs`'s `updateHistory` emits the same
+  notice (`RED STREAK: ...`) inline on every run while the streak holds, so the loop
+  notices without waiting for the next `--lock` audit. Missing or malformed history is not a
+  finding: the feature is passive. CONTRACT.md §Diff invariants gained one paragraph naming
+  the three failure modes and this guard. No lock schema change and no change to the
+  `.history.json` entry format; class patch per CONTRACT.md §Change classes.
 - **Three reference-level disciplines adapted from screenshot-to-code** (MIT,
   github.com/abi/screenshot-to-code; security-checked and mined 2026-08-26, notes in the
   design-KB's `_extraction/screenshot-to-code.md`). No script or contract changes; no change

@@ -14,6 +14,10 @@
 //   reference-source       (--lock only) WARN per screen with referenceImage but no
 //                          referenceSource — a stale reference is indistinguishable from a
 //                          real drift without knowing where the PNG itself came from
+//   permanently-red        (--lock only) WARN per screen whose last N recorded runs
+//                          (.report/<id>.history.json) all fail the pixel gate with no
+//                          ratchet declared; a check red on every run cannot signal a
+//                          regression, so a new failure changes nothing and nobody looks
 //   fault-injection        adherence-lint's a11y checks go RED on a temp copy of the golden
 //                          fixture mutated one defect at a time (a check that cannot fail
 //                          is not a check); the pristine copy must stay clean
@@ -37,8 +41,14 @@ const ENGINE_ROOT = path.dirname(SCRIPT_DIR);
 const SECTIONS = [
   'script-inventory', 'docs-drift', 'help-support', 'exit-codes',
   'spawn-not-import', 'template-placeholders', 'schema-validity', 'reference-source',
-  'fault-injection', 'self-test',
+  'permanently-red', 'fault-injection', 'self-test',
 ];
+
+// permanently-red: how many trailing recorded runs must all fail the pixel gate, with no
+// ratchet, before the check has proven it cannot signal a regression. 5 is long enough that
+// a single bad render or a one-off flake does not trip it, short enough to surface inside a
+// normal fix loop (CONTRACT §Loop control caps a loop at 4 rounds) rather than months later.
+const RED_STREAK_N = 5;
 
 // ---------------------------------------------------------------- findings
 
@@ -427,6 +437,54 @@ function checkRatchet(extraLockPath) {
   }
 }
 
+// ------------------------------------------------------------ permanently-red
+//
+// notConverged + ratchet (CONTRACT.md §Diff invariants) is the sanctioned way for a
+// legitimately stuck screen to stay green-able: the ratchet gives the check something to go
+// red AGAINST. A screen with neither has no such thing: if its last RED_STREAK_N recorded
+// runs all failed the pixel gate, the check has been red for that whole stretch and a NEW
+// regression would look identical to the old, already-known failure. Nobody would notice.
+// This reads .report/<id>.history.json (written by verify.mjs's updateHistory) next to the
+// lock and warns per screen. Passive: missing or malformed history is not itself a finding.
+function checkPermanentlyRed(extraLockPath) {
+  if (!extraLockPath) return;
+  const abs = path.resolve(extraLockPath);
+  if (!fs.existsSync(abs)) return; // already an ERROR from schema-validity
+  let lock;
+  try { lock = JSON.parse(fs.readFileSync(abs, 'utf8')); }
+  catch { return; } // already an ERROR from schema-validity
+  const lockDir = path.dirname(abs);
+  for (const s of (Array.isArray(lock.screens) ? lock.screens : [])) {
+    if (!s || typeof s !== 'object' || !s.referenceImage) continue;
+    const passThreshold = s.passThreshold;
+    const tileCeiling = s.tileCeiling;
+    if (typeof passThreshold !== 'number' || typeof tileCeiling !== 'number') continue;
+
+    const historyPath = path.join(lockDir, '.report', `${s.id}.history.json`);
+    let history;
+    try { history = JSON.parse(fs.readFileSync(historyPath, 'utf8')); }
+    catch { continue; } // missing or unreadable: passive, no finding
+    if (!Array.isArray(history)) continue; // malformed (e.g. "{}"): passive, no finding
+
+    // Entries with non-finite numbers are ignored outright, not treated as fails: they
+    // cannot support the claim "every one of the last N runs failed".
+    const valid = history.filter((e) =>
+      e && typeof e === 'object'
+      && Number.isFinite(e.globalPct) && Number.isFinite(e.worstTile));
+    if (valid.length < RED_STREAK_N) continue;
+
+    const lastN = valid.slice(-RED_STREAK_N);
+    const allFail = lastN.every((e) => e.globalPct > passThreshold || e.worstTile > tileCeiling);
+    if (!allFail) continue;
+
+    const ratcheted = s.notConverged === true && !!s.ratchet;
+    if (ratcheted) continue;
+
+    add('WARN', 'permanently-red', extraLockPath,
+      `screen ${s.id ?? '?'}: pixel gate red on the last ${RED_STREAK_N} recorded runs with no ratchet, so a regression cannot change its state; declare notConverged with a ratchet at the recorded best, or fix the screen`);
+  }
+}
+
 // ---------------------------------------------------------------- self-test
 
 function tail(res, n = 12) {
@@ -717,6 +775,7 @@ async function main() {
   await checkSchemaValidity(args.lock);
   checkReferenceSource(args.lock);
   checkRatchet(args.lock);
+  checkPermanentlyRed(args.lock);
   runFaultInjection();
   runA11yScopingInjection();
   if (args.selfTest) runSelfTest();
