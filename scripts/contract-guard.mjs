@@ -400,6 +400,33 @@ function checkReferenceSource(extraLockPath) {
   }
 }
 
+// A ratchet is only honest if its recorded best is a real measurement of a screen that nearly
+// passes. A baseline far above the target would let any regression hold, so warn when the
+// recorded best is more than twice the threshold's pixel equivalent. A warning, not an error:
+// the note and the by-hand re-baseline are the guard, this just makes an absurd one visible.
+function checkRatchet(extraLockPath) {
+  if (!extraLockPath) return;
+  const abs = path.resolve(extraLockPath);
+  if (!fs.existsSync(abs)) return;
+  let lock;
+  try { lock = JSON.parse(fs.readFileSync(abs, 'utf8')); }
+  catch { return; }
+  for (const s of (Array.isArray(lock.screens) ? lock.screens : [])) {
+    if (!s || typeof s !== 'object' || !s.ratchet) continue;
+    if (s.notConverged !== true) {
+      add('WARN', 'ratchet', extraLockPath, `screen ${s.id ?? '?'}: ratchet present but notConverged is not true, so it never applies`);
+      continue;
+    }
+    const dpr = s.dpr ?? 1, thr = s.passThreshold ?? 0.005;
+    const frame = (s.captureWidth ?? 0) * (s.captureHeight ?? 0) * dpr * dpr;
+    const allowed = 2 * thr * frame;
+    if (frame > 0 && s.ratchet.diffPixels > allowed) {
+      add('WARN', 'ratchet', extraLockPath,
+        `screen ${s.id ?? '?'}: ratchet.diffPixels ${s.ratchet.diffPixels} is more than twice the threshold's pixel equivalent (${Math.round(thr * frame)}); a ratchet that far from its target holds almost anything`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- self-test
 
 function tail(res, n = 12) {
@@ -689,6 +716,7 @@ async function main() {
   checkTemplatePlaceholders(scripts);
   await checkSchemaValidity(args.lock);
   checkReferenceSource(args.lock);
+  checkRatchet(args.lock);
   runFaultInjection();
   runA11yScopingInjection();
   if (args.selfTest) runSelfTest();

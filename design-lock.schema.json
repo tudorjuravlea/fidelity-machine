@@ -530,6 +530,33 @@
           "note": {
             "type": "string",
             "description": "Free working note on the screen."
+          },
+          "ratchet": {
+            "type": "object",
+            "description": "For a screen declared notConverged: the recorded best the pixel gate must not regress from. The passThreshold stays the target and is still reported; this makes the check able to go red on a regression instead of being red on every run. Re-baseline deliberately, with a note, never by script.",
+            "properties": {
+              "diffPixels": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tolerancePx": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "recordedAt": {
+                "type": "string",
+                "format": "date"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "diffPixels",
+              "recordedAt",
+              "note"
+            ],
+            "additionalProperties": false
           }
         },
         "if": {
