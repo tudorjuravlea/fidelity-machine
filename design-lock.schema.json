@@ -439,6 +439,10 @@
                 "rect": {
                   "$ref": "#/$defs/rect",
                   "description": "Ground-truth CSS-px rect from Figma get_metadata (modes A/B1)"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why this anchor deliberately carries no rect. Required whenever rect is absent: geometry records such an entry as no-ground-truth and skips it, so an unexplained rect-less anchor is indistinguishable from one nobody filled in, and a screen of them reports pass having compared nothing."
                 }
               }
             }
@@ -755,9 +759,15 @@
           "status": {
             "enum": [
               "approved",
-              "deprecated"
+              "provisional",
+              "deprecated",
+              "withdrawn"
             ],
-            "description": "Deprecate superseded rulings and record the replacement; never delete history."
+            "description": "approved = in force; provisional = in force but resting on an unconfirmed assumption; deprecated = superseded, kept for history; withdrawn = retracted with no replacement. Deprecate superseded rulings and record the replacement; never delete history."
+          },
+          "supersedes": {
+            "type": "string",
+            "description": "What this ruling replaces, when it replaces a named predecessor."
           }
         }
       }

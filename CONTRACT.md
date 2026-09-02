@@ -116,6 +116,7 @@ are created next to the lock.
 
 - `pixelmatch(ref, img, diff, W, H, { threshold: 0.1, includeAA: false })`. NEVER raise `threshold` to absorb AA — that hides real color drift; AA is handled structurally by `includeAA: false`.
 - Masks zero the SAME rects in BOTH buffers before matching. Every mask has a `reason`. Lint enforces `Σ mask area ≤ caps.maxMaskedAreaPct` of the frame.
+- A `figIds[]` entry with no `rect` is recorded `no-ground-truth` and skipped by geometry. That is legitimate only when the Figma frame and the DOM box genuinely measure different things, and such an entry MUST carry a `reason` saying so. A rect-less entry without a reason is an anchor someone forgot to fill in, and a gate that silently skips every anchor reports `pass` having compared nothing.
 - `globalPct = diffPixels / (W*H − maskedPx)`.
 - Tiles: 64×64 grid over the diff buffer; `worstTile` = max per-tile diff density over that tile's unmasked pixels.
 - PASS ⇔ `globalPct ≤ screen.passThreshold && worstTile ≤ screen.tileCeiling`.
@@ -195,10 +196,25 @@ gates never see. Absent → silent; any hit → ERROR.
 User mandates and interpretive rulings that shape generation ("balances always masked in
 demo shots", "the secondary locale keeps the primary locale's number format") are recorded
 in the lock's `decisions[]` as `DEC-*` entries — `{id, date, scope, decision, rationale?,
-status}` — never only as prose in reports or skill text. Prose scatters and dies with the
-session; the ledger travels with the lock and is re-read by every future pass. A superseded
-ruling is marked `status: "deprecated"` with its replacement recorded as a new entry —
-deprecate, don't delete: the history of a ruling is part of the ruling.
+supersedes?, status}` — never only as prose in reports or skill text. Prose scatters and dies
+with the session; the ledger travels with the lock and is re-read by every future pass. A
+superseded ruling is marked `status: "deprecated"` with its replacement recorded as a new
+entry — deprecate, don't delete: the history of a ruling is part of the ruling. When the new
+entry supersedes a named predecessor, say which in `supersedes`.
+
+`status` is one of:
+
+| status | meaning |
+|---|---|
+| `approved` | in force |
+| `provisional` | in force but resting on an assumption not yet confirmed — say which in the rationale |
+| `deprecated` | superseded; kept for history |
+| `withdrawn` | retracted by the person who made it, not superseded by a replacement |
+
+`provisional` and `withdrawn` are not decoration. A ruling made against a gap in the capture
+is provisional until the gap is filled, and saying so is what stops a later pass treating a
+guess as settled. A withdrawn ruling differs from a deprecated one: nothing replaced it, and
+the record has to show that so the question is understood to be open again.
 
 ## Change classes (lock evolution)
 
