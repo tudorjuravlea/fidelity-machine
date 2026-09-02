@@ -44,6 +44,15 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   blocker naming the count and the report path. Proven on 27 production screens before this
   move; the engine port keeps the same classifier and location output, with `--lock` now
   required (no default path) and every brand-specific comment rewritten generic.
+- **`diff.mjs` prints the ceiling of a fix before anyone spends money on it.** (class: patch , 
+  no generated output changes; existing report fields and verdicts are unchanged.) The report
+  and stdout, after the verdict lines, now carry `gapPx` (how many pixels past `passThreshold`
+  the screen sits, or under it on a pass) and `recoverable` (what the five tiles holding the most diff pixels
+  hold toward that gap, as a fraction of it, and, only while failing, the minimum count of ALL
+  differing tiles that would need to be fixed completely to close it). Lets a fix idea be priced
+  against the gap before it is worked, instead of after: see `references/pixel-diff-tuning.md`
+  §Reading the evidence, Step 0, and CONTRACT.md §Diff invariants.
+
 - **Three reference-level disciplines adapted from screenshot-to-code** (MIT,
   github.com/abi/screenshot-to-code; security-checked and mined 2026-08-26, notes in the
   design-KB's `_extraction/screenshot-to-code.md`). No script or contract changes; no change

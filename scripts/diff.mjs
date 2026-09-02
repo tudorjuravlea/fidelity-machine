@@ -404,6 +404,35 @@ for (let n = 0; n < worst5.length; n++) {
   worstRegions.push({ bbox: t.bbox, density: t.density, diffPixels: t.red, unmaskedPixels: t.unmasked, inner: t.inner, classification, crops });
 }
 
+// ---- 6b. gapPx / recoverable: the ceiling of a fix, printed before anyone spends money on it ----
+// gapPx: how many pixels diffPixels sits past (or under) the passThreshold line, in the same
+// denominator as globalPct. recoverable: what the five tiles holding the MOST diff pixels could
+// buy back if fixed completely (ranked by pixel count, not by density: the density-ranked
+// worstRegions above can be small partial tiles that hold few pixels), and, only while failing,
+// the minimum count of ALL differing tiles that would need to be fixed completely to close the
+// gap. This does not change the verdict; it prices a fix idea before it is worked
+// (references/pixel-diff-tuning.md §Reading the evidence, Step 0).
+const thresholdPx = Math.floor(screen.passThreshold * denom);
+const gapPx = diffPixels - thresholdPx;
+const differingTilesAll = tiles.filter((t) => t.density > 0);
+const sortedByDiffPixelsDesc = [...differingTilesAll].sort((a, b) => b.red - a.red);
+const top5ByPx = sortedByDiffPixelsDesc.slice(0, 5);
+const top5Px = top5ByPx.reduce((s, t) => s + t.red, 0);
+let tilesNeededToPass = null;
+let top5FractionOfGap = null;
+if (gapPx > 0) {
+  top5FractionOfGap = top5Px / gapPx;
+  let cumulative = 0;
+  let n = 0;
+  for (const t of sortedByDiffPixelsDesc) {
+    cumulative += t.red;
+    n++;
+    if (cumulative >= gapPx) break;
+  }
+  tilesNeededToPass = n;
+}
+const recoverable = { top5Px, top5FractionOfGap, tilesNeededToPass, differingTiles: differingTilesAll.length };
+
 // ---- 7. report + verdict -----------------------------------------------------
 const pass = globalPct <= screen.passThreshold && worstTile <= screen.tileCeiling;
 const report = {
@@ -419,6 +448,8 @@ const report = {
   dpr,
   extent,
   worstRegions,
+  gapPx,
+  recoverable,
 };
 fs.writeFileSync(path.join(reportDir, `${screen.id}.diff.png`), PNG.sync.write(diffPng));
 fs.writeFileSync(path.join(reportDir, `${screen.id}.report.json`), `${JSON.stringify(report, null, 2)}\n`);
@@ -433,6 +464,17 @@ if (extent) {
   console.log(`  extent x ${e.bbox.x}..${e.bbox.x + e.bbox.width - 1} y ${e.bbox.y}..${e.bbox.y + e.bbox.height - 1} (${e.bbox.width}x${e.bbox.height}) centroid (${fmtNum(e.centroid.x)},${fmtNum(e.centroid.y)}) density ${e.density.toFixed(4)} over ${e.diffPixels} px`);
 } else {
   console.log('  extent: none (no diff pixels)');
+}
+if (gapPx > 0) {
+  const gapPctStr = `${Math.round(recoverable.top5FractionOfGap * 100)}%`;
+  const verb = top5Px >= gapPx ? 'could' : 'cannot';
+  const tileWord = top5ByPx.length === 1 ? 'tile' : 'tiles';
+  console.log(`  over by ${gapPx} px; the ${top5ByPx.length} ${tileWord} holding the most diff pixels hold ${top5Px} px (${gapPctStr} of the gap): fixing them all ${verb} reach the threshold`);
+  console.log(`  ceiling: at least ${tilesNeededToPass} of ${recoverable.differingTiles} differing tiles must be fixed completely to pass`);
+} else if (!tileOk) {
+  console.log(`  under by ${-gapPx} px on the global line, but failing on the tile ceiling: one tile must come down from ${pct(worstTile)} to ${screen.tileCeiling}`);
+} else {
+  console.log(`  under by ${-gapPx} px`);
 }
 console.log(`  maskedPct ${pct(maskedPct)}  (${maskedPx} px, ${(screen.maskedRegions ?? []).length} region(s))`);
 const maskCap = lock.caps?.maxMaskedAreaPct;

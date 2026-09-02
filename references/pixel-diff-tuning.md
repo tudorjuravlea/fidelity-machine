@@ -106,6 +106,18 @@ exist so a reviewer can audit every rect; a mask without a defensible reason is 
 
 ## Reading the evidence — fix toward the reference, not the delta
 
+### Step 0: compute the ceiling
+
+Before working any fix idea, subtract what it can possibly recover from the gap. `diff.mjs`
+already prints `gapPx` (how many pixels past `passThreshold` the screen sits) and `recoverable`
+(what the five tiles holding the most diff pixels hold toward that gap, and the minimum count of ALL differing tiles
+that would need to be fixed completely to close it). If the idea targets one or two of those
+tiles and their combined pixels fall short of `gapPx`, the idea is not a fix, it is a diagnosis:
+it may be true and worth understanding, but funding it will not move the verdict. The honest
+outputs at that point are a ratchet (CONTRACT.md §Diff invariants) recording the best reachable
+result, or a re-measured reference if the gap itself turns out to be a stale comparison. Do this
+subtraction before anyone spends money on the idea, not after it ships and comes up short.
+
 A failing screen emits `.report/<id>.diff.png`, `.report/<id>.report.json`, and
 `.report/<id>.tiles/`: the top-5 worst tiles as **triplet crops** — `ref/`, `render/`, `diff/`
 per bbox — each with one text line, geometry-classified when ground truth exists:
