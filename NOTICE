@@ -25,7 +25,23 @@ references/surface-classes.md adapts desktop-surface guidance, from genjutsu,
 Copyright (c) 2026 Adrien Thevon, MIT License
 (https://github.com/AThevon/genjutsu).
 
-references/taste-and-composition.md, references/spec-capture.md and references/mode-b.md
-adapt render-review and authentic-asset guidance from screenshot-to-code,
+references/taste-and-composition.md, references/spec-capture.md, references/mode-b.md and
+references/eval-harness.md adapt render-review, authentic-asset, evaluation-harness and QA
+guidance from screenshot-to-code,
 Copyright (c) 2023 Abi Raja, MIT License
 (https://github.com/abi/screenshot-to-code).
+
+references/eval-harness.md also adapts LLM-judge design rules from nurijanian-skills,
+Copyright (c) 2026 George Nurijanian, MIT License
+(https://github.com/gnurio/nurijanian-skills).
+
+The live-product capture flow in references/spec-capture.md adapts the stitched
+full-page capture method from Skills,
+Copyright (c) 2026 Meng To, MIT License
+(https://github.com/MengTo/Skills).
+
+references/color-science.md and the data-color-scale rules in references/dataviz-craft.md
+re-express findings by their named originators, as curated in skill.color-expert by
+David Aerne (meodai), CC-BY-4.0 for the curation
+(https://github.com/meodai/skill.color-expert); the scientific claims remain their
+original authors'.

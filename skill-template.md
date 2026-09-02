@@ -84,7 +84,12 @@ anything that animates → `ENGINE/references/motion-craft.md` (durations and cu
 `tokens.motion` by name, never invented; the pixel gate cannot see motion, so say what was
 reviewed); platform CSS features (scroll-driven animation, view transitions, `@starting-style`,
 anchor positioning, container queries) → `ENGINE/references/modern-css.md` (start visible then
-enhance; the pinned render browser proves nothing about the audience).
+enhance; the pinned render browser proves nothing about the audience); color work beyond
+pasting lock values (deriving ramps or chart scales, contrast decisions, palette extraction
+from reference imagery, judging token distinguishability) → `ENGINE/references/color-science.md`;
+comparing generator configurations (model vs model, prompt vs prompt, mode vs mode) →
+`ENGINE/references/eval-harness.md` (the gates score one artifact; the harness ranks
+configurations across a dataset).
 
 ## 4. Microcopy pass (after layout, before gates)
 

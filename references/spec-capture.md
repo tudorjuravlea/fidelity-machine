@@ -215,6 +215,47 @@ and placing it at identity, or accept the residual and record it in the report. 
 a non-zero diff on a correctly-extracted asset as a wrong-region extraction; check the
 container's computed transform and scale first.
 
+## Live-product reference capture (rung 3)
+
+Adapted from the stitched full-page capture method in Skills by Meng To (MIT,
+github.com/MengTo/Skills). A browser's one-shot fullPage screenshot silently lies on
+exactly the pages worth capturing — lazy-loaded, scroll-animated, reveal-heavy pages
+return a tall image that is mostly blank while a scroll-through looks perfect. These
+shots feed B2 as reference images, so verify the capture before anything downstream
+trusts it.
+
+- **Stitch, never one-shot**: open the real page URL, scroll to the bottom once so lazy
+  media and reveal sections mount, return to the top, step down in viewport-sized
+  overlapping steps, capture each settled viewport, stitch vertically. Cut section crops
+  from the stitched image only, never from a native fullPage screenshot.
+- **Settle on a signal, not a stopwatch**: `readyState === "complete"`, then watch the
+  DOM node count until it stops changing (an SPA fetches after load), then wait until
+  every `img` reports `complete`. A fixed delay races an image decode whose duration
+  depends on the network, which is why it fails inconsistently.
+- **The window may not be the scroller.** On many SPAs the scrollable region is an
+  `overflow-y: auto` container inside a fixed-height shell; scrolling the window captures
+  one frame repeated down a tall image, which looks like a capture and is not. Find the
+  element that actually overflows before capturing.
+- **Capture from a clean, isolated browser profile** — cookies decide what the page IS
+  before the screenshot decides what it looks like (a logged-in profile pointed at a
+  product domain returns the dashboard, not the marketing site). Two successful-looking
+  failures to detect by name: a bot check (mostly empty page, one centered button) and a
+  login wall (a form containing a password input). Record which surface was actually
+  captured.
+- **Very tall pages shard**: past roughly 16,000px single captures start failing; slice
+  into ~8,000px segments and join them.
+- **Check the output, not the exit code**: crop the top and the bottom 1,500px of the
+  finished image and look at both. It costs seconds and catches the two failures a
+  successful run reports as success — a blank lower half, and a page that never scrolled.
+- **Section crops are contiguous or they are wrong**: exact boundaries in page order, no
+  skipped pixel rows, overlap only where sticky elements force it. A crop taken at a
+  different scroll state reintroduces exactly the inconsistency the stitch removed.
+- **Actuate before capturing an interaction state** (hover the card, scroll into the
+  pinned section, let the canvas reach a representative moment), and verify the files,
+  not just the call: every referenced image exists, is non-empty, and measures the
+  expected dimensions. A zero-byte asset and a successful capture look identical in a
+  task log.
+
 ## Context priority ladder — declare which rung, per value
 
 | Rung | Source | Use |

@@ -86,6 +86,28 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   and hygiene rules for parallel agents (isolated render copies, no rate-limited API calls
   inside a parallel agent, computing a fix's ceiling before funding it). Class: patch, no
   script or contract behavior changes.
+- **`references/eval-harness.md`.** How to rank generator configurations (model vs model,
+  prompt vs prompt, mode vs mode) across a fixed dataset, and how that composes with the
+  gates: pixel-diff scores one artifact against its reference, the harness ranks
+  configurations, and where a dataset item has an exact reference the gate's diff margin is
+  the metric. Anchored 0-4 human scale where references are inexact, three runs per
+  configuration, prompt-report logging, distinctive fixtures, done-detection by affordance,
+  and judge-design rules for model-as-evaluator (one failure dimension per judge, critique
+  before verdict, a borderline few-shot judged Fail). Adapted from screenshot-to-code's
+  evaluation and QA discipline (MIT, Abi Raja) and the verbalized-sampling judge set (MIT,
+  George Nurijanian); both credited in NOTICE. Class: patch, no script or contract changes.
+- **`references/color-science.md`.** The science that keeps the engine's color measurements
+  honest: which space for which job (OKLCH to derive and judge, exact hex to store and
+  compare, HSL for nothing); where perceptual uniformity bends (near-black grain needs wider
+  token separation; a display gamut holds on the order of a thousand distinct regions, which
+  contextualizes the census); gamut existence checks at capture (a written OKLCH value can
+  silently refold in the browser); the APCA contrast ladder with the engine stance "design
+  to APCA, verify to WCAG" (conformance stays on the numbers the law cites); color-vision
+  deficiency simulation with the size-dependent distinctness rule; and a palette-extraction
+  pipeline for B2 and rung 3-5 captures (cluster in OKLab, overshoot then merge,
+  representative pixel over centroid, phantom guards). Findings re-expressed and attributed
+  to their named originators, as curated in skill.color-expert (CC-BY-4.0 curation, David
+  Aerne); credited in NOTICE. Class: patch, no script or contract changes.
 
 ### Fixed
 
@@ -134,6 +156,26 @@ hash after propagation.
     rule (record the reopen time, stage the scripts, do not blind-retry) and the token
     handling rule (read only inside a header, output only to a file via `-o`, never
     echoed).
+- `references/dataviz-craft.md` deepened from the design-KB mining wave: bump chart,
+  ridgeline and beeswarm join the selection table; a per-type table of the one lie each
+  chart type invites, checked by the self-critique; six new honesty rules (crowding is
+  data, round once then draw from the rounded number, drift checked as relative error,
+  disclose the missing and never impute it, a connector is a gap and not a trajectory,
+  tight domains disclosed with the bar/slopegraph/dumbbell distinction); per-genre anatomy
+  specs; theme-safe ramp language ("stronger contrast is larger", never "darker is
+  larger": the legend sentence that ships false in one theme); contrast computed on
+  composited colors with the border trick for small marks; a data-color-scales section
+  (sequential, diverging and categorical scales with the flat-derivative test and
+  generate-score-then-lint); and a bind-the-number-to-the-mark verification hook.
+- `references/spec-capture.md` gains a live-product reference capture flow for rung 3
+  sources: stitched full-page capture over one-shot fullPage, settle on signals rather
+  than stopwatches, container-scroller detection, isolated browser profiles with
+  bot-check and login-wall detection by name, sharding past ~16,000px, checking the
+  output rather than the exit code, contiguous section crops, and actuate-before-capture.
+  Adapted from Skills by Meng To (MIT); credited in NOTICE.
+- `skill-template.md`: the per-artifact routing block now routes color work beyond pasted
+  lock values to `color-science.md`, and generator-configuration comparisons to
+  `eval-harness.md`.
 
 ## 1.0.0 — 2026-08-14
 
