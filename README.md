@@ -84,7 +84,7 @@ One honest acknowledgment: the idea has been attempted before. A small project c
 
 1. **Capture:** an AI agent reads your design system (from Figma via MCP, or from reference images) and compiles it into `design-lock.json`: colors per theme, the complete spacing scale, type roles, radii, elevation, mandated copy, banned jargon, brand signatures, hard don'ts. The lock is the mold. It is frozen: derived files are hash-chained to it, and hand-editing them fails the gate.
 2. **Generate:** the agent produces screens *from the lock only*. Raw hex outside the token sheet fails. An off-scale spacing value fails. A font substitute fails. Lorem ipsum fails.
-3. **Verify:** the pipeline runs, in fixed order: content and compliance lint, then structured self-critique (including the brand-transplant test), then the geometry gate, then the pixel diff against the reference with per-region ceilings. Thresholds are law: a stubborn screen gets diagnosed, never a loosened gate.
+3. **Verify:** the pipeline runs, in fixed order: content and compliance lint, then structured self-critique (including the brand-transplant test), then the geometry gate, then the pixel diff against the reference with per-region ceilings, then a colour census that catches uniform colour drift the pixel diff's own cutoff cannot see. Thresholds are law: a stubborn screen gets diagnosed, never a loosened gate.
 4. **Report:** green ships with its numbers. Red returns with the defect, the region crop, and the rule. The loop runs at most four rounds, keeps the best result, and stops honestly instead of thrashing.
 
 ---

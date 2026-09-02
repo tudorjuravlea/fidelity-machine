@@ -106,8 +106,10 @@ Max 1–2 ethical nudges; dark patterns banned outright.
    If not, the composition is generic despite token correctness; fix by leaning on the
    lock's `signatures[]`, never by inventing off-system.
 3. **Geometry + pixel gates**: structure first, then diff. PASS ⇔ `globalPct ≤ passThreshold`
-   AND `worstTile ≤ tileCeiling`. Fix toward the reference, never the delta. Net-new screens
-   without a reference: gates 1–2 + render + visual review carry it — say so plainly.
+   AND `worstTile ≤ tileCeiling`. Fix toward the reference, never the delta. Then the colour
+   census (`colour-census.mjs`) catches uniform colour drift the pixel gate's YIQ cutoff
+   cannot see. Net-new screens without a reference: gates 1–2 + render + visual review carry
+   it, say so plainly.
 
 Loop ≤4 rounds, best-so-far, revert regressions, STOP honestly on no progress. Threshold caps
 are law — a stubborn screen gets diagnosed (`ENGINE/references/pixel-diff-tuning.md`), never a

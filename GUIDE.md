@@ -25,10 +25,10 @@ node scripts/verify.mjs --lock /tmp/playground/design-lock.json --screen home
 You get one line that matters:
 
 ```
-PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok  globalPct=0.0000% (pass <= 0.5000%)
+PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
 ```
 
-Read it left to right: the content lint passed, the screen rendered deterministically, the layout geometry matched, and the pixel diff against the reference measured 0.0000% against an allowed 0.5000%. That is what "on-brand" looks like as a measurement instead of an opinion.
+Read it left to right: the content lint passed, the screen rendered deterministically, the layout geometry matched, the pixel diff against the reference measured 0.0000% against an allowed 0.5000%, and the colour census found no drift hiding below that diff's own cutoff. That is what "on-brand" looks like as a measurement instead of an opinion.
 
 ## 3. Break it on purpose
 
@@ -51,10 +51,10 @@ node scripts/verify.mjs --lock /tmp/playground/design-lock.json --screen home
 ```
 
 ```
-FAIL  home [B2]  lint=FAIL(1) render=-- geometry=-- diff=--
+FAIL  home [B2]  lint=FAIL(1) render=-- geometry=-- diff=-- census=--
 ```
 
-Two things to notice. First, it failed. Second, look at the dashes: the render, geometry, and pixel gates did not even run. The content gate blocks first, by design. A screen with an off-system value never gets to be judged on its looks.
+Two things to notice. First, it failed. Second, look at the dashes: the render, geometry, pixel, and colour-census gates did not even run. The content gate blocks first, by design. A screen with an off-system value never gets to be judged on its looks.
 
 ## 4. Read the finding
 
@@ -86,7 +86,7 @@ node scripts/verify.mjs --lock /tmp/playground/design-lock.json --screen home
 ```
 
 ```
-PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok  globalPct=0.0000% (pass <= 0.5000%)
+PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
 ```
 
 That round trip, red with a named cause, then green with a measurement, is the entire working loop. In real use, the AI agent generates, the machine judges, the findings go back to the agent, and the loop repeats until green or until the machine says honestly that it cannot converge.

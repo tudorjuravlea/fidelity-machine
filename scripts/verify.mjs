@@ -8,9 +8,12 @@
  *      screen regardless of visuals (compliance > clarity > motivation).
  *   2. Taste self-critique — model gate, not scriptable; its place is noted in the report.
  *   3. render.mjs → geometry.mjs (structure before pixels; exits 0 on all-no-ground-truth
- *      B2 screens) → diff.mjs (pixel gate).
- * A failed gate short-circuits the later gates for that screen — the ordering is the
- * priority, not just a sequence.
+ *      B2 screens) → diff.mjs (pixel gate) → colour-census.mjs (colour drift below the
+ *      pixel gate's cutoff; runs whenever diff ran).
+ * A failed gate short-circuits the later gates for that screen; the ordering is the
+ * priority, not only a sequence. One exception: the colour census runs whenever diff ran,
+ * pass or fail, because it is an independent signal (drift the pixel metric cannot score),
+ * not a refinement of the diff verdict, and a failing diff says nothing about it.
  *
  * Children are spawned as CLIs (their CLIs are the contract); their exit codes are mapped
  * to the CONTRACT meanings in the report. Nothing is imported from sibling scripts.
@@ -56,6 +59,7 @@ const GATE_SCRIPTS = {
   render: 'render.mjs',
   geometry: 'geometry.mjs',
   diff: 'diff.mjs',
+  census: 'colour-census.mjs',
 };
 
 const EXIT_MEANING = {
@@ -355,6 +359,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       gates.render = skippedGate('skipped — content/compliance gate blocked this screen (three-gate ordering: content > taste > geometry/pixels)');
       gates.geometry = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.diff = skippedGate('skipped — content/compliance gate blocked this screen');
+      gates.census = skippedGate('skipped, content/compliance gate blocked this screen');
     } else {
       // Gate 3a — render.
       const rres = runChild(GATE_SCRIPTS.render, ['--lock', lockPath, '--screen', id]);
@@ -375,6 +380,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       if (!renderOk) {
         gates.geometry = skippedGate('skipped — render produced no output (.render/*.png + geometry dump required)');
         gates.diff = skippedGate('skipped — render produced no output');
+        gates.census = skippedGate('skipped, render produced no output');
       } else {
         // Gate 3b — geometry (structure before pixels). Runs for B2 too: the geometry
         // script exits 0 itself when a screen has no ground-truth rects.
@@ -428,13 +434,45 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
               noteFinding(dres.exitCode === 3 ? 55 : 65, `[${id}] diff.mjs exit ${dres.exitCode} — ${meaning(dres.exitCode)}`);
             }
           }
+
+          // Gate 3d, colour census: catches colour drift below the pixel gate's YIQ
+          // cutoff (CONTRACT §Diff invariants). Runs whenever diff.mjs actually ran,
+          // regardless of the diff verdict, it is an independent signal, not a
+          // refinement of the pixel gate's own pass/fail.
+          if (dres.missing) {
+            gates.census = skippedGate('skipped, diff.mjs is missing, colour census could not run');
+          } else {
+            const cres = runChild(GATE_SCRIPTS.census, ['--lock', lockPath, '--screen', id]);
+            gates.census = gateFromChild(cres);
+            if (cres.missing) {
+              missingScripts.add(GATE_SCRIPTS.census);
+              noteEvent(2, GATE_SCRIPTS.census, id);
+              blockers.push(`setup: ${GATE_SCRIPTS.census} is missing, colour census could not run`);
+              noteFinding(70, `[${id}] missing script ${GATE_SCRIPTS.census} (expected in ${SCRIPTS_DIR})`);
+            } else {
+              const censusReportPath = `.report/${id}.census.json`;
+              const censusReport = readJsonSafe(path.join(reportDir, `${id}.census.json`));
+              if (censusReport) gates.census.report = censusReportPath;
+              if (cres.exitCode === 1) {
+                const count = Array.isArray(censusReport?.findings) ? censusReport.findings.length : null;
+                noteEvent(1, GATE_SCRIPTS.census, id);
+                blockers.push(`colour census: ${count ?? '>=1'} silent colour finding(s) below the pixel gate's cutoff, see ${censusReportPath}`);
+                noteFinding(25, `[${id}] colour census failed, ${count ?? '>=1'} finding(s); see ${censusReportPath}`);
+              } else if (cres.exitCode !== 0) {
+                noteEvent(cres.exitCode, GATE_SCRIPTS.census, id);
+                blockers.push(`colour-census.mjs exit ${cres.exitCode}, ${meaning(cres.exitCode)}`);
+                noteFinding(65, `[${id}] colour-census.mjs exit ${cres.exitCode}, ${meaning(cres.exitCode)}`);
+              }
+            }
+          }
         } else {
           gates.diff = skippedGate('skipped — geometry gate failed (structure before pixels: fix boxes, then diff)');
+          gates.census = skippedGate('skipped, geometry gate failed (structure before pixels: fix boxes, then diff)');
         }
       }
     }
 
-    const pass = ['lint', 'render', 'geometry', 'diff'].every((k) => gates[k]?.status === 'pass');
+    const pass = ['lint', 'render', 'geometry', 'diff', 'census'].every((k) => gates[k]?.status === 'pass');
 
     // Loop-control bookkeeping — only rounds that produced a measurement count.
     let loop;
@@ -500,7 +538,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     const g = s.gates;
     console.log(
       `${s.pass ? 'PASS' : 'FAIL'}  ${id} [${s.mode ?? '?'}]  `
-      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} diff=${cell(g.diff)}  `
+      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} diff=${cell(g.diff)} census=${cell(g.census)}  `
       + `globalPct=${pctFmt(s.globalPct)} (pass <= ${pctFmt(s.passThreshold)})  worstTile=${pctFmt(num(s.worstTile))} (ceil ${pctFmt(s.tileCeiling)})`
     );
     for (const m of s.loop?.messages ?? []) console.log(`      ${m}`);

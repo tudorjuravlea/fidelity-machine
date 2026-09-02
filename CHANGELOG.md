@@ -29,6 +29,21 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   finding: the feature is passive. CONTRACT.md §Diff invariants gained one paragraph naming
   the three failure modes and this guard. No lock schema change and no change to the
   `.history.json` entry format; class patch per CONTRACT.md §Change classes.
+- **`scripts/colour-census.mjs`, a colour-drift gate, promoted from a skill-side instrument
+  into the engine (minor: additive gate; a lock is unaffected, but a screen that was passing
+  under diff.mjs alone may now fail if it carries the uniform colour shift this gate exists
+  to catch).** `pixelmatch` (`diff.mjs`) scores colour distance in YIQ and ignores anything
+  under `35215 * PIXELMATCH_THRESHOLD^2` (352.15 at threshold 0.1), a uniform per-channel
+  shift of up to ~26 levels is scored as IDENTICAL, on any number of pixels, which is exactly
+  the shape of a design-system version bump. The census histograms flat colours on both sides
+  of a render/reference pair, pairs deficits against surpluses by volume, confirms each pair
+  by a co-located pixel walk, and classifies confirmed pairs as `reported` (a real
+  substitution: `deficitFraction >= 0.25` or `density >= 0.25`, both re-measurable defaults)
+  or `rasterisation` (filed, not silenced). Wired into `verify.mjs` as the gate run after
+  `diff.mjs` for every screen that reaches it; a reported finding fails the screen with a
+  blocker naming the count and the report path. Proven on 27 production screens before this
+  move; the engine port keeps the same classifier and location output, with `--lock` now
+  required (no default path) and every brand-specific comment rewritten generic.
 - **Three reference-level disciplines adapted from screenshot-to-code** (MIT,
   github.com/abi/screenshot-to-code; security-checked and mined 2026-08-26, notes in the
   design-KB's `_extraction/screenshot-to-code.md`). No script or contract changes; no change

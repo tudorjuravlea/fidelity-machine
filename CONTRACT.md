@@ -26,8 +26,9 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 │   ├── geometry.mjs                 # DOM boxes vs lock figIds rects
 │   ├── pixelmatch-threshold.mjs     # single source for PIXELMATCH_THRESHOLD; diff.mjs and any skill-side colour-drift instrument that must agree with it import this instead of duplicating the literal
 │   ├── diff.mjs                     # pixelmatch gate: global + per-tile + triplet crops
+│   ├── colour-census.mjs            # colour-drift gate: catches uniform shifts below diff.mjs's YIQ cutoff
 │   ├── adherence-lint.mjs           # static gate: tokens, fonts, microcopy, jargon, disclosures, caps
-│   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff, loop control
+│   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff→census, loop control
 │   ├── contract-guard.mjs           # meta-gate: enforces THIS document's invariants mechanically
 │   └── release-check.mjs            # publish readiness: brand-leakage sweep, fresh-install sim, budgets
 └── references/                      # vendored frozen guidance (loaded on demand)
@@ -94,6 +95,7 @@ All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--scree
 - `render.mjs --lock L --screen S` → writes `.render/S.png` + `.render/S.geometry.json`
 - `geometry.mjs --lock L --screen S` → reads `.render/S.geometry.json`, writes `.report/S.geometry.json`
 - `diff.mjs --lock L --screen S` → reads reference + `.render/S.png`, writes diff png + report + triplets
+- `colour-census.mjs --lock L [--screen S]` → reads reference + `.render/S.png`, writes `.report/S.census.json`; `--lock` is required, there is no default path
 - `adherence-lint.mjs --lock L [--src <dir>]` → lints generated source + lock invariants (caps, masks)
 - `verify.mjs --lock L [--screen S] [--calibrate]` → full pipeline; `--calibrate` measures the noise floor on the control screen and writes `meta.noiseFloorPct`
 - `setup-check.mjs` (no lock needed) → readiness report; prints the exact `npm i` command if missing
@@ -126,6 +128,7 @@ are created next to the lock.
 - Tiles: 64×64 grid over the diff buffer; `worstTile` = max per-tile diff density over that tile's unmasked pixels.
 - PASS ⇔ `globalPct ≤ screen.passThreshold && worstTile ≤ screen.tileCeiling`.
 - Evidence: top-5 worst tiles emitted as triplet crops (`ref/`, `render/`, `diff/` per bbox) + one text line each, classified by geometry result when available ("box matches → color/weight, not layout"). The report also carries a report-level `extent {bbox, centroid, diffPixels, density}` over every unmasked diff pixel in the whole buffer (`null` when there are none), and each `worstRegions[]` entry carries the same shape as `inner`, scoped to that tile, both in absolute device-pixel coordinates.
+- `colour-census.mjs` catches what `diff.mjs` structurally cannot: `pixelmatch` scores colour distance in YIQ and ignores any difference under `35215 * PIXELMATCH_THRESHOLD^2` (352.15 at threshold 0.1), a uniform per-channel shift of up to ~26 levels is scored as IDENTICAL, on any number of pixels, which is exactly the shape of a design-system version bump. It histograms flat colours on both sides of the SAME masked/unmasked split as `diff.mjs` (masked rects excluded from both, never counted), pairs deficits (colours the reference paints that the render doesn't) against surpluses (colours the render paints that the reference doesn't) by volume, then confirms each pair by a co-located pixel walk so a coincidental histogram match cannot pass for a substitution. A confirmed pair is classified `reported` when `deficitFraction >= --min-deficit` (default 0.25, the reference colour is substantially gone) OR `density >= --min-density` (default 0.25, the wrong pixels are packed densely), otherwise it is filed as `rasterisation` and does not affect the exit code. The size floor `--min` (default 1000 px) is a DEFAULT a new design system re-measures, not a brand fact: on the first production capture, every screen was clean at 1000 px; at 500 px two rasterisation artefacts (a shadow hairline, a gridline the two rasterisers antialias across different rows) were reported as drift; at 250 px antialiasing shades of text started to look like substitutions. Below the floor is the gate pair's blind spot: a wrong colour on under the floor's pixel count, and also under the pixel gate's cutoff, passes both gates silently.
 
 ## Threshold caps (lint-enforced on the lock itself)
 
