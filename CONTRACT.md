@@ -15,11 +15,12 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── CONTRACT.md                      # this file
 ├── design-lock.schema.json          # JSON Schema for every design-lock.json (the SSOT shape)
 ├── skill-template.md                # per-system SKILL.md template ({{SYSTEM_NAME}} etc.)
+├── skill-scaffold/                  # the project tree around a SKILL.md (durable docs, evals, capture ledgers, media formats, tool contracts) — instantiated by new-system.mjs; see its README.md
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally)
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
 ├── scripts/
-│   ├── new-system.mjs               # scaffold ~/.claude/skills/<name>/ from the template
+│   ├── new-system.mjs               # scaffold ~/.claude/skills/<name>/ from skill-template.md + skill-scaffold/
 │   ├── setup-check.mjs              # readiness gate — verify deps; NEVER installs
 │   ├── capture-figma.mjs            # Figma MCP output → design-lock.json + derived token artifacts (§Provenance)
 │   ├── render.mjs                   # deterministic screenshot + geometry dump
@@ -42,13 +43,22 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 
 ~/.claude/skills/<system-name>/      # ONE PER DESIGN SYSTEM — e.g. acme-banking
 ├── SKILL.md                         # instantiated from skill-template.md; binds ENGINE + LOCK
+├── AXIOMS.md · DECISIONS.md · LESSONS.md · REGENERATE.md · CHANGELOG.md   # durable docs (scaffolded)
+├── evals/evals.json                 # contract cases incl. the should-not-trigger negative
+├── gauntlet/LANES.md                # standing-board lane contracts (the skill implements them as its own gauntlet script)
+├── references/playbook.md           # occasion → asset → channel routing for the media layer
+├── tools/README.md                  # contract-first specs for skill-side pipelines (deck/print/brand-lint)
 └── captures/<capture-name>/         # the system's world
     ├── design-lock.json             # the frozen SSOT for THIS system
     ├── capture.json                 # raw Figma capture bundle (re-derivable input)
+    ├── BRAND-FACTS.md · MOTION.md · GATE-BLIND-SPOTS.md   # capture ledgers: facts + sources, motion values, measured gate blind spots
+    ├── formats.json                 # canvas/print presets (screen px-first, print mm-first)
+    ├── templates/{slides,social,print}/   # media-format skeletons (LAYOUTS.md / ARCHETYPES.md / PRINT-LAYOUTS.md)
     ├── components/                  # ANATOMY LIBRARY — one spec .md per Figma component
-    │   └── INDEX.md                 # name → nodeId → spec file, grouped by category
+    │   ├── INDEX.md                 # name → nodeId → spec file, grouped by category
+    │   └── SELECTION.md             # route by intent + "never pick" traps
     ├── fonts/*.woff2                # bundled brand fonts (licensed — keep local)
-    ├── reference/*.png              # reference images (from the system's renderer)
+    ├── reference/                   # reference images + APPROVALS.md (human arming: PENDING → APPROVED)
     ├── assets/tokens.css + tailwind.tokens.cjs + tokens.dtcg.json   # DERIVED from lock — hand-editing banned (§Provenance)
     ├── <screen>.html                # generated screens
     └── .render/ · .report/         # pipeline artifacts (regenerable)
@@ -60,8 +70,11 @@ for components with no spec — and each such gap is a capture task to name in t
 license to guess. Specs record Figma-verbatim values (paddings, radii, type roles, variable slots)
 and are one-way captures: to change one, re-capture from Figma, never hand-tune.
 
-Scaffold a new system: `node ~/.claude/fidelity-machine/scripts/new-system.mjs --name <kebab> [--title "…"]`,
+Scaffold a new system: `node ~/.claude/fidelity-machine/scripts/new-system.mjs --name <kebab> [--title "…"]`
+— SKILL.md plus the full project tree above (from `skill-template.md` + `skill-scaffold/`) —
 then run the capture flow (references/spec-capture.md) into its `captures/` dir.
+`skill-scaffold/README.md` states the staged build order (capture → anatomy → gated sections →
+media formats → gauntlet/evals).
 
 **Fixtures (component pixel-verification):** `build-component-fixture.mjs` bundles a React
 fixture (`<skill>/library/fixtures/<name>.fixture.tsx`) into `<lockDir>/components-fixtures/<name>.html`

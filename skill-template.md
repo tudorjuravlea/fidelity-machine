@@ -22,6 +22,12 @@ Lock missing/incomplete → STOP; run the capture flow (`ENGINE/references/spec-
 reload, resume as a blocker. Never generate from memory of the design system. Never silently
 overwrite a lock (`capture-figma.mjs --merge`). Setup unverified → `ENGINE/scripts/setup-check.mjs`.
 
+**Second blocking gate — facts.** Dates, names, numbers, prices, and claims come from the
+user's brief or `captures/{{CAPTURE_NAME}}/BRAND-FACTS.md`, never invented. No source → a
+typed slot (`data-slot`) with placeholder styling, named in the report. Demo copy replayed
+from the capture is normalized to the system's content rules; the reflow residual is
+documented per screen, never a reason to weaken lint.
+
 ## 1. Route every node — Mode A / B1 / B2
 
 **Read the surface class first, and read it from INPUT, not width.** Anything a finger can
@@ -49,7 +55,11 @@ only → **Mode B2**, pixel gate + mandatory human worst-region review. Details:
 `ENGINE/references/mode-a.md`, `ENGINE/references/mode-b.md`. Recurring B1 regions get promoted
 into the library.
 
-Anatomy library first: before composing any Mode-B region, check `captures/{{CAPTURE_NAME}}/components/INDEX.md` for the component's captured spec and build from its exact values; screenshot tear-downs are a fallback only for spec-less components, and every such gap gets named in the report as a capture task. 
+Anatomy library first: choosing a component? Start with
+`captures/{{CAPTURE_NAME}}/components/SELECTION.md` (routing by intent, "never pick" traps,
+gap flags); `INDEX.md` answers "where is the spec for X". Before composing any Mode-B region,
+build from the spec's exact values; screenshot tear-downs are a fallback only for spec-less
+components, and every such gap gets named in the report as a capture task. 
 
 Imagery library first: illustrations/icons are never invented. If the capture has an imagery
 library (`captures/{{CAPTURE_NAME}}/illustrations/INDEX.md` + `MANIFEST.json`), follow the lock's
@@ -144,6 +154,29 @@ expected_behavior, files}` exercising the skill's contract — and at least one
 as a testable case (a generic design prompt that must NOT activate fidelity mode). Grading
 may be human, but every fixture named in `files` must exist — an eval whose fixture is
 missing tests nothing.
+
+## {{SYSTEM_TITLE}} specifics
+
+Record here the small set of rules that are true of this system and no other: signature color
+routing, the type hierarchy law, the motion source of truth, and the media status (which
+surfaces are pixel-gated today vs net-new). Every line mirrors a `DECISIONS.md` entry — a
+specific without a DEC number is a preference, not a rule.
+
+## Module index — load on demand, never wholesale
+
+| Need | File |
+|---|---|
+| Which component fits this intent | `captures/{{CAPTURE_NAME}}/components/SELECTION.md` |
+| A component's exact captured values | `captures/{{CAPTURE_NAME}}/components/<name>.md` (via `INDEX.md`) |
+| Hover/scroll/responsive behavior | `captures/{{CAPTURE_NAME}}/MOTION.md` |
+| Brand facts, sources, retractions | `captures/{{CAPTURE_NAME}}/BRAND-FACTS.md` |
+| Why a rule exists / what was decided | `DECISIONS.md` + lock `decisions[]` |
+| What the gates cannot see | `captures/{{CAPTURE_NAME}}/GATE-BLIND-SPOTS.md` |
+| What went wrong before and the rule now | `LESSONS.md` |
+| Non-negotiables | `AXIOMS.md` |
+| Which asset for which occasion, caption skeleton | `references/playbook.md` |
+| Slide/social/print layouts + type scales | `captures/{{CAPTURE_NAME}}/templates/` |
+| Canvas/print sizes | `captures/{{CAPTURE_NAME}}/formats.json` |
 
 ## Hard rules
 

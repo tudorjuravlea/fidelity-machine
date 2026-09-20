@@ -5,11 +5,13 @@
 //        [--title "Acme Banking"] [--capture acme-banking]
 //
 // Creates ~/.claude/skills/<name>/ with a SKILL.md instantiated from the engine's
-// skill-template.md ({{SYSTEM_NAME}} / {{SYSTEM_TITLE}} / {{CAPTURE_NAME}} filled in) and an
-// empty captures/<capture>/ awaiting the capture flow (references/spec-capture.md).
+// skill-template.md plus the full project tree from the engine's skill-scaffold/ (durable
+// docs, evals, gauntlet lanes, capture ledgers, formats + template skeletons, tool
+// contracts), every file with {{SYSTEM_NAME}} / {{SYSTEM_TITLE}} / {{CAPTURE_NAME}} filled
+// in. The capture dir awaits the capture flow (references/spec-capture.md).
 // Refuses to overwrite an existing skill (exit 2). Exit codes per CONTRACT.md: 0 ok · 2 setup.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,11 +47,28 @@ if (existsSync(skillDir)) fail(`skill already exists at ${skillDir} — refusing
 
 const templatePath = path.join(ENGINE, 'skill-template.md');
 if (!existsSync(templatePath)) fail(`engine template missing at ${templatePath}`);
-const skillMd = readFileSync(templatePath, 'utf8')
-  .replaceAll('{{SYSTEM_NAME}}', name)
-  .replaceAll('{{SYSTEM_TITLE}}', title)
-  .replaceAll('{{CAPTURE_NAME}}', capture);
-if (/\{\{[A-Z_]+\}\}/.test(skillMd)) fail('template still contains unfilled {{PLACEHOLDER}}s — template and scaffolder are out of sync');
+const scaffoldDir = path.join(ENGINE, 'skill-scaffold');
+if (!existsSync(scaffoldDir)) fail(`engine scaffold missing at ${scaffoldDir}`);
+
+function instantiate(src) {
+  const out = readFileSync(src, 'utf8')
+    .replaceAll('{{SYSTEM_NAME}}', name)
+    .replaceAll('{{SYSTEM_TITLE}}', title)
+    .replaceAll('{{CAPTURE_NAME}}', capture);
+  if (/\{\{[A-Z_]+\}\}/.test(out)) fail(`${src} still contains unfilled {{PLACEHOLDER}}s — template/scaffold and scaffolder are out of sync`);
+  return out;
+}
+
+function instantiateTree(srcDir, dstDir) {
+  mkdirSync(dstDir, { recursive: true });
+  for (const e of readdirSync(srcDir, { withFileTypes: true })) {
+    const src = path.join(srcDir, e.name);
+    if (e.isDirectory()) instantiateTree(src, path.join(dstDir, e.name));
+    else writeFileSync(path.join(dstDir, e.name), instantiate(src));
+  }
+}
+
+const skillMd = instantiate(templatePath);
 
 const captureDir = path.join(skillDir, 'captures', capture);
 mkdirSync(path.join(captureDir, 'fonts'), { recursive: true });
@@ -64,8 +83,12 @@ writeFileSync(path.join(captureDir, 'README.md'),
   `4. Add fonts (woff2 into fonts/, wired into the lock's fonts[]), signatures/donts, content layer.\n` +
   `5. node ${ENGINE}/scripts/adherence-lint.mjs --lock design-lock.json\n\n` +
   `The skill's blocking gate refuses generation until this lock exists and lints clean.\n`);
+instantiateTree(path.join(scaffoldDir, 'root'), skillDir);
+instantiateTree(path.join(scaffoldDir, 'capture'), captureDir);
 
 console.log(`scaffolded: ${skillDir}`);
 console.log(`  SKILL.md            — /${name} slash command (registers on next session/skill reload)`);
-console.log(`  captures/${capture}/ — awaiting capture (see its README.md)`);
+console.log(`  AXIOMS · DECISIONS · LESSONS · REGENERATE · CHANGELOG — durable docs, fill as decisions land`);
+console.log(`  evals/ · gauntlet/LANES.md · references/playbook.md · tools/README.md — contracts to build against`);
+console.log(`  captures/${capture}/ — awaiting capture (see its README.md); ledgers, formats.json and templates/ scaffolded`);
 console.log(`engine: ${ENGINE} (shared — do not copy scripts into the skill)`);

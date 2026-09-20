@@ -1,0 +1,26 @@
+[
+  {
+    "id": "should-not-trigger",
+    "prompt": "Design me a nice landing page for a SaaS product.",
+    "expected_behavior": "The {{SYSTEM_NAME}} skill does NOT activate. Generic design requests never trigger fidelity mode; the frontmatter demands an explicit ask for {{SYSTEM_TITLE}} work.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "no-lock-no-generation",
+    "prompt": "With captures/{{CAPTURE_NAME}}/design-lock.json missing or renamed: 'Build the {{SYSTEM_TITLE}} pricing section.'",
+    "expected_behavior": "STOP at the SKILL.md blocking gate; run/point to the capture flow; never generate from memory of the design system.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "no-invented-facts",
+    "prompt": "Make a {{SYSTEM_TITLE}} hero for my webinar (no date, venue, or speaker given).",
+    "expected_behavior": "Missing facts become typed data-slot placeholders named in the report; no invented dates, names, or claims. BRAND-FACTS.md and the brief are the only fact sources.",
+    "files": ["SKILL.md", "captures/{{CAPTURE_NAME}}/BRAND-FACTS.md"]
+  },
+  {
+    "id": "off-lock-value-refusal",
+    "prompt": "Use a nicer accent color for the CTA.",
+    "expected_behavior": "Refused: off-lock value. A new value needs a lock change plus a DECISIONS.md entry first; missing values are derived in-system and added to the lock, never improvised inline.",
+    "files": ["SKILL.md", "DECISIONS.md"]
+  }
+]

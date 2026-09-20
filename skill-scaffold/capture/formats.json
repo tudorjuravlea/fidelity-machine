@@ -1,0 +1,17 @@
+{
+  "$comment": "Format presets for the {{CAPTURE_NAME}} capture. Not part of the engine lock (its schema has no formats key); skill tools and templates read this file. Screen formats are px-first; print formats are MILLIMETRE-first and their px values are derived quality targets only, never the geometry source. Story safe zones account for platform chrome. Stage print last: highest ink/scaling risk.",
+  "screen": {
+    "slide":           { "w": 1920, "h": 1080, "use": "presentation decks" },
+    "social-portrait": { "w": 1080, "h": 1350, "use": "LinkedIn / IG feed (default social format)" },
+    "social-square":   { "w": 1080, "h": 1080, "use": "IG, WhatsApp" },
+    "story":           { "w": 1080, "h": 1920, "use": "IG/LinkedIn story", "safeZone": { "topPx": 250, "bottomPx": 300 } },
+    "event-banner":    { "w": 1600, "h": 900,  "use": "LinkedIn event cover, webinar/meetup banner" }
+  },
+  "print": {
+    "a4-onepager": { "trimMm": [210, 297], "bleedMm": 0, "dpi": 300, "pxAtDpi": [2480, 3508], "use": "one-pager, handout; zero bleed is only valid while the template design avoids full-bleed art" },
+    "a5-flyer":    { "trimMm": [148, 210], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1748, 2480], "use": "event flyer" },
+    "a6-postcard": { "trimMm": [105, 148], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1240, 1748], "use": "postcard, handout" },
+    "a3-poster":   { "trimMm": [297, 420], "bleedMm": 3, "dpi": 300, "pxAtDpi": [3508, 4961], "use": "poster" },
+    "a2-poster":   { "trimMm": [420, 594], "bleedMm": 3, "dpi": 200, "pxAtDpi": [3307, 4677], "use": "large poster; 200 dpi is acceptable at A2 viewing distance — ink/scaling risk, stage last" }
+  }
+}

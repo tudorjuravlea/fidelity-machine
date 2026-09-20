@@ -108,6 +108,24 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   representative pixel over centroid, phantom guards). Findings re-expressed and attributed
   to their named originators, as curated in skill.color-expert (CC-BY-4.0 curation, David
   Aerne); credited in NOTICE. Class: patch, no script or contract changes.
+- **`skill-scaffold/` — the project tree around a SKILL.md, scaffolded by `new-system.mjs`.**
+  (Class: minor — new files plus a new-system behavior extension; no lock impact, no gate
+  changes.) Generalized, brand-scrubbed, from two shipped skill builds that proved the
+  process out. `new-system.mjs` now instantiates, beside SKILL.md, everything else those
+  builds carried: the durable docs (AXIOMS, DECISIONS ledger, LESSONS, REGENERATE with the
+  Deletion Test, a per-skill CHANGELOG); an `evals/evals.json` starter whose four cases
+  derive mechanically from the template's own rules (incl. the should-not-trigger negative);
+  capture-side ledgers (BRAND-FACTS, MOTION, GATE-BLIND-SPOTS, components INDEX + SELECTION
+  with the "never pick" section, reference APPROVALS); a generic `formats.json` (screen
+  formats px-first, print formats millimetre-first, story safe zones); slide/social/print
+  layout skeletons; a distribution-playbook skeleton (occasion → asset → channel routing,
+  caption and cadence sections to fill in); `gauntlet/LANES.md` (the eight-lane standing
+  board as lane contracts);
+  and `tools/README.md` — contract-first specs for the deck pipeline (build/pdf/pptx with the
+  images-not-text honesty rule), the mm-first print pipeline (incl. the measured Chromium
+  page-size snapping correction and the px→pt 96/72 conversion), and the brand-lint
+  companion. `skill-template.md` gains the facts blocking gate, SELECTION-first component
+  routing, a "system specifics" section stub, and the module index table.
 
 ### Fixed
 
