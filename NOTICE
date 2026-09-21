@@ -45,3 +45,8 @@ re-express findings by their named originators, as curated in skill.color-expert
 David Aerne (meodai), CC-BY-4.0 for the curation
 (https://github.com/meodai/skill.color-expert); the scientific claims remain their
 original authors'.
+
+skill-scaffold/root/evals/HARNESS.md and skill-scaffold/root/evals/tasks.json adapt the
+before/after correction-experiment methodology from @shadcn/lint,
+Copyright (c) 2026 shadcn, MIT License
+(https://github.com/shadcn-ui/lint).

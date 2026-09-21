@@ -29,7 +29,9 @@ earlier one already verified:
    human review — never a fabricated diff number. Print is millimetre-first and exports only
    through the print pipeline (`tools/README.md`).
 5. **Standing quality board**: `gauntlet/LANES.md` implemented as a read-only gauntlet script;
-   `evals/evals.json` grows a case per decided rule.
+   `evals/evals.json` grows a case per decided rule; `evals/tasks.json` + `evals/HARNESS.md`
+   carry the before/after correction-experiment suite (temptation/neutral tasks + the harness
+   contract that scores them).
 
 Throughout: every rule earns a DECISIONS.md row, every incident a LESSONS.md entry, and every
 unit an honest REGENERATE.md readiness score. The lock itself is never scaffolded — it is
