@@ -829,6 +829,18 @@
         }
       }
     },
+    "lint": {
+      "type": "object",
+      "description": "Optional annotations for adherence-lint.mjs's own report; not part of the design system itself.",
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Short trailing annotation appended to every printed finding's detail (report time only — the findings themselves are unaffected). Sanitized before printing: Unicode control/format characters (e.g. ANSI escape bytes) blanked, then whitespace including newlines collapsed to single spaces, trimmed, capped at 200 chars — a lock is an input artifact and must not be able to author extra report lines or terminal control sequences."
+        }
+      }
+    },
     "caps": {
       "type": "object",
       "description": "HARD ceilings the lint enforces on the lock itself — a screen cannot be forced to pass by loosening its thresholds past these.",

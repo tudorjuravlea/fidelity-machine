@@ -29,6 +29,18 @@
 //     certified-good fixture. EVERY other raw hex outside :root/[data-theme] is an ERROR.
 //   * em-dash: "visible text" excludes <head> (title/meta are browser chrome, not page copy)
 //     in addition to <style>/<script>. Entities (&mdash; &#8212; &#x2014;) are decoded first.
+//
+// Optional lock fields this file reads:
+//   * lock.lint.note (string): appended to every PRINTED finding's detail as " — <note>" at
+//     print time only, after add() has already recorded the finding — the findings array
+//     itself stays clean for any machine consumer that reads the structured data instead of
+//     the console lines. SANITIZED before printing (non-string silently ignored; Unicode
+//     control/format characters — e.g. ESC, so ANSI escape sequences can't be smuggled through —
+//     blanked first, then all whitespace including newlines collapsed to one space; trimmed;
+//     capped at 200 chars) — a lock is an input artifact (skill-scaffold instantiates one,
+//     captures come from external design systems) and must not be able to inject its own report
+//     lines (e.g. a forged `RESULT: PASS …` or `[SKIP] …`) or terminal control sequences into
+//     this gate's output.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -53,11 +65,11 @@ const VOID_TAGS = new Set(['input', 'img', 'br', 'hr', 'meta', 'link', 'area', '
 
 const SECTIONS = [
   'schema-sanity', 'caps-enforcement', 'mask-budget',                                   // lock
-  'raw-hex', 'css-vars', 'tokens-only-spacing', 'placeholders', 'em-dash',              // source
+  'raw-hex', 'css-vars', 'tokens-only-spacing', 'type-scale', 'placeholders', 'em-dash', // source
   'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
   'banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',             // microcopy
   'sentence-length', 'color-only-status', 'content-lock', 'signatures', 'imagery-provenance',
-  'figid-coverage',                                                                     // gate integrity
+  'figid-coverage', 'unreadable-values',                                                // gate integrity
 ];
 
 // ---------------------------------------------------------------- findings (hue model)
@@ -79,6 +91,52 @@ function normalizeHex(v) {
   if (!/^[0-9a-f]{3,8}$/.test(s) || s.length === 5 || s.length === 7) return null;
   if (s.length === 3 || s.length === 4) return s.split('').map((c) => c + c).join('');
   return s;
+}
+
+// sRGB → OKLab, for the perceptual distance references/color-science.md mandates ("OKLab for
+// distances and mixing"). Matrices are Björn Ottosson's OKLab (https://bottosson.github.io/
+// posts/oklab/) — sRGB→LMS, cube root, LMS'→Lab. Self-contained on purpose: the render/diff
+// scripts have their own pixel-space color math, and this file has no reason to import it.
+function srgbChannelToLinear(c) {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function hexToOklab(hex) {
+  const n = normalizeHex(hex);
+  if (!n) return null;
+  const [r, g, b] = [0, 2, 4].map((i) => srgbChannelToLinear(parseInt(n.slice(i, i + 2), 16) / 255));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+  };
+}
+// Euclidean distance in OKLab ("ΔE-ok"); null when either hex is unparseable.
+function oklabDistance(hexA, hexB) {
+  const a = hexToOklab(hexA);
+  const b = hexToOklab(hexB);
+  if (!a || !b) return null;
+  return Math.sqrt((a.L - b.L) ** 2 + (a.a - b.a) ** 2 + (a.b - b.b) ** 2);
+}
+
+// Iterative Levenshtein edit distance (no existing helper in scripts/ — checked before adding
+// this) for css-vars' "did you mean" suggestion.
+function editDistance(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j - 1], prev[j], cur[j - 1]);
+    }
+    prev = cur;
+  }
+  return prev[n];
 }
 
 function snippet(content, index, span = 40) { // hue's evidence snippet
@@ -132,6 +190,15 @@ function styleBlocks(html) { // [{ css, offset }] — offset into the original f
   const re = /<style[^>]*>([\s\S]*?)<\/style>/gi;
   let m;
   while ((m = re.exec(html))) out.push({ css: m[1], offset: m.index + m[0].indexOf('>') + 1 });
+  return out;
+}
+
+// [{ js, offset }] — inline <script> bodies only (a `src=` script has no local text to scan).
+function scriptBlocks(html) {
+  const out = [];
+  const re = /<script(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) out.push({ js: m[1], offset: m.index + m[0].indexOf('>') + 1 });
   return out;
 }
 
@@ -330,7 +397,56 @@ function scanHexHits(buf) {
   return hits;
 }
 
-function checkRawHex(files, rel) {
+// Every lock color, both modes, resolved to a comparable hex. Values that aren't parseable
+// hex (var(...), rgba(...), etc.) are skipped silently — the goal is a suggestion, not a
+// second schema check.
+function collectLockColorHexes(lock) {
+  const out = []; // { name, hex, mode }
+  const colors = lock?.tokens?.colors;
+  if (!colors || typeof colors !== 'object') return out;
+  for (const mode of ['light', 'dark']) {
+    const set = colors[mode];
+    if (!set || typeof set !== 'object') continue;
+    for (const [name, value] of Object.entries(set)) {
+      const hex = typeof value === 'string' ? normalizeHex(value) : null;
+      if (hex) out.push({ name, hex, mode });
+    }
+  }
+  return out;
+}
+
+// Two calibrated bands, not one cutoff — snapping and suggesting are different questions.
+// Picked to match this engine's OWN lock, not cited from color-science.md (that file argues
+// AGAINST a single global step size — grain is finer near black than white, the cool half of
+// the space is coarser — so it supplies no number and none should be attributed to it).
+// Sanity-checked against fixtures/golden/design-lock.json's own tokens: `background` #F7F6F3
+// vs `surface1` #FFFFFF — two DIFFERENT roles the lock deliberately keeps apart — sit at
+// ΔE-ok 0.0272. That distance must fall in the middle band (worth reusing, not "the same
+// token"), never the snap band, or this check would tell an author two of the lock's own
+// colors are one color. It does: 0.0272 > OKLAB_SAME_COLOR (0.02) and < OKLAB_NEAR_MISS (0.10).
+const OKLAB_SAME_COLOR = 0.02;  // at/under this, it IS the token — round-trip/anti-aliasing noise
+const OKLAB_NEAR_MISS = 0.10;   // up to this, close enough to flag for reuse before growing the lock
+
+function nearestLockColor(hex, lockColors) {
+  let best = null;
+  for (const c of lockColors) {
+    const d = oklabDistance(hex, c.hex);
+    if (d == null) continue;
+    if (!best || d < best.d) best = { ...c, d };
+  }
+  return best;
+}
+
+// Where checkCssVars already knows to look for a project's token stylesheet(s); named here
+// instead of asserting a fixed path that may not exist (see main()'s call site).
+function tokensCssDescription(extraTokenCssPaths, rel) {
+  const present = (extraTokenCssPaths || []).filter((p) => existsSync(p));
+  if (present.length === 0) return 'in the stylesheet that defines your tokens';
+  return `in ${present.map((p) => rel(p)).join(' or ')}`;
+}
+
+function checkRawHex(lock, files, rel, tokensCssDesc) {
+  const lockColors = collectLockColorHexes(lock);
   for (const f of files) {
     let buf;
     if (f.ext === '.css') buf = stripTokenScopes(stripCssComments(f.content));
@@ -344,12 +460,24 @@ function checkRawHex(files, rel) {
     }
     for (const [valueLc, g] of grouped) {
       const line = lineOf(buf, g.firstIdx);
+      const nearest = lockColors.length > 0 ? nearestLockColor(g.raw, lockColors) : null;
+      let suggestion = '';
+      if (nearest) {
+        const de = nearest.d < 1e-6 ? 'exact match' : nearest.d.toFixed(4);
+        if (nearest.d <= OKLAB_SAME_COLOR) {
+          suggestion = ` — same color — use var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc}`;
+        } else if (nearest.d <= OKLAB_NEAR_MISS) {
+          suggestion = ` — nearest lock token var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc} — prefer reusing it; if the design truly needs a distinct value, lock change + DECISIONS.md entry first`;
+        } else {
+          suggestion = ' — no lock token is close — this is an off-lock value; derive it and add it to the lock plus a DECISIONS.md entry before using it';
+        }
+      }
       if (ANCHOR_HEX.has(valueLc)) {
         add('WARN', 'raw-hex', rel(f.abs),
-          `absolute white/black #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw hex is an ERROR`, line);
+          `absolute white/black #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw hex is an ERROR${suggestion}`, line);
       } else {
         add('ERROR', 'raw-hex', rel(f.abs),
-          `raw hex #${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars`, line);
+          `raw hex #${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars${suggestion}`, line);
       }
     }
   }
@@ -379,8 +507,26 @@ function checkCssVars(files, rel, extraTokenCssPaths) {
       missing.set(m[1], g);
     }
     for (const [name, g] of missing) {
+      // A fixed distance-2 budget is a rewrite for a short name (random 3-char pairs land
+      // within 2 about 1 in 9 of the time). Scale the budget to the name's own length instead:
+      // require distance < half the bare name's length, and for names of 3 chars or less
+      // (after stripping "--") allow only an exact single-character typo (distance === 1) —
+      // never a coincidence-prone 2-edit "suggestion" on a 3-letter token.
+      const bareLen = name.replace(/^--/, '').length;
+      let candidates = [];
+      for (const cand of defined) {
+        if (cand === name) continue;
+        const d = editDistance(name, cand);
+        if (d > 2) continue;
+        if (bareLen <= 3 ? d !== 1 : !(d < bareLen / 2)) continue;
+        candidates.push({ name: cand, d });
+      }
+      // Deterministic tie-break: lowest distance, then lexicographically smallest name — never
+      // "whichever was declared first", which made the suggestion depend on file order.
+      candidates.sort((a, b) => a.d - b.d || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      const suggestion = candidates.length ? ` — did you mean var(${candidates[0].name})?` : '';
       add('ERROR', 'css-vars', rel(f.abs),
-        `var(${name}) used ${g.count}x but never defined in the scanned files or assets/tokens.css`, lineOf(f.content, g.firstIdx));
+        `var(${name}) used ${g.count}x but never defined in the scanned files or assets/tokens.css${suggestion}`, lineOf(f.content, g.firstIdx));
     }
   }
 }
@@ -393,6 +539,19 @@ function checkSpacing(files, rel, scale) {
     return;
   }
   const onScale = (n) => n === 0 || scale.includes(n);
+  // Ties round toward both neighbors, not silently down: 10px on [8,12,…] is equally close to
+  // 8 and 12, and reporting only "nearest scale value: 8px" hides that 12 is an equally valid
+  // fix.
+  const nearestOnScale = (n) => {
+    let bestDist = Infinity;
+    let vals = [];
+    for (const v of scale) {
+      const dist = Math.abs(v - n);
+      if (dist < bestDist) { bestDist = dist; vals = [v]; }
+      else if (dist === bestDist) vals.push(v);
+    }
+    return vals.join('px or ') + 'px';
+  };
   const PROP_RE = /(?<![\w-])(margin(?:-[a-z-]+)?|padding(?:-[a-z-]+)?|gap|row-gap|column-gap|inset(?:-[a-z-]+)?|top|right|bottom|left)\s*:\s*([^;{}]+)/gi;
   const TW_RE = /^-?(?:(?:m|p)[trblxyse]?|gap(?:-[xy])?|space-[xy]|inset(?:-[xy])?|top|right|bottom|left)-\[(\d+(?:\.\d+)?)px\]$/;
 
@@ -403,7 +562,7 @@ function checkSpacing(files, rel, scale) {
       if (seen.has(key)) return;
       seen.add(key);
       add('WARN', 'tokens-only-spacing', rel(f.abs),
-        `spacing ${n}px (${where}) is not on the lock's spacing scale [${scale.join(', ')}]`, lineOf(f.content, absIdx));
+        `spacing ${n}px (${where}) is off the lock's spacing scale — nearest scale value: ${nearestOnScale(n)}; full scale [${scale.join(', ')}]`, lineOf(f.content, absIdx));
     };
     const scanDecls = (cssText, baseOffset) => {
       let m;
@@ -433,6 +592,121 @@ function checkSpacing(files, rel, scale) {
         const tm = tok.match(TW_RE);
         if (tm && !onScale(parseFloat(tm[1]))) report(parseFloat(tm[1]), `class "${tok}"`, m.index);
       }
+    }
+  }
+}
+
+// WARN-only heuristic, same class as checkSpacing: font-size / font-weight declarations (and
+// Tailwind text-[Npx] utilities) compared against the sizes/weights the lock's typography
+// roles actually carry (widened with lock.fonts[*].weights — a shipped weight is legal even
+// when no *role* names it, only its lookup-by-name for the "nearest role weight" hint does
+// not apply to those). If the lock's roles have no numeric size field at all, there is nothing
+// to compare against — SKIP, mirroring checkSpacing's empty-scale SKIP.
+//
+// Declarations this check cannot statically compare — rem/em/%/clamp()/var() sizes, the
+// `font:` shorthand (which also carries a size this check does not parse out), and
+// non-numeric font-weight values (bold/normal/lighter/bolder/var()) — are counted and
+// reported per file as their own SKIP instead of passing through silently — the same
+// "unchecked must never read as clean" principle checkUnreadableValues exists for. `@media`
+// blocks are blanked out before scanning: the lock's typography carries no breakpoint
+// dimension, so a responsive override is something this check structurally cannot judge, not
+// a violation of the base scale.
+function checkTypeScale(lock, files, rel) {
+  const typo = lock.tokens?.typography;
+  // Array-shaped typography (a malformed/legacy lock) would otherwise report the array INDEX
+  // as a role name ("nearest role size: 0 16px") — treat it the same as typography being absent.
+  const roleEntries = typo && typeof typo === 'object' && !Array.isArray(typo) ? Object.entries(typo) : [];
+  const sizeEntries = []; // { role, size }
+  const weightEntries = []; // { role, weight }
+  for (const [role, spec] of roleEntries) {
+    if (!spec || typeof spec !== 'object') continue;
+    const size = typeof spec.sizePx === 'number' ? spec.sizePx : (typeof spec.fontSize === 'number' ? spec.fontSize : null);
+    if (size != null) sizeEntries.push({ role, size });
+    if (typeof spec.weight === 'number') weightEntries.push({ role, weight: spec.weight });
+  }
+  if (sizeEntries.length === 0) {
+    add('SKIP', 'type-scale', '(lock)', 'lock typography carries no sizes — type-scale check skipped');
+    return;
+  }
+  const sizes = sizeEntries.map((e) => e.size);
+  const fontsWeights = Array.isArray(lock.fonts)
+    ? lock.fonts.flatMap((f) => (Array.isArray(f?.weights) ? f.weights.filter((w) => typeof w === 'number') : []))
+    : [];
+  const legalWeights = new Set([...weightEntries.map((e) => e.weight), ...fontsWeights]);
+  const nearestSize = (n) => sizeEntries.reduce((best, e) => (!best || Math.abs(e.size - n) < Math.abs(best.size - n) ? e : best), null);
+  const nearestWeight = (n) => weightEntries.reduce((best, e) => (!best || Math.abs(e.weight - n) < Math.abs(best.weight - n) ? e : best), null);
+
+  const TW_SIZE_RE = /^text-\[(\d+(?:\.\d+)?)px\]$/;
+  const PX_ONLY_RE = /^\d+(?:\.\d+)?px$/;
+  // Blanks whole @media blocks (one level of nesting) before the real scan runs on the result.
+  const stripMediaBlocks = (css) => css.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gi, spaceFill);
+
+  for (const f of files) {
+    const seenSize = new Set();
+    const seenWeight = new Set();
+    let unreadable = 0;
+    const reportSize = (n, where, absIdx) => {
+      if (sizes.includes(n) || seenSize.has(n)) return;
+      seenSize.add(n);
+      const near = nearestSize(n);
+      add('WARN', 'type-scale', rel(f.abs),
+        `font-size ${n}px (${where}) is off the lock's type scale — nearest role size: ${near.role} ${near.size}px`, lineOf(f.content, absIdx));
+    };
+    const reportWeight = (n, where, absIdx) => {
+      if (weightEntries.length === 0 || legalWeights.has(n) || seenWeight.has(n)) return;
+      seenWeight.add(n);
+      const near = nearestWeight(n);
+      add('WARN', 'type-scale', rel(f.abs),
+        `font-weight ${n} (${where}) is off the lock's type scale — nearest role weight: ${near.role} ${near.weight}`, lineOf(f.content, absIdx));
+    };
+    const scanDecls = (cssTextRaw, baseOffset) => {
+      const cssText = stripMediaBlocks(cssTextRaw);
+      let m;
+      const sizeRe = /font-size\s*:\s*(\d+(?:\.\d+)?)px\b/gi;
+      while ((m = sizeRe.exec(cssText))) reportSize(parseFloat(m[1]), `font-size: ${m[1]}px`, baseOffset + m.index);
+      const weightRe = /font-weight\s*:\s*(\d{3,4})\b/gi;
+      while ((m = weightRe.exec(cssText))) reportWeight(parseFloat(m[1]), `font-weight: ${m[1]}`, baseOffset + m.index);
+      // Every font-size declaration this check could NOT read (not a bare px number).
+      const anySizeRe = /(?<![\w-])font-size\s*:\s*([^;{}]+)/gi;
+      while ((m = anySizeRe.exec(cssText))) {
+        if (!PX_ONLY_RE.test(m[1].trim())) unreadable += 1;
+      }
+      // The `font:` shorthand also carries a size this check does not parse out of it; only
+      // count shorthand that has a digit somewhere (`font: inherit`/`font: menu` carry no size
+      // to miss).
+      const shorthandRe = /(?<![\w-])font\s*:\s*([^;{}]+)/gi;
+      while ((m = shorthandRe.exec(cssText))) {
+        if (/\d/.test(m[1])) unreadable += 1;
+      }
+      // Every font-weight declaration this check could NOT read (not a bare 3-4 digit number)
+      // — a keyword (bold/normal/lighter/bolder) or var(...). Sizes are not the only dimension
+      // this check can silently fail to verify; a keywords-only codebase must not read "ok" any
+      // more than a rem-only one does.
+      const anyWeightRe = /(?<![\w-])font-weight\s*:\s*([^;{}]+)/gi;
+      while ((m = anyWeightRe.exec(cssText))) {
+        if (!/^\d{3,4}$/.test(m[1].trim())) unreadable += 1;
+      }
+    };
+    if (f.ext === '.css') scanDecls(stripCssComments(f.content), 0);
+    if (f.ext === '.html') {
+      for (const b of styleBlocks(f.content)) scanDecls(stripCssComments(b.css), b.offset);
+      let m;
+      const styleAttrRe = /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+      while ((m = styleAttrRe.exec(f.content))) scanDecls(m[1] ?? m[2] ?? '', m.index);
+    }
+    // Tailwind-style arbitrary text size utility: text-[26px]
+    let m;
+    const classRe = /\bclass(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+    while ((m = classRe.exec(f.content))) {
+      for (const tok of (m[1] ?? m[2] ?? '').split(/\s+/)) {
+        const tm = tok.match(TW_SIZE_RE);
+        if (tm) reportSize(parseFloat(tm[1]), `class "${tok}"`, m.index);
+      }
+    }
+    if (unreadable > 0) {
+      const noun = unreadable === 1 ? 'declaration' : 'declarations';
+      add('SKIP', 'type-scale', rel(f.abs),
+        `${unreadable} font-size/font-weight ${noun} in units the static check cannot read (rem/em/%/clamp/var or \`font:\` shorthand for sizes; a keyword or var() for weights) — unchecked, not clean`);
     }
   }
 }
@@ -1142,6 +1416,154 @@ function checkFigIdCoverage(lock, lockDir, lockLabel, rel) {
   if (!declared) add('SKIP', 'figid-coverage', '(lock)', 'no screen declares figIds');
 }
 
+// Gate integrity. A style/class value assembled at runtime is invisible to every other static
+// check in this file — raw-hex, tokens-only-spacing and type-scale all match literal text, and
+// a value built from a template literal, concatenation, a join, or an attribute set through
+// setAttribute/setProperty/Object.assign has no literal text to match. Flagging the construct
+// itself makes that blind spot explicit instead of letting a runtime-built value read as
+// silently clean. Scans .js/.jsx/.tsx AND inline <script> bodies in .html — the golden fixture
+// itself ships one, and a construct that only escapes detection inside <script> would defeat
+// the whole point of this section.
+//
+// Known remaining blind spots (named, not hidden, per this section's own rule): CSS-in-JS
+// tagged templates (`styled.div\`...\``, `css\`...\``); framework binding syntax (`:class`,
+// `[ngClass]`, `class:foo`); JSX inline style OBJECTS with a non-literal value
+// (`style={{color: c}}` — the most common React dynamic-style form, and NOT covered by the
+// `style attribute` construct above, which only matches a template-literal string, not an
+// object literal); `innerHTML`; and any external `<script src="...">` — there is no local text
+// for a source walk to read. (Routing a value through a helper function before it reaches
+// setAttribute, and building a string via `+=` before assigning it, are both still caught here
+// — the helper call and the final assignment are ordinary sink matches — so neither is listed
+// as a blind spot.)
+function checkUnreadableValues(files, rel) {
+  // string concatenation (+) and array .join(...) are, unlike every other construct below,
+  // context-free JS patterns with no attribute-adjacent anchor of their own — a bare regex
+  // match fires on ordinary string building that has nothing to do with class/style (money
+  // formatting, i18n keys, URL construction, log lines), which makes the "style value built at
+  // runtime" message false. So they only count inside an actual class/style SINK: a
+  // className=/class=/style= attribute or member assignment, a setAttribute("class"|"style", …)
+  // argument, a style.<prop>=/style['prop']= assignment, or an Object.assign(<x>.style, …)
+  // argument — the same sink list the other constructs already match against.
+  const GLOBAL_CONSTRUCTS = [
+    { key: 'className/class attribute or assignment', re: /\b(?:className|class)\s*=\s*\{?\s*`[^`]*\$\{[^`]*`/g },
+    { key: 'style attribute', re: /\bstyle\s*=\s*\{?\s*`[^`]*\$\{[^`]*`/g },
+    { key: 'style.<property> assignment', re: /\bstyle\s*\.\s*[A-Za-z][\w-]*\s*=\s*`[^`]*\$\{[^`]*`/g },
+    { key: 'style[<property>] bracket assignment', re: /\bstyle\s*\[\s*['"][\w-]+['"]\s*\]\s*=\s*`[^`]*\$\{[^`]*`/g },
+    { key: 'setProperty(...)', re: /\.setProperty\(\s*[^,]*,\s*`[^`]*\$\{[^`]*`/g },
+    { key: 'Object.assign(<el>.style, …)', re: /\bObject\.assign\(\s*[\w.$]*\.style\s*,/g },
+    { key: 'setAttribute("class"|"style", …) with a computed value', re: /\.setAttribute\(\s*(['"])(?:class|style)\1\s*,\s*(?!\1[^'"]*\1\s*\))[^)]*\)/g },
+    { key: 'document.write(...) with dynamic content', re: /document\.write\(\s*[^)]*?[+`][^)]*\)/g },
+  ];
+  const SINK_SCOPED_CONSTRUCTS = [
+    { key: 'string concatenation (+) with a non-literal operand, in a class/style sink', re: /(?:['"][^'"]*['"]\s*\+\s*[A-Za-z_$][\w.$]*|[A-Za-z_$][\w.$]*\s*\+\s*['"][^'"]*['"])/g },
+    { key: 'array .join(...) in a class/style sink', re: /\[[^\]]*\]\s*\.\s*join\s*\(/g },
+  ];
+
+  for (const f of files) {
+    const sources = []; // [{ text, baseOffset }]
+    if (JSY_EXTS.has(f.ext)) {
+      sources.push({ text: stripJsComments(f.content), baseOffset: 0 });
+    } else if (f.ext === '.html') {
+      for (const b of scriptBlocks(f.content)) sources.push({ text: stripJsComments(b.js), baseOffset: b.offset });
+    } else {
+      continue;
+    }
+
+    const report = (key, count, firstAbsIdx) => {
+      if (count === 0) return;
+      add('WARN', 'unreadable-values', rel(f.abs),
+        `${key} (${count} site${count === 1 ? '' : 's'}, first at line ${lineOf(f.content, firstAbsIdx)}) — style value built at runtime — the static gate cannot verify it; findings here mean "unchecked", not "clean"`,
+        lineOf(f.content, firstAbsIdx));
+    };
+
+    for (const { key, re } of GLOBAL_CONSTRUCTS) {
+      let count = 0;
+      let firstAbsIdx = -1;
+      for (const { text, baseOffset } of sources) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(text))) {
+          count += 1;
+          if (firstAbsIdx === -1) firstAbsIdx = baseOffset + m.index;
+          if (m[0] === '') re.lastIndex += 1; // never spin on a zero-width match
+        }
+      }
+      report(key, count, firstAbsIdx);
+    }
+
+    for (const { key, re } of SINK_SCOPED_CONSTRUCTS) {
+      let count = 0;
+      let firstAbsIdx = -1;
+      for (const { text, baseOffset } of sources) {
+        for (const span of findClassStyleSinks(text)) {
+          re.lastIndex = 0;
+          let m;
+          while ((m = re.exec(span.text))) {
+            count += 1;
+            const abs = baseOffset + span.start + m.index;
+            if (firstAbsIdx === -1) firstAbsIdx = abs;
+            if (m[0] === '') re.lastIndex += 1;
+          }
+        }
+      }
+      report(key, count, firstAbsIdx);
+    }
+  }
+}
+
+// Text spans that are a class/style SINK — used to scope the otherwise context-free
+// concatenation/`.join` detection above. Heuristic bounding (up to the next `;`/newline for a
+// bare assignment, or the next `}`/`)` for a braced/call form), not a parser — the same
+// tradeoff every other regex in this file makes.
+function findClassStyleSinks(text) {
+  const spans = []; // { start, text }
+  let m;
+  // Member-access assignment: el.className = expr; / el.style = expr; — the BARE (non-template)
+  // form; el.style.<prop>=/style['prop']= are their own sinks below. Requires a leading `.`, so
+  // a plain JSX/HTML literal attribute (`className="tx"`, no dot, nothing to concatenate inside
+  // quotes) never becomes a sink here.
+  const memberAssignRe = /\.(?:className|class|style)\s*=\s*(?!\{)/g;
+  while ((m = memberAssignRe.exec(text))) {
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const end = rest.search(/[;\n]/);
+    spans.push({ start, text: rest.slice(0, end === -1 ? rest.length : end) });
+  }
+  // JSX/attribute expression container: className={expr} / class={expr} / style={expr}.
+  const jsxAttrRe = /(?<!\.)\b(?:className|class|style)\s*=\s*\{/g;
+  while ((m = jsxAttrRe.exec(text))) {
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const end = rest.indexOf('}');
+    spans.push({ start, text: rest.slice(0, end === -1 ? rest.length : end) });
+  }
+  // setAttribute("class"|"style", expr)
+  const setAttrRe = /\.setAttribute\(\s*(['"])(?:class|style)\1\s*,\s*/g;
+  while ((m = setAttrRe.exec(text))) {
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const end = rest.indexOf(')');
+    spans.push({ start, text: rest.slice(0, end === -1 ? rest.length : end) });
+  }
+  // .style.<prop> = expr / .style['prop'] = expr
+  const stylePropRe = /\.style\s*(?:\.\s*[A-Za-z][\w-]*|\[\s*['"][\w-]+['"]\s*\])\s*=\s*/g;
+  while ((m = stylePropRe.exec(text))) {
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const end = rest.search(/[;\n]/);
+    spans.push({ start, text: rest.slice(0, end === -1 ? rest.length : end) });
+  }
+  // Object.assign(<x>.style, expr)
+  const objAssignRe = /\bObject\.assign\(\s*[\w.$]*\.style\s*,\s*/g;
+  while ((m = objAssignRe.exec(text))) {
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const end = rest.indexOf(')');
+    spans.push({ start, text: rest.slice(0, end === -1 ? rest.length : end) });
+  }
+  return spans;
+}
+
 function checkSignatures(lock, files) {
   const signatures = Array.isArray(lock.signatures) ? lock.signatures : [];
   // Signature greps target GENERATED SCREEN SOURCE (.html/.jsx/.tsx), not derived token assets —
@@ -1249,9 +1671,11 @@ function main() {
   checkProvenance(lock, lockDir, lockLabel);
 
   // ---- SOURCE ADHERENCE
-  checkRawHex(files, rel);
-  checkCssVars(files, rel, [join(SKILL_ROOT, 'assets', 'tokens.css'), join(lockDir, 'assets', 'tokens.css')]);
+  const extraTokenCssPaths = [join(SKILL_ROOT, 'assets', 'tokens.css'), join(lockDir, 'assets', 'tokens.css')];
+  checkRawHex(lock, files, rel, tokensCssDescription(extraTokenCssPaths, rel));
+  checkCssVars(files, rel, extraTokenCssPaths);
   checkSpacing(files, rel, lock.tokens?.spacing);
+  checkTypeScale(lock, files, rel);
   checkPlaceholders(files, rel);
   checkEmDash(htmlFiles, rel);
   checkBannedFonts(lock, lockLabel, files, rel);
@@ -1271,6 +1695,7 @@ function main() {
   checkSignatures(lock, files);
   checkImageryProvenance(lock, files, rel);
   checkFigIdCoverage(lock, lockDir, lockLabel, rel);
+  checkUnreadableValues(files, rel);
 
   // ---- report
   console.log('adherence-lint — static gate');
@@ -1279,9 +1704,24 @@ function main() {
 
   const order = new Map(SECTIONS.map((s, i) => [s, i]));
   findings.sort((a, b) => (order.get(a.section) ?? 99) - (order.get(b.section) ?? 99));
+  // Sanitize before printing: a lock is an INPUT artifact (skill-scaffold instantiates them,
+  // captures come from external design systems) and must not be able to author extra lines —
+  // or terminal control sequences — in the gate's own report. Unicode control (\p{Cc}, e.g.
+  // ESC/BEL) and format (\p{Cf}, e.g. zero-width/RTL marks) characters are blanked FIRST — an
+  // ESC byte is not whitespace, and a raw one would survive the collapse below intact, letting
+  // a TTY-rendered ANSI payload (cursor-up + line-erase + fake green PASS) overwrite real report
+  // lines even though the captured byte stream stayed clean. Then whitespace — including
+  // newlines — is collapsed to single spaces and trimmed, so a note cannot inject a forged
+  // `RESULT: PASS …` or `[SKIP] …` line; the 200-char cap keeps it a trailing annotation, not a
+  // report of its own.
+  const rawNote = typeof lock.lint?.note === 'string'
+    ? lock.lint.note.replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+  const note = rawNote ? rawNote.slice(0, 200) : null;
   for (const f of findings) {
     const loc = f.line ? `${f.file}:${f.line}` : f.file;
-    console.log(`[${f.level}] ${f.section} — ${loc} — ${f.detail}`);
+    const detail = note ? `${f.detail} — ${note}` : f.detail;
+    console.log(`[${f.level}] ${f.section} — ${loc} — ${detail}`);
   }
   if (findings.length === 0) console.log('No findings.');
 
@@ -1290,7 +1730,15 @@ function main() {
     const e = findings.filter((f) => f.section === s && f.level === 'ERROR').length;
     const w = findings.filter((f) => f.section === s && f.level === 'WARN').length;
     const k = findings.filter((f) => f.section === s && f.level === 'SKIP').length;
-    const status = e ? `${e} ERROR${w ? `, ${w} WARN` : ''}` : w ? `${w} WARN` : k ? 'skipped' : 'ok';
+    // Join every non-zero level instead of falling through on the first match — a section
+    // that both WARNed and SKIPped (e.g. type-scale: one off-scale size WARN plus a SKIP for
+    // declarations it couldn't read) must show both; the old ladder let WARN hide a
+    // co-occurring SKIP, and the SKIP is often where a check's real coverage gap is disclosed.
+    const parts = [];
+    if (e) parts.push(`${e} ERROR`);
+    if (w) parts.push(`${w} WARN`);
+    if (k) parts.push(`${k} skipped`);
+    const status = parts.length ? parts.join(', ') : 'ok';
     console.log(`  ${s.padEnd(22)} ${status}`);
   }
 
