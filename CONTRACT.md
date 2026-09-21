@@ -44,7 +44,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ~/.claude/skills/<system-name>/      # ONE PER DESIGN SYSTEM — e.g. acme-banking
 ├── SKILL.md                         # instantiated from skill-template.md; binds ENGINE + LOCK
 ├── AXIOMS.md · DECISIONS.md · LESSONS.md · REGENERATE.md · CHANGELOG.md   # durable docs (scaffolded)
-├── evals/evals.json                 # contract cases incl. the should-not-trigger negative
+├── evals/{evals,tasks}.json · evals/HARNESS.md   # trigger cases + temptation/neutral task suites + the correction-experiment contract, implemented as its own harness script
 ├── gauntlet/LANES.md                # standing-board lane contracts (the skill implements them as its own gauntlet script)
 ├── references/playbook.md           # occasion → asset → channel routing for the media layer
 ├── tools/README.md                  # contract-first specs for skill-side pipelines (deck/print/brand-lint)
@@ -111,7 +111,7 @@ All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--scree
 - `diff.mjs --lock L --screen S` → reads reference + `.render/S.png`, writes diff png + report + triplets
 - `probe-blind-spots.mjs --lock L --screen S [--faults <list>] [--json] [--out <dir>]` → runs the real pipeline against a fresh temp copy of `S` once per fault, writes `<lockDir-or---out>/.report/S.blind-spots.json` (§Blind-spot probe)
 - `colour-census.mjs --lock L [--screen S]` → reads reference + `.render/S.png`, writes `.report/S.census.json`; `--lock` is required, there is no default path
-- `adherence-lint.mjs --lock L [--src <dir>]` → lints generated source + lock invariants (caps, masks)
+- `adherence-lint.mjs --lock L [--src <dir>]` → lints generated source + lock invariants (caps, masks); raw-hex/css-vars/tokens-only-spacing findings carry a nearest-token or nearest-scale suggestion (raw-hex calibrated in three OKLab bands against the lock's own tokens), `type-scale`/`unreadable-values` widen coverage to typography drift and runtime-built style values the gate can't statically read (both name what they still can't verify, in a SKIP finding and a header comment respectively, rather than reading "clean"), and an optional `lock.lint.note` is sanitized (whitespace and control/format characters) before being echoed into every finding
 - `verify.mjs --lock L [--screen S] [--calibrate]` → full pipeline; `--calibrate` measures the noise floor on the control screen and writes `meta.noiseFloorPct`
 - `setup-check.mjs` (no lock needed) → readiness report; prints the exact `npm i` command if missing
 - `release-check.mjs [--ban <term>] [--ban-file <path>] [--skip-fresh]` (no lock needed) → publish-readiness sweep; `--ban` (repeatable) and `--ban-file` (one extra banned term per line) extend the brand-leakage list with names the built-in sweep cannot know

@@ -126,6 +126,76 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   page-size snapping correction and the px→pt 96/72 conversion), and the brand-lint
   companion. `skill-template.md` gains the facts blocking gate, SELECTION-first component
   routing, a "system specifics" section stub, and the module index table.
+- **`adherence-lint.mjs` findings now carry agent-first diagnostics, two new checks widen
+  static coverage, and the new `lock.lint.note` field is sanitized against report injection.**
+  Change class: minor (new lock-optional fields, two new SECTIONS entries; no existing check's
+  level changes and no existing PASS/FAIL verdict changes). Diagnostic style adapted from
+  @shadcn/lint (MIT, github.com/shadcn-ui/lint; credited in NOTICE).
+  - `raw-hex`: every off-token hex now resolves the nearest `tokens.colors.light`/`.dark` token
+    in OKLab space (self-contained sRGB→OKLab conversion, Björn Ottosson's matrices) and
+    appends one of three bands, calibrated against this lock's own inter-token spacing: at or
+    under ΔE-ok 0.02, "same color — use var(--x)"; up to 0.10, "nearest lock token var(--x)
+    (ΔE-ok …) — prefer reusing it; if the design truly needs a distinct value, lock change +
+    DECISIONS.md entry first"; past 0.10, a flag that the value is genuinely off-lock. Names
+    the real token stylesheet path that was scanned (or an honest fallback when none exists),
+    not an asserted `assets/tokens.css`.
+  - `css-vars`: an undefined `var(--x)` now suggests the nearest defined var name
+    (`did you mean var(--y)?`) with a budget scaled to the name's own length, and a
+    deterministic (lexicographic) tie-break independent of file declaration order. A
+    single-edit typo (e.g. `--rad` → `--red`) can still suggest even on a 3-character name —
+    only a 2-edit suggestion is suppressed there, where random short pairs collide too often
+    to be a reliable signal.
+  - `tokens-only-spacing`: the WARN now leads with the nearest on-scale value(s) before the
+    full scale; an exact tie names both neighboring values instead of rounding down silently.
+  - New optional `lock.lint.note` (string, ≤200 chars): appended to every *printed* finding's
+    detail at report time; the underlying findings array is untouched. Sanitized before
+    printing — Unicode control/format characters (e.g. ANSI escape bytes) blanked first, then
+    all whitespace including newlines collapsed to single spaces, then trimmed, then capped —
+    so a lock (an input artifact) cannot inject extra report lines (e.g. a forged
+    `RESULT: PASS …`) or terminal control sequences into the gate's report.
+  - New section `type-scale` (source group): flags `font-size`/`font-weight` (CSS, `<style>`,
+    `style="…"`, Tailwind `text-[Npx]`) off the sizes/weights declared in
+    `tokens.typography.<role>`, unioned with `lock.fonts[*].weights` for weight legality; WARN,
+    heuristic, same class as `tokens-only-spacing`. Skips `@media` blocks (no breakpoint
+    dimension in the lock to judge them against). SKIPs the whole check when the lock's
+    typography carries no numeric size, and separately reports, per file, how many
+    `font-size`/`font-weight`/`font:`-shorthand declarations it could not statically read
+    (rem/em/%/clamp/var for sizes; a keyword like `bold` or `var()` for weights) — unchecked
+    is reported as unchecked, never as clean.
+  - New section `unreadable-values` (gate integrity group): WARNs, once per file+construct
+    (naming the site count and first line), when a `.js`/`.jsx`/`.tsx` file — or an inline
+    `<script>` inside a `.html` file — builds a `className`/`class`/`style` value at runtime:
+    template-literal interpolation, `setAttribute`, `Object.assign(<x>.style, …)`, or
+    bracket-form `style[...]` assignment unconditionally; string concatenation and array
+    `.join` only when the expression sits inside one of those same class/style sinks — never
+    on ordinary string building elsewhere in the file. Names its own remaining blind spots in
+    its header comment (CSS-in-JS tagged templates, framework binding syntax, JSX inline style
+    objects with a non-literal value, `innerHTML`, external `<script src>`) rather than letting
+    an untested class read as "clean".
+- **`skill-scaffold/root/evals/tasks.json` + `HARNESS.md`** (class: minor, new scaffold
+  files, no lock impact). The skill-scaffold's evals grow from 4 static trigger-cases
+  (`evals.json`, unchanged) to also carry a before/after correction-experiment methodology,
+  adapted from @shadcn/lint (MIT, github.com/shadcn-ui/lint; credited in NOTICE).
+  `tasks.json` ships two task suites — `temptation` (6 generic off-lock asks, each verified
+  against `adherence-lint.mjs`'s actual `add()` calls and tagged `expected_severity`: two are
+  `raw-hex`/`transition-all` ERROR pressure, two are `tokens-only-spacing`/`banned-fonts`
+  WARN-only pressure scored on findings rather than exit code, one is `judge-only` — a
+  fabricated-fact temptation no lint section can see, scored solely on the judge's
+  provenance question — and one is a gate-bypass request scored separately) and `neutral`
+  (4 plain assembly briefs as a false-positive baseline). `HARNESS.md` is the
+  correction-experiment contract: an A/B/C design (A = ungated agent with the skill's normal
+  lock/context, C = A's output corrected against verbatim lint findings, optional B control
+  isolating what the diagnostics add over the rules prose alone), five outcome labels
+  (`within-lock`/`lock-extended`/`gate-dodge`/`non-convergent`/`errored`, with `gate-dodge`
+  outranking the others), and an intent-preservation judge whose mechanics are inherited from
+  `references/eval-harness.md` (anchored scale, binary vote, position-randomized) — a gate
+  pass earned by styling less or dropping the asked-for element is a FAILURE, not a pass.
+  Names primary metrics (correction rate, rounds-to-clean at N=3, false-positive rate,
+  intent-preservation rate) and cross-references `references/eval-harness.md` (configuration
+  ranking) without blurring into it. `gauntlet/LANES.md`'s `evals-files` lane now also checks
+  `tasks.json`'s `file` path convention and asserts every ERROR/WARN `expected_severity`
+  names a section whose `add()` calls can produce that level (`judge-only`/`n/a`/neutral
+  tasks exempt). `skill-scaffold/README.md`'s phase-5 line now names both new files.
 
 ### Fixed
 
