@@ -28,6 +28,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 │   ├── pixelmatch-threshold.mjs     # single source for PIXELMATCH_THRESHOLD; diff.mjs and any skill-side colour-drift instrument that must agree with it import this instead of duplicating the literal
 │   ├── diff.mjs                     # pixelmatch gate: global + per-tile + triplet crops
 │   ├── probe-blind-spots.mjs        # measures a screen's blind spots: injects fixed faults one at a time, reports which gate (if any) catches each (§Blind-spot probe)
+│   ├── eval-correction.mjs          # correction-experiment runner: A/B/C conditions, outcome labels, intent-preservation judge (evals/HARNESS.md)
 │   ├── colour-census.mjs            # colour-drift gate: catches uniform shifts below diff.mjs's YIQ cutoff
 │   ├── adherence-lint.mjs           # static gate: tokens, fonts, microcopy, jargon, disclosures, caps
 │   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff→census, loop control
@@ -44,7 +45,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ~/.claude/skills/<system-name>/      # ONE PER DESIGN SYSTEM — e.g. acme-banking
 ├── SKILL.md                         # instantiated from skill-template.md; binds ENGINE + LOCK
 ├── AXIOMS.md · DECISIONS.md · LESSONS.md · REGENERATE.md · CHANGELOG.md   # durable docs (scaffolded)
-├── evals/{evals,tasks}.json · evals/HARNESS.md   # trigger cases + temptation/neutral task suites + the correction-experiment contract, implemented as its own harness script
+├── evals/{evals,tasks}.json · evals/HARNESS.md   # trigger cases + temptation/neutral task suites + the correction-experiment contract, run via the engine's eval-correction.mjs
 ├── gauntlet/LANES.md                # standing-board lane contracts (the skill implements them as its own gauntlet script)
 ├── references/playbook.md           # occasion → asset → channel routing for the media layer
 ├── tools/README.md                  # contract-first specs for skill-side pipelines (deck/print/brand-lint)
@@ -112,6 +113,7 @@ All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--scree
 - `probe-blind-spots.mjs --lock L --screen S [--faults <list>] [--json] [--out <dir>]` → runs the real pipeline against a fresh temp copy of `S` once per fault, writes `<lockDir-or---out>/.report/S.blind-spots.json` (§Blind-spot probe)
 - `colour-census.mjs --lock L [--screen S]` → reads reference + `.render/S.png`, writes `.report/S.census.json`; `--lock` is required, there is no default path
 - `adherence-lint.mjs --lock L [--src <dir>]` → lints generated source + lock invariants (caps, masks); raw-hex/css-vars/tokens-only-spacing findings carry a nearest-token or nearest-scale suggestion (raw-hex calibrated in three OKLab bands against the lock's own tokens), `type-scale`/`unreadable-values` widen coverage to typography drift and runtime-built style values the gate can't statically read (both name what they still can't verify, in a SKIP finding and a header comment respectively, rather than reading "clean"), and an optional `lock.lint.note` is sanitized (whitespace and control/format characters) before being echoed into every finding
+- `eval-correction.mjs --tasks T --lock L [--src-context <dir>] --model <id> [--control] [--only <id>] [--suite temptation|neutral|all] [--judge-model <id>] [--judge-passes <n>] [--rounds <n>] [--out <dir>] [--mock <script>]` → the correction-experiment runner (`evals/HARNESS.md`); A/B/C conditions per task, scored on findings from the task's own output file only (path-normalized, no baseline masking, pre-existing task.file is refused as errored), the correction rate itself gated on the pressure actually firing; labeled within-lock/lock-extended/gate-dodge/non-convergent/errored, judged for intent preservation via screenshot pair + majority vote (an unscored or never-run judge is flagged, never silently a pass); the context copy excludes the eval's own answer key (`evals/`, `gauntlet/`); `--model` required for a real run (one auth preflight before the task loop starts), `--mock <script>` substitutes the `claude` CLI end to end for a free dry run; every `task.file` is validated and its sandbox containment enforced, not merely assumed; writes `<out>/run-<ISO>/results.json` (default `<lockDir>/.eval-correction`) with cost/token/wall-time totals, never the caller's tree otherwise
 - `verify.mjs --lock L [--screen S] [--calibrate]` → full pipeline; `--calibrate` measures the noise floor on the control screen and writes `meta.noiseFloorPct`
 - `setup-check.mjs` (no lock needed) → readiness report; prints the exact `npm i` command if missing
 - `release-check.mjs [--ban <term>] [--ban-file <path>] [--skip-fresh]` (no lock needed) → publish-readiness sweep; `--ban` (repeatable) and `--ban-file` (one extra banned term per line) extend the brand-leakage list with names the built-in sweep cannot know

@@ -7,8 +7,9 @@ credited in NOTICE.
 `evals.json` proves the skill activates and refuses correctly — four SKILL.md-level trigger
 cases, not a lint-firing test. This file proves something narrower: does a correction round
 driven by `adherence-lint.mjs` findings move a task from off-lock to on-lock, without
-quietly deleting what was asked for. Implement as a script the skill's owner or an agent
-runs; ships as a contract here, not as code.
+quietly deleting what was asked for. Implemented by `ENGINE/scripts/eval-correction.mjs`
+(run it with this skill's `evals/tasks.json` and lock); this file remains the normative
+contract — where runner and contract disagree, the contract wins and the runner is the bug.
 
 `tasks.json` keeps the two-suite `{temptation, neutral}` object shape rather than
 `evals.json`'s flat array on purpose: a trigger case is one assertion, a correction task is

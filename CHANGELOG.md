@@ -196,6 +196,47 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   `tasks.json`'s `file` path convention and asserts every ERROR/WARN `expected_severity`
   names a section whose `add()` calls can produce that level (`judge-only`/`n/a`/neutral
   tasks exempt). `skill-scaffold/README.md`'s phase-5 line now names both new files.
+- **`scripts/eval-correction.mjs`** (class: minor, new script, no lock impact). The
+  correction-experiment runner: implements `skill-scaffold/root/evals/HARNESS.md` as code — does
+  a correction round driven by `adherence-lint.mjs`'s findings move a task from off-lock to
+  on-lock, without quietly deleting what was asked for. Runs every `tasks.json` task through
+  condition A (fresh agent, the sandboxed lock AND `--src-context` tree — MINUS `evals/` and
+  `gauntlet/`, the experiment's own answer key, which condition A never sees — no gate) and
+  condition C (A's exact output + verbatim lint findings scoped to the task's own output file,
+  path-normalized so `out//x.html` and `out/x.html` compare equal, with NO baseline masking on
+  that file — a task whose output file already exists before condition A runs is `errored`, never
+  scored — up to `--rounds` rounds, early-stop on a clean scored signal). With `--control`,
+  condition B (rules prose, no diagnostics, the same hidden-lint stop rule, also screenshotted and
+  judged). Scores each task by its `expected_severity` exactly as HARNESS.md specifies (ERROR: an
+  ERROR finding on the task's own file; WARN: the named section's finding on that file;
+  `judge-only`: a provenance question put to a judge model, an unscored judge makes the task
+  itself errored; `n/a`: whether the gate ran at all; `neutral`: condition A only, the same
+  file-scoped false-positive rate). Labels each corrected task within-lock / lock-extended /
+  gate-dodge / non-convergent / errored — gate-dodge (a judge verdict of intent-lost, or a
+  mechanically detected deletion) outranks a lint-clean result; a judge that returns no parseable
+  verdict, OR never ran at all because both renders were empty, is flagged (one shared
+  `judgeUnscored`/`unjudgeable` accounting) and excluded from the intent-preservation rate rather
+  than silently read as a pass. **The correction rate itself is gated on `pressureFired`** — a
+  task whose expected pressure never produced a finding in condition A is reported as its own
+  excluded count, `Pressure never fired : N/M`, never folded into a flattering rate. The
+  intent-preservation judge screenshots condition A's and C's output (Playwright, self-contained
+  HTML; a body that renders no visible content — head/title text does not count — is `errored`
+  before ever reaching the judge), randomizes which screenshot is labeled BEFORE/AFTER per pass,
+  and majority-votes across `--judge-passes` with a critique-written-before-verdict response
+  schema (references/eval-harness.md's judge-design rules; some prompt phrasing follows the
+  before/after methodology HARNESS.md itself credits to @shadcn/lint, MIT, see NOTICE).
+  `--mock <script>` replaces every `claude` CLI call (agent or judge) with a caller-supplied
+  script that receives the exact same argv a real call would. Every `task.file` is validated at
+  load time (an absolute path, or one that escapes its sandbox after `path.posix.normalize`, is a
+  setup error naming the task id) and re-asserted at every point it is resolved against a
+  sandbox — the claim that nothing is written outside `os.tmpdir()` and the results dir is now
+  enforced, not merely assumed. A real run does one minimal auth/CLI preflight before the task
+  loop starts, so an expired session aborts once with the CLI's own message instead of every task
+  producing an identical, uninformative `errored` row. Every `spawnSync` carries
+  `killSignal: 'SIGKILL'` so a misbehaving child cannot wedge the runner past its configured
+  timeout. `<out>/run-<ISO>/results.json` (default `<lockDir>/.eval-correction`) carries cost,
+  token and wall-time totals per task and per run; a mock run's `results.json` carries
+  `"mode":"mock"` and the printed summary visibly shouts MOCK.
 
 ### Fixed
 
