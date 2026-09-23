@@ -61,6 +61,24 @@ tool only when its phase arrives: the deck pipeline first, print last.
   a sub-0.2 mm sliver off the page's outer edge — inside the bleed margin, never the
   trim/artwork area.
 
+## print-check — gates for a finished print PDF
+
+- In: `--pdf <file>` (required) · `--expect-mm <W>x<H>` (page size incl. bleed, required) ·
+  `[--qr <url>]` (the exact URL every QR on any page must decode to) · `[--fonts <name,…>]`
+  (allowed embedded font family names; anything else is a finding) · `[--dpi <n>]` (render
+  density for the QR read, default 160, refuses below 120: small codes fail to decode at low
+  density whatever the layout, so a low-dpi failure would indict the decoder, not the artwork).
+- Runs, per page: MediaBox in mm vs `--expect-mm`; Ghostscript `inkcov` (every channel that
+  carries ink must be non-zero, and the file must contain no `DeviceRGB` colour space); the
+  Ghostscript font table vs `--fonts`; a PNG render at `--dpi` decoded with jsQR when `--qr` is
+  given. Prints one line per gate per page and a final verdict.
+- Refuses: missing `--pdf`/`--expect-mm` (exit 2); Ghostscript absent (2); any gate failing
+  (exit 1, every failing page and gate named); `--dpi` under 120 (2).
+- `--self-test` builds three throwaway PDFs in `os.tmpdir()` (wrong page size; an RGB fill; a
+  QR pointing at the wrong URL) and proves each refusal fires for its own reason.
+- Route-agnostic: the PDF may come from `export-print` + `print-boxes` (HTML through Chromium)
+  or from native PDF objects; see `ENGINE/references/print-collateral.md` §5 and §6.
+
 ## {{SYSTEM_NAME}}-lint — brand-specific static lint
 
 - A COMPANION to `ENGINE/scripts/adherence-lint.mjs`, never a replacement: raw-hex, css-vars,

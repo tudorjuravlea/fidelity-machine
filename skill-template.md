@@ -90,6 +90,9 @@ charts and dashboards → `ENGINE/references/dataviz-craft.md`; slide decks and 
 figure pages → `ENGINE/references/slides-and-decks.md`; multi-screen structure and
 navigation → `ENGINE/references/ia-and-navigation.md`; alternative solutions to the same
 problem → `ENGINE/references/variations.md` (after the baseline passes, never before);
+anything that leaves the screen (badges, lanyards, roll-ups, backdrops, lectern panels, print
+specification sheets) → `ENGINE/references/print-collateral.md` (constraints in mm as code, two
+render routes, the print gates, measured iteration, rebuildable delivery);
 anything that animates → `ENGINE/references/motion-craft.md` (durations and curves come from
 `tokens.motion` by name, never invented; the pixel gate cannot see motion, so say what was
 reviewed); platform CSS features (scroll-driven animation, view transitions, `@starting-style`,

@@ -7,6 +7,21 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **`references/print-collateral.md`** (class: patch, docs only, no lock impact). The process
+  for objects that leave the screen (badges, lanyards, roll-ups, backdrops, lectern panels,
+  print specification sheets): intake as a checklist with the applied-element rule (design for
+  what covers a zone, not what is printed under it), guideline mining with page citations,
+  physical constraints encoded in trim millimetres (hardware safe zones, insert zones, edge
+  rules), two render routes (HTML through Chromium via `export-print`/`print-boxes`, or native
+  CMYK PDF objects with a Ghostscript pass) under one gate set (page size, ink separations,
+  font table, QR decode at 160 dpi or more, visual), measurement-driven iteration (type fitted
+  by width, placement measured from the render, source-geometry limits stated as trades), the
+  rebuildable delivery set ending in a spec sheet generated from the print files, textile
+  notes, and the intake questions for the next pieces. Routed from `skill-template.md`.
+  `skill-scaffold/root/tools/README.md` gains the matching `print-check` tool contract
+  (page size, `inkcov` separations, font table, QR decode; `--self-test` with three planted
+  faults), route-agnostic next to `export-print` and `print-boxes`.
+
 - **`scripts/probe-blind-spots.mjs`** (class: minor, new script, no lock impact). Measures a
   screen's blind spots instead of writing them down: injects a fixed set of faults
   (font-family swap, letter-spacing, font-weight, +20/+40-per-channel colour shift of the
