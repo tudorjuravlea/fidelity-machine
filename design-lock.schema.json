@@ -841,6 +841,30 @@
         }
       }
     },
+    "render": {
+      "type": "object",
+      "description": "Optional renderer policy for requests that leave the lock's tree (anything not the main document, data:/blob:/about:, or a file:// path inside the lock's directory). Absent = observe. render.mjs always records such requests in the geometry JSON (externalRequests) and prints a stderr note; enforcement is opt-in because blocking by default could break a lock whose screens legitimately load remote assets.",
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "offline"
+          ],
+          "description": "observe (default): record and report external requests, change nothing. offline: abort every external request whose host is not in allowHosts and exit 5, writing no PNG or geometry, if any was blocked — an off-tree font or stylesheet can change between runs and the pixel diff would blame the generator. WebSockets cannot be aborted: one to a host not in allowHosts is refused after the fact (exit 5). 'Inside the lock's directory' is a lexical path test: a symlink inside it pointing out counts as inside."
+        },
+        "allowHosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^:/@\\s]+$"
+          },
+          "description": "Hostnames an offline render may still fetch from (and open WebSockets to). Hostname only — no scheme, port, path or credentials (e.g. \"fonts.example.com\", never \"fonts.example.com:443\" or \"https://fonts.example.com\"); matched exactly and case-insensitively against the request URL's hostname, so any port on that host is allowed; no wildcards. A file:// path outside the lock has no host and can only be fixed by bundling it under the lock."
+        }
+      }
+    },
     "caps": {
       "type": "object",
       "description": "HARD ceilings the lint enforces on the lock itself — a screen cannot be forced to pass by loosening its thresholds past these.",

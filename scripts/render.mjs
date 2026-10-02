@@ -4,13 +4,29 @@
 //   node render.mjs --lock <path/to/design-lock.json> --screen <id>
 //   → writes .render/<id>.png + .render/<id>.geometry.json next to the lock.
 //
-// Exit codes: 0 pass · 2 setup/usage · 4 FONT_PARITY · 5 render failure/timeout.
+// Exit codes: 0 pass · 2 setup/usage · 4 FONT_PARITY · 5 render failure/timeout
+//   (incl. an off-tree request refused under lock.render.network = "offline").
 // (3 DIMENSION_MISMATCH is diff.mjs's gate — render guarantees output dims via
 //  viewport = captureWidth×captureHeight and scale = dpr===1 ? 'css' : 'device'.)
+//
+// Off-tree requests (lock.render.network): every request that does not come from the lock's own
+// tree is recorded in the geometry JSON (externalRequests) and named in a stderr `render note:`;
+// "offline" additionally refuses them (exit 5). Known limits, stated rather than hidden:
+//   - WebSockets are not interceptable by Playwright's route, so they cannot be aborted. They are
+//     recorded from page 'websocket' events (resourceType "websocket", blocked: false), and in
+//     offline mode one to a host not in allowHosts fails the run after the fact, with the same
+//     exit-5 message — refused, though its bytes may already have arrived. The same after-the-
+//     fact refusal covers any other external record the route never saw (e.g. a URL carrying
+//     user:pass@, which Chromium refuses before interception).
+//   - "Inside the lock's directory" is a lexical path-prefix test, not a realpath walk: a symlink
+//     inside the lock dir that points outside counts as inside, and a path spelling the lock dir
+//     in different letter case (same directory on a case-insensitive disk) counts as outside.
+//   - Requests issued after the final offline check (after the screenshot and the geometry
+//     reads) cannot affect the captured frame and are not observed.
 
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 // Determinism constants (CONTRACT §Determinism invariant 3).
@@ -80,6 +96,90 @@ function resolveScreen(lock, screenId, lockPath) {
   }
   return screen;
 }
+
+// lock.render.network — how the renderer treats requests that leave the lock's tree.
+// 'observe' (the default, also when lock.render is absent) records and reports them and changes
+// nothing; 'offline' refuses them. Enforcement is opt-in because blocking by default could break
+// a lock whose screens legitimately load remote assets; observing cannot break anything.
+const NETWORK_MODES = ['observe', 'offline'];
+const RENDER_KEYS = ['network', 'allowHosts'];
+const HOSTNAME_ONLY = /^[^:/@\s]+$/; // same rule as the schema's allowHosts item pattern
+
+// Validated here, not left to design-lock.schema.json: render.mjs is run on locks nobody has
+// schema-checked, and a lock that asked for 'offline' but misspelled it must not quietly render
+// in 'observe' — the author would believe the screen is proven off-tree-free when it is not.
+// Same reason an unknown key under render is refused rather than ignored.
+function resolveNetwork(lock, lockPath) {
+  if (lock.render === undefined) return { mode: 'observe', allowHosts: [] };
+  const r = lock.render;
+  if (r === null || typeof r !== 'object' || Array.isArray(r)) {
+    fail(EXIT.SETUP, `exit 2 (setup/usage error): lock "render" in ${lockPath} must be an object like {"network": "offline", "allowHosts": []} (see design-lock.schema.json).`);
+  }
+  const unknown = Object.keys(r).filter((k) => !RENDER_KEYS.includes(k));
+  if (unknown.length) {
+    fail(EXIT.SETUP, `exit 2 (setup/usage error): lock render has unknown key(s) ${unknown.map((k) => `"${k}"`).join(', ')} in ${lockPath}; allowed keys: ${RENDER_KEYS.join(', ')} (see design-lock.schema.json).`);
+  }
+  // `=== undefined`, not `??`: an explicit null is a value the author wrote, and the schema
+  // rejects it, so it must not quietly mean the default.
+  const mode = r.network === undefined ? 'observe' : r.network;
+  if (typeof mode !== 'string' || !NETWORK_MODES.includes(mode)) {
+    fail(EXIT.SETUP, `exit 2 (setup/usage error): lock render.network ${JSON.stringify(r.network)} in ${lockPath} is not one of the allowed values: ${NETWORK_MODES.map((m) => `"${m}"`).join(', ')} (see design-lock.schema.json).`);
+  }
+  const allowHosts = r.allowHosts === undefined ? [] : r.allowHosts;
+  // Hostname only. An entry like "example.com:443" or "https://example.com" would be accepted
+  // and then silently never match (the match is against the URL hostname), so it is refused at
+  // load time instead of failing closed with no explanation at render time.
+  if (!Array.isArray(allowHosts) || allowHosts.some((h) => typeof h !== 'string' || !HOSTNAME_ONLY.test(h))) {
+    fail(EXIT.SETUP, `exit 2 (setup/usage error): lock render.allowHosts in ${lockPath} must be an array of hostnames only, e.g. ["fonts.example.com"] — no scheme, port, path or credentials (no ':', '/', '@' or whitespace) (see design-lock.schema.json).`);
+  }
+  // Hosts compare case-insensitively (URL hostnames are already lower-cased by the parser).
+  return { mode, allowHosts: allowHosts.map((h) => h.toLowerCase()) };
+}
+
+// Parse a request URL without ever throwing. Credentials are stripped before the URL is stored
+// or printed (geometry JSON and stderr are artifacts people share). host is the hostname for
+// network schemes and null otherwise: a file:// URL has no host an allowHosts entry could name,
+// so it can only be fixed by bundling. An unparseable URL keeps its raw text, host null.
+const NETWORK_SCHEMES = ['http:', 'https:', 'ws:', 'wss:'];
+function describeUrl(rawUrl) {
+  let u;
+  try { u = new URL(rawUrl); } catch { return { url: String(rawUrl), parsed: null, host: null }; }
+  let clean = String(rawUrl);
+  if (u.username || u.password) { u.username = ''; u.password = ''; clean = u.href; }
+  return { url: clean, parsed: u, host: NETWORK_SCHEMES.includes(u.protocol) ? (u.hostname || null) : null };
+}
+
+// A request is 'internal' when its bytes come from the lock's own tree (or carry no fetch at
+// all: data:/blob:/about:), 'external' otherwise. The pixel diff assumes every painted byte came
+// from the tree the lock pins; an off-tree font or stylesheet can change between runs (late font
+// swap, a CDN edit) and the diff would then blame the generator for a change it did not make.
+// The lock-dir prefix check appends the separator so a sibling "/lock-dirX/" does not pass as
+// inside "/lock-dir/". The main document is decided by the caller, structurally (see main()).
+// Never throws: this runs inside page event listeners, where a throw escapes as an uncaught
+// exception and the process exits 1 — the code for a fidelity finding, which would send a model
+// to "fix" a renderer crash. fileURLToPath refuses legal-to-Chromium URLs (file://host/…, an
+// encoded "/" in the path); such a URL is not provably in-tree, so it is external.
+function classifyUrl(d, lockDir) {
+  if (!d.parsed) return 'external';
+  const p = d.parsed.protocol;
+  if (p === 'data:' || p === 'blob:' || p === 'about:') return 'internal';
+  if (p === 'file:') {
+    try {
+      return path.resolve(fileURLToPath(d.parsed)).startsWith(path.resolve(lockDir) + path.sep) ? 'internal' : 'external';
+    } catch {
+      return 'external';
+    }
+  }
+  return 'external';
+}
+
+// Label for the note's host list: the hostname, else the scheme ("file://"), else a marker.
+const hostLabel = (rec) => {
+  if (rec.host) return rec.host;
+  const d = describeUrl(rec.url);
+  return d.parsed ? `${d.parsed.protocol}//` : '(unparseable URL)';
+};
+const stripHash = (u) => String(u).split('#')[0];
 
 // CONTRACT §Path resolution: a url that is not http(s):// or file:// is a path
 // resolved relative to the LOCK file's directory, converted to file://.
@@ -161,6 +261,7 @@ async function main() {
   const lockDir = path.dirname(lockPath);
   const lock = await loadLock(lockPath);
   const screen = resolveScreen(lock, args.screen, lockPath);
+  const network = resolveNetwork(lock, lockPath);
   const url = resolveScreenUrl(screen.url, lockDir);
   const chromiumInfo = checkChromiumBuild(lock);
 
@@ -188,23 +289,153 @@ async function main() {
     await context.addInitScript(determinismInit, { epochMs: FROZEN_EPOCH_MS, seed: RNG_SEED });
     const page = await context.newPage();
 
+    // The main document is identified structurally — the main frame's navigation request for a
+    // document — not by string equality with the lock's url: Chromium canonicalizes the navigation
+    // URL ("http://h:1" → "http://h:1/", "HTTP://" → "http://"), so a string match let the page
+    // itself count as external (a false note in observe; in offline, the page aborted itself).
+    // Every hop of a redirect chain is such a request, so the final URL is internal too; the URLs
+    // seen that way (plus the canonical lock url and page.url() after goto) are remembered so a
+    // later re-request of the same document is not misread either. Only goto's own chain counts —
+    // the first main-frame navigation and the redirect hops that descend from it: a page script
+    // that sends its main frame elsewhere (location = "https://…", even during load) starts a new
+    // navigation with no redirectedFrom(), and that request is classified by its URL.
+    const mainDocUrls = new Set([stripHash(describeUrl(url).parsed?.href ?? url)]);
+    const mainDocRequests = new WeakSet();
+    let firstNavigationSeen = false;
+    const isMainDocument = (request) => {
+      try {
+        if (mainDocRequests.has(request)) return true;
+        if (request.isNavigationRequest() && request.resourceType() === 'document' &&
+            request.frame() === page.mainFrame()) {
+          const from = request.redirectedFrom();
+          if ((!firstNavigationSeen && !from) || (from && mainDocRequests.has(from))) {
+            firstNavigationSeen = true;
+            mainDocRequests.add(request);
+            mainDocUrls.add(stripHash(request.url()));
+            return true;
+          }
+        }
+      } catch {
+        // frame() throws for a request with no frame (e.g. a service worker's) — not the page.
+      }
+      return mainDocUrls.has(stripHash(request.url()));
+    };
+
+    // External-request record, deduplicated by (credential-stripped) url in first-seen order.
+    // Attached before goto so the main document's own subresources are seen. Observation is
+    // always on and never changes what loads; only render.network = "offline" changes behavior.
+    // noteExternal never throws (see classifyUrl): anything it cannot classify is external.
+    const external = new Map(); // url → { url, resourceType, host, failed, blocked }
+    const record = (d, resourceType) => {
+      if (!external.has(d.url)) {
+        external.set(d.url, { url: d.url, resourceType, host: d.host, failed: false, blocked: false });
+      }
+      return external.get(d.url);
+    };
+    const noteExternal = (request) => {
+      let rawUrl = '';
+      let resourceType = 'other';
+      try { rawUrl = request.url(); resourceType = request.resourceType(); } catch { /* keep defaults */ }
+      try {
+        if (isMainDocument(request)) return null;
+        const d = describeUrl(rawUrl);
+        return classifyUrl(d, lockDir) === 'external' ? record(d, resourceType) : null;
+      } catch {
+        return record({ url: String(rawUrl), host: null }, resourceType);
+      }
+    };
+    const isAllowed = (rec) => rec.host !== null && network.allowHosts.includes(rec.host);
+
+    if (network.mode === 'offline') {
+      await context.route('**/*', (route) => {
+        let rec = null;
+        let abort = true; // fail closed: a request that could not be classified is not in-tree
+        try {
+          rec = noteExternal(route.request());
+          abort = rec !== null && !isAllowed(rec);
+        } catch { /* abort stays true */ }
+        if (abort) {
+          if (rec) rec.blocked = true;
+          else record({ url: '(unclassifiable request)', host: null }, 'other').blocked = true;
+          return route.abort('blockedbyclient').catch(() => {});
+        }
+        return route.continue().catch(() => {});
+      });
+    }
+    page.on('request', (request) => { noteExternal(request); });
+    page.on('requestfailed', (request) => {
+      const rec = noteExternal(request);
+      if (rec) rec.failed = true;
+    });
+    // WebSockets never reach route or the request events; see the header comment.
+    page.on('websocket', (ws) => {
+      try { record(describeUrl(ws.url()), 'websocket'); } catch { /* never throw from a listener */ }
+    });
+
+    // In offline mode a run fails on ANY external record whose host is not allowed — not only the
+    // ones the route aborted. Some never reach the route: a WebSocket (cannot be aborted), or a
+    // URL Chromium refuses on its own before interception (e.g. one carrying user:pass@). Keying
+    // on the record rather than on the abort keeps the rule "nothing off-tree and unallowed in an
+    // exit-0 offline run" true whatever path the request took; those are refused after the fact.
+    const violations = () => (network.mode !== 'offline' ? [] : [...external.values()]
+      .filter((r) => r.blocked || !isAllowed(r)));
+    const violationList = () => violations().map((r) => `  - ${r.url} (${r.resourceType}` +
+      `${r.resourceType === 'websocket' ? ' — cannot be aborted, refused after the fact'
+        : (r.blocked ? '' : ' — not seen by the route, refused after the fact')})`).join('\n');
+    const offlineRefusal = (list) =>
+      'exit 5 (render failure/environment): OFFLINE RENDER REFUSED — lock render.network = "offline" blocked ' +
+      'external request(s) that would have painted bytes from outside the lock\'s tree:\n' + list +
+      '\nFix one of: (a) bundle the file under the lock\'s directory and reference it by a relative path; ' +
+      'or (b) if fetching it at render time is intended, add its host to lock render.allowHosts ' +
+      '(exact host, e.g. ["example.com"]; a file:// path outside the lock can only be fixed by (a)).';
+    // Offline refusal is exit 5, not 1: a blocked off-tree request is an environment/packaging
+    // fact about the screen, not a fidelity finding — a model told "fix this" would restyle the
+    // page to paper over a missing file. Same family as FONT_PARITY (exit 4), which it often
+    // co-fires with (a blocked font fails document.fonts.check).
+    const assertNothingBlocked = () => {
+      const list = violationList();
+      if (list) fail(EXIT.RENDER, offlineRefusal(list));
+    };
+
+    let mainResponse = null;
     try {
-      await page.goto(url, { waitUntil: 'load' });
+      mainResponse = await page.goto(url, { waitUntil: 'load' });
     } catch (err) {
+      // If offline mode blocked something, that is the story — never a bare ERR_BLOCKED_BY_CLIENT.
+      const list = violationList();
+      if (list) fail(EXIT.RENDER, `${offlineRefusal(list)}\n(page.goto then failed: ${err.message})`);
       fail(EXIT.RENDER, `exit 5 (render failure): failed to load ${url}: ${err.message}`);
     }
+    // The final URL of goto's own chain (after redirects) — not page.url(), which a page script
+    // may already have moved elsewhere.
+    try { if (mainResponse) mainDocUrls.add(stripHash(mainResponse.url())); } catch { /* best effort */ }
 
     // Invariant 6: readiness is an explicit page-side contract, never networkidle.
     try {
       await page.waitForSelector('[data-render-ready]', { state: 'attached', timeout: READY_TIMEOUT_MS });
     } catch {
+      // A blocked stylesheet or script is the likeliest reason readiness never came, so name it
+      // first; the readiness contract text below is unchanged when nothing was blocked.
+      const blocked = violationList();
       fail(EXIT.RENDER,
+        (blocked
+          ? 'exit 5 (render timeout): lock render.network = "offline" blocked these external request(s) — the likely cause of the timeout below:\n' +
+            blocked + '\nBundle them under the lock\'s directory, or add their host to lock render.allowHosts.\n'
+          : '') +
         `exit 5 (render timeout): [data-render-ready] did not appear within ${READY_TIMEOUT_MS}ms at ${url}.\n` +
         'Contract: the generated page MUST set the data-render-ready attribute on <html> (or any element) ' +
         'once fonts, data, and layout are fully settled, e.g.\n' +
         "  document.fonts.ready.then(() => requestAnimationFrame(() => document.documentElement.setAttribute('data-render-ready', '')));\n" +
         'render.mjs never falls back to networkidle.');
     }
+
+    // Offline gate, first pass: after readiness, before font parity. A font whose request was
+    // blocked BEFORE this point reports as the blocked request it is (exit 5) rather than as the
+    // FONT_PARITY failure it causes. A font first requested AFTER this point (e.g. used only by an
+    // element the page adds after readiness) is blocked by the route but meets the font checks
+    // below first, so that run exits 4, not 5 — the blocked URL is then not named. The final gate
+    // after the screenshot catches every other late request.
+    assertNothingBlocked();
 
     // Invariant 5 + caret half of invariant 3.
     await page.addStyleTag({
@@ -279,11 +510,10 @@ async function main() {
     });
     await page.mouse.move(screen.captureWidth - 1, screen.captureHeight - 1);
 
-    await mkdir(renderDir, { recursive: true });
-
     // Invariant 2: scale 'css' at dpr 1, 'device' at dpr 2 → PNG dims === reference dims.
+    // Captured to a buffer, not straight to pngPath: the final offline gate runs after the
+    // capture, and a refused run must leave no PNG of its own — nor clobber an earlier run's.
     const shot = {
-      path: pngPath,
       fullPage: false,
       animations: 'disabled',
       caret: 'hide',
@@ -293,7 +523,7 @@ async function main() {
       const { x, y, width, height } = screen.clip;
       shot.clip = { x, y, width, height };
     }
-    await page.screenshot(shot);
+    const png = await page.screenshot(shot);
 
     // Geometry dump — consumed by geometry.mjs (modes A/B1) and by diff.mjs for
     // classifying worst tiles ("box matches → color/weight, not layout").
@@ -312,6 +542,20 @@ async function main() {
     // whatever fell below the fold. One screen here declared 1600 against a real 2106 and had
     // been scoring green for weeks without its only primary action in frame.
     const documentHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
+
+    // Offline gate, final pass: after the capture and the last page read, before anything is
+    // written. A request the page started after readiness (a timer, a late element) may already
+    // have been blocked by the route while the frame was taken; the frame could be the degraded
+    // render offline mode exists to refuse, so it is discarded and the run exits 5. The records
+    // are snapshotted in the same synchronous step as the check (no await between), so a request
+    // the route blocks while the files are being written cannot reach an exit-0 geometry: an
+    // exit-0 geometry never carries a blocked: true record. A request the page first issues after
+    // this point can no longer affect the captured frame, and is not reported.
+    assertNothingBlocked();
+    const externalRecords = [...external.values()].map((r) => ({ ...r }));
+
+    await mkdir(renderDir, { recursive: true });
+    await writeFile(pngPath, png);
 
     const geometry = {
       screenId: screen.id,
@@ -332,11 +576,29 @@ async function main() {
       chromiumBuildWarning: chromiumInfo.warning,
       fontCheckResults,
       figIds: figResults,
+      network: { mode: network.mode, allowHosts: network.allowHosts },
+      externalRequests: externalRecords,
+      externalRequestCount: externalRecords.length,
     };
     await writeFile(geometryPath, `${JSON.stringify(geometry, null, 2)}\n`);
 
     const foundCount = figResults.filter((r) => r.found).length;
     console.log(`render ok: ${screen.id} → ${pngPath} (${screen.captureWidth}x${screen.captureHeight} css px @ dpr ${screen.dpr}) + ${path.basename(geometryPath)} (${foundCount}/${figResults.length} figIds found, ${fontCheckResults.length} font checks passed)`);
+    // A note, not a failure (observe mode never changes the exit code): on stderr so stdout's
+    // `render ok:` line stays the single machine-read line it has always been.
+    // The host list is capped so a page with dozens of hosts still prints one readable line; the
+    // geometry JSON has the full record. The tail says what the author can do in THIS mode: an
+    // exit-0 offline run only has allowed hosts left, so "set offline" would be wrong advice.
+    if (externalRecords.length > 0) {
+      const hosts = [...new Set(externalRecords.map(hostLabel))];
+      const MAX_HOSTS = 5;
+      const hostText = hosts.slice(0, MAX_HOSTS).join(', ') +
+        (hosts.length > MAX_HOSTS ? ` and ${hosts.length - MAX_HOSTS} more` : '');
+      const tail = network.mode === 'offline'
+        ? 'allowed by lock.render.allowHosts — remove the host to refuse'
+        : 'bundle it under the lock, or set lock.render.network = "offline" to refuse';
+      console.error(`render note: ${externalRecords.length} external request(s) — ${hostText} (a font or stylesheet fetched off-tree can change between runs; ${tail})`);
+    }
   } finally {
     if (browser) await browser.close().catch(() => {});
   }

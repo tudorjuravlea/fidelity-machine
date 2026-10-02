@@ -365,6 +365,14 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       const rres = runChild(GATE_SCRIPTS.render, ['--lock', lockPath, '--screen', id]);
       gates.render = gateFromChild(rres);
       renderOk = !rres.missing && rres.exitCode === 0;
+      // A passing render's stderr is otherwise dropped (gateFromChild keeps it only as failure
+      // evidence), which would hide render.mjs's advisory off-tree-request note from every verify
+      // run. Forward just those lines, verbatim; nothing else of a passing child's stderr.
+      if (renderOk) {
+        for (const line of rres.stderr.split('\n')) {
+          if (line.startsWith('render note:')) process.stderr.write(`${line}\n`);
+        }
+      }
       if (rres.missing) {
         missingScripts.add(GATE_SCRIPTS.render);
         noteEvent(2, GATE_SCRIPTS.render, id);
