@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "name": "lint-negative-imagery-provenance",
+    "capturedAt": "2026-10-03",
+    "chromiumBuild": "chromium-1228",
+    "provenance": {
+      "generatedAt": "2026-10-03T00:00:00Z",
+      "lockTokensHash": "sha256:076bf3178d3d2c8c2cccdcf4742c6e584279a3b6d093ab42a2e4a09d356adb96",
+      "artifacts": {
+        "tokens.dtcg.json": "sha256:707a9e6c454b997fca975081039662ae3adc8e03770d8bd2e8e2a0df34d5de47"
+      }
+    }
+  },
+  "tokens": {
+    "colors": {
+      "light": {
+        "background": "#F7F6F3",
+        "surface1": "#FFFFFF",
+        "text1": "#1C1B18",
+        "text2": "#6B675E",
+        "accent": "#0F5132"
+      }
+    },
+    "spacing": [
+      8,
+      16,
+      24
+    ],
+    "typography": {
+      "heading": {
+        "family": "Helvetica Neue",
+        "sizePx": 26,
+        "weight": 700,
+        "lineHeight": 1.2
+      },
+      "body": {
+        "family": "Helvetica Neue",
+        "sizePx": 15,
+        "weight": 400,
+        "lineHeight": 1.45
+      }
+    }
+  },
+  "fonts": [
+    {
+      "family": "Helvetica Neue",
+      "files": [],
+      "weights": [
+        400,
+        700
+      ],
+      "fontChecks": [
+        "400 15px \"Helvetica Neue\""
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "home",
+      "mode": "B2",
+      "netNew": true,
+      "captureWidth": 720,
+      "captureHeight": 640,
+      "dpr": 1,
+      "colorScheme": "light",
+      "url": "screen.html",
+      "figIds": [
+        {
+          "figmaNodeId": "1:100",
+          "domId": "1:100"
+        }
+      ],
+      "lockedStrings": [
+        "Your accounts",
+        "Send money"
+      ]
+    }
+  ],
+  "content": {
+    "locales": [
+      "en"
+    ],
+    "bannedJargon": {
+      "en": [
+        {
+          "term": "Beneficiary",
+          "replacement": "The person you're paying"
+        }
+      ]
+    },
+    "disclosureInventory": [
+      {
+        "flow": "home",
+        "mustContain": [
+          "You can cancel a scheduled payment"
+        ]
+      }
+    ]
+  },
+  "signatures": [
+    {
+      "rule": "Amounts always use tabular figures",
+      "grep": "tabular-nums"
+    }
+  ],
+  "imagery": {
+    "policy": [
+      "Inline artwork declares its source: a captured asset, a chart, or a declared derived composition"
+    ]
+  },
+  "caps": {
+    "maxPassThreshold": {
+      "A": 0.002,
+      "B1": 0.005,
+      "B2": 0.005
+    },
+    "maxTileCeiling": 0.4,
+    "maxMaskedAreaPct": 0.15
+  }
+}

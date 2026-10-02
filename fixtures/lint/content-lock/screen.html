@@ -1,0 +1,34 @@
+<!-- lint-negative: content-lock — the locked heading copy rewritten during restyling -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lint negative: content-lock</title>
+<style>
+  :root {
+    --background: #F7F6F3;
+    --surface1: #FFFFFF;
+    --text1: #1C1B18;
+    --text2: #6B675E;
+    --accent: #0F5132;
+    --space-2: 8px; --space-4: 16px; --space-6: 24px;
+  }
+  body { font-family: "Helvetica Neue", sans-serif; background: var(--background); color: var(--text1); font-size: 15px; line-height: 1.45; margin: 0; }
+  main { padding: var(--space-6); }
+  h1 { font-size: 26px; font-weight: 700; }
+  .sub { color: var(--text2); margin-top: var(--space-2); }
+  .amount { font-variant-numeric: tabular-nums; }
+  .btn { background: var(--accent); color: var(--surface1); border: 0; padding: var(--space-2) var(--space-4); font: inherit; }
+  :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main data-fig-id="1:100">
+  <h1>Accounts overview</h1>
+  <p class="sub">Checking account balance.</p>
+  <p class="amount">$12,480 available.</p>
+  <p class="sub">You can cancel a scheduled payment until the payment day.</p>
+  <button class="btn">Send money</button>
+</main>
+</body>
+</html>

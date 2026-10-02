@@ -1,0 +1,3 @@
+{
+  "$description": "Hand-edited stand-in derived token artifact for the provenance chain. Its sha256 is recorded in design-lock.json meta.provenance.artifacts; editing this file without re-deriving is the provenance fault."
+}

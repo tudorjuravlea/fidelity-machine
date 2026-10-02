@@ -1,0 +1,239 @@
+{
+  "fixtures": [
+    {
+      "id": "schema-sanity",
+      "section": "schema-sanity",
+      "level": "ERROR",
+      "lock": "schema-sanity/design-lock.json",
+      "src": "schema-sanity",
+      "minCount": 1,
+      "planted": "design-lock.json: required key meta.chromiumBuild removed"
+    },
+    {
+      "id": "caps-enforcement",
+      "section": "caps-enforcement",
+      "level": "ERROR",
+      "lock": "caps-enforcement/design-lock.json",
+      "src": "caps-enforcement",
+      "minCount": 1,
+      "planted": "design-lock.json: screen \"home\" passThreshold 0.01 above caps.maxPassThreshold.B2 0.005"
+    },
+    {
+      "id": "mask-budget",
+      "section": "mask-budget",
+      "level": "ERROR",
+      "lock": "mask-budget/design-lock.json",
+      "src": "mask-budget",
+      "minCount": 1,
+      "planted": "design-lock.json: a masked region whose reason is 3 characters"
+    },
+    {
+      "id": "raw-hex",
+      "section": "raw-hex",
+      "level": "ERROR",
+      "lock": "raw-hex/design-lock.json",
+      "src": "raw-hex",
+      "minCount": 1,
+      "planted": "a hand-typed off-token hex on .btn background, outside :root"
+    },
+    {
+      "id": "css-vars",
+      "section": "css-vars",
+      "level": "ERROR",
+      "lock": "css-vars/design-lock.json",
+      "src": "css-vars",
+      "minCount": 1,
+      "planted": ".sub color reads a custom property that is never defined (typo of --text2)"
+    },
+    {
+      "id": "tokens-only-spacing",
+      "section": "tokens-only-spacing",
+      "level": "WARN",
+      "lock": "tokens-only-spacing/design-lock.json",
+      "src": "tokens-only-spacing",
+      "minCount": 1,
+      "planted": ".btn vertical padding 10px, off the 8/16/24 spacing scale"
+    },
+    {
+      "id": "type-scale",
+      "section": "type-scale",
+      "level": "WARN",
+      "lock": "type-scale/design-lock.json",
+      "src": "type-scale",
+      "minCount": 1,
+      "planted": ".amount font-size 34px, not a size any lock typography role carries"
+    },
+    {
+      "id": "placeholders",
+      "section": "placeholders",
+      "level": "ERROR",
+      "lock": "placeholders/design-lock.json",
+      "src": "placeholders",
+      "minCount": 1,
+      "planted": "an unresolved double-brace template token left in the greeting copy"
+    },
+    {
+      "id": "em-dash",
+      "section": "em-dash",
+      "level": "ERROR",
+      "lock": "em-dash/design-lock.json",
+      "src": "em-dash",
+      "minCount": 1,
+      "planted": "an em-dash character in visible body copy"
+    },
+    {
+      "id": "banned-fonts",
+      "section": "banned-fonts",
+      "level": "WARN",
+      "lock": "banned-fonts/design-lock.json",
+      "src": "banned-fonts",
+      "minCount": 1,
+      "planted": "h1 sets an AI-default display face as its first family"
+    },
+    {
+      "id": "contrast",
+      "section": "contrast",
+      "level": "ERROR",
+      "lock": "contrast/design-lock.json",
+      "src": "contrast",
+      "minCount": 1,
+      "planted": "design-lock.json: light text1 lightened to #A8A49C, about 2.3:1 on background (body text needs 4.5:1)"
+    },
+    {
+      "id": "transition-all",
+      "section": "transition-all",
+      "level": "ERROR",
+      "lock": "transition-all/design-lock.json",
+      "src": "transition-all",
+      "minCount": 1,
+      "planted": ".btn animates every property; a reduced-motion guard is present so only this rule fires"
+    },
+    {
+      "id": "a11y",
+      "section": "a11y",
+      "level": "ERROR",
+      "lock": "a11y/design-lock.json",
+      "src": "a11y",
+      "minCount": 1,
+      "planted": "heading order jumps from h1 straight to h3"
+    },
+    {
+      "id": "forbidden-substitutes",
+      "section": "forbidden-substitutes",
+      "level": "ERROR",
+      "lock": "forbidden-substitutes/design-lock.json",
+      "src": "forbidden-substitutes",
+      "minCount": 1,
+      "planted": "design-lock.json forbids the Arial family; body font stack names it as a fallback"
+    },
+    {
+      "id": "banned-jargon",
+      "section": "banned-jargon",
+      "level": "ERROR",
+      "lock": "banned-jargon/design-lock.json",
+      "src": "banned-jargon",
+      "minCount": 1,
+      "planted": "visible copy uses the banned term the lock replaces with plain language"
+    },
+    {
+      "id": "disclosure-presence",
+      "section": "disclosure-presence",
+      "level": "ERROR",
+      "lock": "disclosure-presence/design-lock.json",
+      "src": "disclosure-presence",
+      "minCount": 1,
+      "planted": "the mandatory cancellation disclosure sentence removed from the screen"
+    },
+    {
+      "id": "ro-diacritics",
+      "section": "ro-diacritics",
+      "level": "WARN",
+      "lock": "ro-diacritics/design-lock.json",
+      "src": "ro-diacritics",
+      "minCount": 1,
+      "planted": "design-lock.json adds the ro locale; a Romanian label writes the conjunction without its comma-below diacritic"
+    },
+    {
+      "id": "button-length",
+      "section": "button-length",
+      "level": "ERROR",
+      "lock": "button-length/design-lock.json",
+      "src": "button-length",
+      "minCount": 1,
+      "planted": "button label grown to seven words"
+    },
+    {
+      "id": "sentence-length",
+      "section": "sentence-length",
+      "level": "WARN",
+      "lock": "sentence-length/design-lock.json",
+      "src": "sentence-length",
+      "minCount": 1,
+      "planted": "one 24-word sentence added to body copy"
+    },
+    {
+      "id": "color-only-status",
+      "section": "color-only-status",
+      "level": "WARN",
+      "lock": "color-only-status/design-lock.json",
+      "src": "color-only-status",
+      "minCount": 1,
+      "planted": "an error-status element with no text, so status is carried by color alone"
+    },
+    {
+      "id": "content-lock",
+      "section": "content-lock",
+      "level": "ERROR",
+      "lock": "content-lock/design-lock.json",
+      "src": "content-lock",
+      "minCount": 1,
+      "planted": "the locked heading copy rewritten during restyling"
+    },
+    {
+      "id": "signatures",
+      "section": "signatures",
+      "level": "ERROR",
+      "lock": "signatures/design-lock.json",
+      "src": "signatures",
+      "minCount": 1,
+      "planted": "the tabular-figures rule for amounts removed, so the signature grep matches nothing"
+    },
+    {
+      "id": "imagery-provenance",
+      "section": "imagery-provenance",
+      "level": "ERROR",
+      "lock": "imagery-provenance/design-lock.json",
+      "src": "imagery-provenance",
+      "minCount": 1,
+      "planted": "an inline svg icon with no imagery declaration attribute"
+    },
+    {
+      "id": "figid-coverage",
+      "section": "figid-coverage",
+      "level": "ERROR",
+      "lock": "figid-coverage/design-lock.json",
+      "src": "figid-coverage",
+      "minCount": 1,
+      "planted": "the main element carries a different fig id, so the declared one is referenced nowhere in the source"
+    },
+    {
+      "id": "provenance",
+      "section": "provenance",
+      "level": "ERROR",
+      "lock": "provenance/design-lock.json",
+      "src": "provenance",
+      "minCount": 1,
+      "planted": "tokens.dtcg.json hand-edited after its sha256 was recorded in meta.provenance"
+    },
+    {
+      "id": "unreadable-values",
+      "section": "unreadable-values",
+      "level": "WARN",
+      "lock": "unreadable-values/design-lock.json",
+      "src": "unreadable-values",
+      "minCount": 1,
+      "planted": "an inline script assigns a style property from a template literal"
+    }
+  ],
+  "uncovered": []
+}

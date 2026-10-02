@@ -41,6 +41,7 @@ jobs:
       - run: node scripts/setup-check.mjs
       - run: node scripts/contract-guard.mjs
       - run: node scripts/release-check.mjs
+      - run: node scripts/lint-negatives.mjs
 
   pixel-self-test:
     name: pixel self-test (macOS, reference platform)
