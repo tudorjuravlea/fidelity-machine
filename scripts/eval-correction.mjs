@@ -193,6 +193,86 @@
 //     carries the CLI's own diagnosis (from the JSON body's `result` field, where a real
 //     failure — e.g. an expired OAuth session — actually lands, exit 0 and empty stderr) rather
 //     than an empty stderr tail.
+//   * R3-1 ruling — the intent judge runs only where a correction happened. R2-3 already kept a
+//     `pressureFired: false` task out of the correction rate, but the judge was still spawned on
+//     it, comparing A against a C that is A byte for byte, and its verdict landed in the
+//     intent-preservation rate — the first real run's rate was inflated by exactly those rows.
+//     Such a task is now never judged: `judge: null`, `judgeSkipped: "pressure-never-fired"`,
+//     outside the intent-preservation denominator, counted on its own line (`Judge skipped`).
+//     Skipped (never asked) and unscored (asked, no verdict) are two facts with two counters,
+//     never one (M2) — and a skipped row is never also `unjudgeable`, which only describes a
+//     judge that would otherwise have run. The same gate applies to condition B's judge: with
+//     no pressure, B ran no round either. Consequence, stated rather than hidden: a judge
+//     verdict of false can no longer demote such a row to gate-dodge — that verdict compared A
+//     with itself and was noise; the mechanical deletion check still runs (and cannot fire on
+//     identical files). The same skip, `judgeSkipped: "no-change"`, applies when the pressure
+//     fired but BOTH C's final task file is A's after whitespace normalization (rewriteRatio 0,
+//     R3-4) AND C's screenshot is pixel-identical to A's (`rendersPixelIdentical`: the two
+//     PNGs decoded with pngjs and their RGBA buffers compared, dimensions first — decoded
+//     pixels, not PNG bytes, so encoder metadata can never make equal pixels read as a change):
+//     rounds ran, nothing in the file or on screen changed, so the judge would compare A with
+//     itself again. The file test alone is not enough (fix round 2): a correction can land
+//     OUTSIDE task.file — e.g. defining in assets/tokens.css a token the file already
+//     referenced — changing the render without touching the file. That row is judged as normal
+//     and records `judgeSkipped: null`, `rewriteRatio: 0` and a `rewriteRatioReason` saying
+//     so; a render comparison that cannot run (pngjs missing, a decode error) is treated the
+//     same way — never assumed identical. This is the ONE place the rewrite measurement feeds a
+//     decision — whether the judge is asked — and it can only remove a noise verdict, never set
+//     or clear a label by itself. Both skip causes share the `Judge skipped` line, each with its
+//     own count in the parenthetical.
+//   * R3-2 ruling — a task's optional `capture` (`static` default | `hover` | `motion`, any
+//     other value is exit 2 at load, naming the task) declares which rendered state its ask
+//     lives in. The judge sees static screenshots only, so for `hover`/`motion` the intent judge
+//     is not run (`judgeSkipped: "capture-state-unavailable"`, `Judge not verified` line) — an
+//     honest "not verified" replaces an unreliable guess, it is not upgraded into a better one
+//     (forced-hover capture is a recorded follow-up, not built here). Mechanical deletion
+//     detection still runs and can still set gate-dodge. Where both skip causes hold, the
+//     nothing-to-judge cause (pressure never fired, or no change) wins the `judgeSkipped` field
+//     — nothing to judge outranks cannot see it; the capture limit still shows on the row's
+//     `capture-state` coverage entry. A judge-only task's provenance judge runs whatever its
+//     capture (it judges content, not a hover state — its coverage entry says so). `capture`
+//     on a NEUTRAL task is exit 2 at load: a neutral task is never judged, so declaring the
+//     state a judge needs is a tasks.json authoring error, not a no-op to tolerate.
+//   * R3-3 ruling — every non-errored corrected, judge-only and neutral row carries `coverage`:
+//     `{area, status, evidence}` entries, status one of Reviewed / Not verified / Not
+//     applicable (HARNESS.md, "Coverage"). It describes what the row's numbers did and did not
+//     see; it never changes a label or a rate. Errored rows carry none (the error IS the row,
+//     HARNESS §Reporting discipline) and process rows carry none (their one fact, `gateRan`, is
+//     not an examined area). results.json now carries the final `summary` object — the same one
+//     the printed summary reads — so the coverage totals are machine-readable, not print-only.
+//   * R3-4 ruling — `rewriteRatio` is the share of A's task-file lines NOT preserved in C:
+//     1 − LCS(A, C) / max(lines A, lines C), in [0, 1] (0 unchanged, 1 full rewrite), from a
+//     dependency-free line LCS over lines trimmed of leading/trailing whitespace with blank
+//     lines dropped — re-indentation and trailing spaces are not rewrites. (An earlier revision
+//     used (added + removed) / max, which counted every modified line twice, so 0.40 really
+//     meant ~20% changed — fix round 1.) Remaining limitation: a minified one-line file reads
+//     as a full rewrite on any change. MEASURED, not scored: `rewriteFlag` (> 0.40) never
+//     changes `outcomeLabel` and never enters a rate, until three runs agree it means what it
+//     claims (HARNESS.md: N=1 is luck); its only consumer is R3-1's no-change judge skip.
+//     Null, with a short, groupable `rewriteRatioReason`, when no correction round ran (a ratio
+//     of 0 for an untouched copy would only dilute the mean), a side exceeds REWRITE_MAX_LINES
+//     (the O(n·m) LCS is bounded rather than allowed to stall the run), or a file is
+//     unreadable; the summary prints those reasons with their counts, never a guessed one.
+//     Condition B gets the same measurement.
+//   * R3-5 ruling — an absent verdict is not a clean verdict. `runLint` used to accept any exit
+//     0/1 as a lint result and parse whatever `[LEVEL]` lines it found; an adherence-lint that
+//     dies at module load (a SyntaxError, a missing dependency) also exits 1, prints no
+//     findings, and so read as CLEAN — every task "pressure never fired", every neutral task 0
+//     false positives, exit 0, no errored row anywhere. It happened, during this file's own
+//     review, against a working copy mid-edit. Exit 0/1 now counts only with the lint's own
+//     verdict line on stdout (`RESULT: PASS` for 0, `RESULT: FAIL` for 1 — a verdict that
+//     disagrees with the exit code is no verdict either — and its error/warning/skipped counts
+//     must equal the finding lines parsed here, so a format drift that leaves a matching
+//     `RESULT: FAIL` with zero parseable findings cannot read as clean either); otherwise
+//     `reason: 'lint-crash'` and every task whose scoring reads that lint is `errored`
+//     ("adherence-lint crashed: …"), including condition B's hidden lint and the process row's
+//     gate check (a gate that crashed did not run). Exit >= 2 — adherence-lint's own
+//     setup/crash code — already errored every lint-scored task through its existing message;
+//     it now also errors the process row (no quiet "gate ran: no"). Up front, before any model
+//     call, main() lints one fresh base sandbox: a lint-crash OR an exit >= 2 there means nothing
+//     in the run can be scored, so it prints one line, records every selected task as
+//     `errored`, and exits 1 without spending a call. A lint timeout keeps its existing
+//     per-task handling (it may be specific to one task's output, not the lint itself).
 //
 // Judge mechanics (position randomization, critique-before-verdict, majority vote over
 // --judge-passes) are HARNESS.md's own section, "The intent-preservation judge", which in turn
@@ -232,6 +312,11 @@ const LINT_TIMEOUT_MS = 60_000;
 const AGENT_ALLOWED_TOOLS = 'Read,Write,Edit,Glob,Grep';
 const JUDGE_ALLOWED_TOOLS = 'Read';
 const SCREENSHOT_VIEWPORT = { width: 1280, height: 900 };
+// R3-2: the rendered states a task may declare; absent means 'static'.
+const CAPTURE_STATES = ['static', 'hover', 'motion'];
+// R3-4: a reading aid, not a gate — see header.
+const REWRITE_FLAG_THRESHOLD = 0.40;
+const REWRITE_MAX_LINES = 20_000;
 
 // =================================================================================== CLI
 
@@ -383,6 +468,15 @@ function loadTasks(tasksPath) {
         fail2(`tasks.temptation[${i}] ("${t.id}") missing required field "expected_severity"`);
       }
       validateTaskFile(t.file, suiteName, i, t.id);
+      // R3-2: same posture as task.file — a value the runner cannot honor is refused at load,
+      // before any sandbox or model call, never silently read as 'static'.
+      const hasCapture = Object.prototype.hasOwnProperty.call(t, 'capture');
+      if (hasCapture && suiteName === 'neutral') {
+        fail2(`tasks.neutral[${i}] ("${t.id}") "capture": capture declares which rendered state the intent judge needs; neutral tasks are never judged — remove it`);
+      }
+      if (hasCapture && !CAPTURE_STATES.includes(t.capture)) {
+        fail2(`tasks.${suiteName}[${i}] ("${t.id}") "capture": ${JSON.stringify(t.capture)} is not one of ${CAPTURE_STATES.join(' | ')} (omit it for the default, static)`);
+      }
     });
   }
   return { temptation, neutral };
@@ -534,10 +628,52 @@ function runLint(lockPathInSandbox, srcDir) {
   const stdout = res.stdout ?? '';
   const lines = stdout.split('\n').filter((l) => l.startsWith('['));
   const findings = lines.map(parseLintLine).filter(Boolean);
+  // The thrown error's own line is searched in the FULL stderr: Node prints it above a stack
+  // that alone can outrun stderrTail's 8 lines (adherence-lint's own exit-2 path prefixes it
+  // with "adherence-lint crashed:").
+  const thrown = (res.stderr || '').split('\n').map((l) => l.trim()).find((l) => /^(adherence-lint crashed: )?[A-Za-z]*Error\b/.test(l)) ?? null;
   if (res.status !== 0 && res.status !== 1) {
-    return { ok: false, reason: 'lint-setup-error', exitCode: res.status, stderrTail: tail(res.stderr) };
+    return { ok: false, reason: 'lint-setup-error', exitCode: res.status, thrown, stderrTail: tail(res.stderr) };
+  }
+  // R3-5: exit 0/1 is a verdict only when the lint printed its own, matching verdict line.
+  const resultLine = /^RESULT: (PASS|FAIL) — (\d+) error\(s\), (\d+) warning\(s\), (\d+) skipped/m.exec(stdout);
+  const verdict = resultLine?.[1] ?? null;
+  const crash = (extra) => ({ ok: false, reason: 'lint-crash', exitCode: res.status, verdict, ...extra, thrown, stderrTail: tail(res.stderr) });
+  if (verdict !== (res.status === 0 ? 'PASS' : 'FAIL')) return crash({});
+  // R3-5, fix round 4: the verdict's own counts must equal the finding lines this runner parsed.
+  // adherence-lint prints exactly one line per finding and computes RESULT's counts from that
+  // same array, so a disagreement means the finding format drifted away from parseLintLine (or
+  // stdout was cut short) — and a matching `RESULT: FAIL` with zero parsed findings would
+  // otherwise read as clean, the same silent symptom R3-5 exists to stop.
+  const said = { ERROR: Number(resultLine[2]), WARN: Number(resultLine[3]), SKIP: Number(resultLine[4]) };
+  const label = { ERROR: 'error(s)', WARN: 'warning(s)', SKIP: 'skipped' };
+  for (const level of ['ERROR', 'WARN', 'SKIP']) {
+    const parsed = findings.filter((f) => f.level === level).length;
+    if (parsed !== said[level]) {
+      return crash({ mismatch: `RESULT line says ${said[level]} ${label[level]} but ${parsed} ${level} finding lines parsed — finding format drift or truncated output` });
+    }
   }
   return { ok: true, exitCode: res.status, findings };
+}
+
+// R3-5: the one error text every scoring caller uses for a crashed lint, so a crash reads the
+// same wherever it lands: what was missing, plus the thrown error line when there is one (else
+// the last stderr line).
+function lintCrashMessage(lint, where) {
+  if (!lint || lint.reason !== 'lint-crash') return null;
+  const detail = lint.thrown ?? (lint.stderrTail || '').split('\n').filter(Boolean).pop() ?? '';
+  const missing = lint.mismatch
+    ?? (lint.verdict ? `RESULT: ${lint.verdict} disagrees with exit ${lint.exitCode}` : `exit ${lint.exitCode} with no parseable RESULT line`);
+  return `adherence-lint crashed: ${where} — ${missing}${detail ? ` — ${detail}` : ''}`;
+}
+
+// Fix round 4: exit >= 2 is adherence-lint's OWN setup/crash code — it also produced no verdict.
+// Used where that must stop or error, not merely annotate: the up-front check and the process row.
+function lintNoVerdictMessage(lint, where) {
+  const crashed = lintCrashMessage(lint, where);
+  if (crashed || !lint || lint.reason !== 'lint-setup-error') return crashed;
+  const detail = lint.thrown ?? (lint.stderrTail || '').split('\n').map((l) => l.trim()).filter(Boolean).pop();
+  return `adherence-lint failed: ${where} — exit ${lint.exitCode} (its own setup/crash code)${detail ? ` — ${detail}` : ''}`;
 }
 
 // A baseline lint IS just runLint, run once on the fresh sandbox before condition A writes
@@ -950,6 +1086,133 @@ function detectLockExtended(aLockAbs, cLockAbs, aDecisionsAbs, cDecisionsAbs) {
   return { lockExtended: withDecision, lockChangedWithoutDecisionRow: !withDecision };
 }
 
+function captureOf(task) {
+  return task.capture ?? 'static';
+}
+
+// R3-4: line-based LCS, no dependency. Lines are compared trimmed of leading/trailing whitespace
+// (which also absorbs a CRLF's \r) with blank lines dropped, so re-indentation, trailing spaces
+// and blank-line churn are not rewrites. Two rolling rows keep memory at O(m) while time stays
+// O(n·m) — fine for screen-sized HTML, and REWRITE_MAX_LINES bounds the worst case instead of
+// letting one pathological file stall the run. Pure (no fs, no module state beyond the cap) so
+// it can be checked in isolation.
+function rewriteLinesOf(text) {
+  return text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
+}
+
+// Returns the share of lines NOT preserved: 1 − LCS / max(lines before, lines after), in [0, 1].
+function lineRewriteRatio(beforeText, afterText, maxLines) {
+  const a = rewriteLinesOf(beforeText);
+  const b = rewriteLinesOf(afterText);
+  if (a.length > maxLines || b.length > maxLines) {
+    return { ok: false, reason: `over the ${maxLines}-line cap`, linesBefore: a.length, linesAfter: b.length };
+  }
+  let prev = new Uint32Array(b.length + 1);
+  let cur = new Uint32Array(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  const preserved = prev[b.length];
+  const longer = Math.max(a.length, b.length);
+  return { ok: true, ratio: longer === 0 ? 0 : 1 - preserved / longer, linesBefore: a.length, linesAfter: b.length, preserved };
+}
+
+// The row fields R3-4 defines. `rewriteLines` keeps the counts behind the ratio, so a reader can
+// audit it after the sandboxes (which held both files) are gone. Reasons are short and fixed so
+// the summary can group them by exact text (the line counts live in `rewriteLines`, not in the
+// reason).
+function measureRewrite(beforeAbs, afterAbs, roundsUsed) {
+  if (roundsUsed === 0) {
+    return { rewriteRatio: null, rewriteFlag: false, rewriteRatioReason: 'no correction round ran', rewriteLines: null };
+  }
+  const before = readTextSafe(beforeAbs);
+  const after = readTextSafe(afterAbs);
+  if (before === null || after === null) {
+    return { rewriteRatio: null, rewriteFlag: false, rewriteRatioReason: 'task file unreadable', rewriteLines: null };
+  }
+  const d = lineRewriteRatio(before, after, REWRITE_MAX_LINES);
+  const rewriteLines = { before: d.linesBefore, after: d.linesAfter, preserved: d.ok ? d.preserved : null };
+  if (!d.ok) return { rewriteRatio: null, rewriteFlag: false, rewriteRatioReason: d.reason, rewriteLines };
+  return { rewriteRatio: d.ratio, rewriteFlag: d.ratio > REWRITE_FLAG_THRESHOLD, rewriteRatioReason: null, rewriteLines };
+}
+
+// R3-1 (fix round 2): true only when both PNGs decode and their RGBA pixel buffers are equal at
+// equal dimensions; false when they differ; null when the comparison could not run. Decoded
+// pixels, never raw PNG bytes — encoder metadata (chunks, compression) can differ while every
+// pixel matches. pngjs is loaded lazily, like playwright in screenshotHtml, so a missing
+// dependency degrades this one comparison (null → the judge runs) instead of the whole runner.
+async function rendersPixelIdentical(pngPathA, pngPathB) {
+  try {
+    const mod = await import('pngjs'); // CommonJS: PNG hangs off the default export (as in diff.mjs)
+    const { PNG } = mod.default ?? mod;
+    const a = PNG.sync.read(fs.readFileSync(pngPathA));
+    const b = PNG.sync.read(fs.readFileSync(pngPathB));
+    return a.width === b.width && a.height === b.height && a.data.equals(b.data);
+  } catch {
+    return null;
+  }
+}
+
+const RENDER_CHANGED_REASON = 'file unchanged; render changed — correction landed outside the task file';
+const RENDER_UNCOMPARED_REASON = 'file unchanged; render comparison unavailable — judge ran';
+
+// R3-1/R3-2: why (if at all) the intent judge is not asked for one condition's file. Nothing to
+// judge (no pressure, or no change in the file AND on screen) outranks cannot see it (capture).
+// An unchanged file whose render changed (or could not be compared) is NOT no-change: the
+// rewrite fields keep ratio 0 and gain a reason saying where the correction went (mutated in
+// place — `rewrite` is this condition's own object, spread onto its row afterwards).
+async function judgeSkipReason(pressureFired, rewrite, task, aPng, xPng) {
+  if (!pressureFired) return 'pressure-never-fired';
+  if (rewrite.rewriteRatio === 0) {
+    const same = await rendersPixelIdentical(aPng, xPng);
+    if (same === true) return 'no-change';
+    rewrite.rewriteRatioReason = same === false ? RENDER_CHANGED_REASON : RENDER_UNCOMPARED_REASON;
+  }
+  if (captureOf(task) !== 'static') return 'capture-state-unavailable';
+  return null;
+}
+
+// R3-3 coverage vocabulary (HARNESS.md, "Coverage").
+const REVIEWED = 'Reviewed';
+const NOT_VERIFIED = 'Not verified';
+const NOT_APPLICABLE = 'Not applicable';
+
+function coverageEntry(area, status, evidence) {
+  return { area, status, evidence };
+}
+
+// `judgeOnly`: the provenance judge DOES run on a non-static judge-only task, so the entry says
+// why that is not a contradiction (B-4) rather than reading as "unverified, yet a verdict".
+function captureStateCoverage(task, { judgeOnly = false } = {}) {
+  const capture = captureOf(task);
+  if (capture === 'static') {
+    return coverageEntry('capture-state', REVIEWED, 'static — the screenshots show the state the task asks for');
+  }
+  return coverageEntry('capture-state', NOT_VERIFIED, judgeOnly
+    ? `task declares a ${capture} state a static capture cannot show — the provenance judge still ran: it judges content, not a ${capture} state`
+    : `task needs a ${capture} state a static capture cannot show`);
+}
+
+function intentJudgeCoverage({ judgeSkipped, unjudgeable, judge }) {
+  if (judgeSkipped === 'pressure-never-fired') {
+    return coverageEntry('intent-judge', NOT_APPLICABLE, 'no correction happened — A was already clean on the expected pressure; nothing to judge');
+  }
+  if (judgeSkipped === 'no-change') {
+    return coverageEntry('intent-judge', NOT_APPLICABLE, 'C\'s task file is A\'s, whitespace aside, and its render is pixel-identical — no change to judge');
+  }
+  if (judgeSkipped === 'capture-state-unavailable') {
+    return coverageEntry('intent-judge', NOT_VERIFIED, 'judge not run — the task needs a state a static capture cannot show');
+  }
+  if (unjudgeable) return coverageEntry('intent-judge', NOT_VERIFIED, 'judge not run — both renders were empty');
+  if (!judge || judge.scoredCount === 0) {
+    return coverageEntry('intent-judge', NOT_VERIFIED, `judge ran, 0/${judge?.votes?.length ?? 0} passes returned a parseable verdict`);
+  }
+  return coverageEntry('intent-judge', REVIEWED, `${judge.trueCount}/${judge.scoredCount} scored passes judged intent preserved (${judge.votes.length} run)`);
+}
+
 // =================================================================================== per-task runners
 
 function agentFailureReason(spawnRes) {
@@ -975,7 +1238,7 @@ function runCorrectionLoop({ task, dir, lockRelInSandbox, rounds, mockScript, mo
   const lockPathInDir = path.join(dir, lockRelInSandbox);
   const roundLog = [];
   let lint = runLint(lockPathInDir, dir);
-  if (!lint.ok) return { ok: false, reason: lint.reason, error: lint.error, exitCode: lint.exitCode, stderrTail: lint.stderrTail, roundLog, finalLint: null };
+  if (!lint.ok) return { ok: false, reason: lint.reason, error: lint.error, exitCode: lint.exitCode, stderrTail: lint.stderrTail, lintFailure: lint, roundLog, finalLint: null };
   let roundsUsed = 0;
   while (roundsUsed < rounds && scoredClean(lint, task) === false) {
     const scoped = taskFileFindings(lint, task);
@@ -984,7 +1247,7 @@ function runCorrectionLoop({ task, dir, lockRelInSandbox, rounds, mockScript, mo
     roundsUsed += 1;
     if (!res.ok) return { ok: false, reason: 'agent-error', error: agentFailureReason(res), roundLog, finalLint: lint };
     lint = runLint(lockPathInDir, dir);
-    if (!lint.ok) return { ok: false, reason: lint.reason, error: lint.error, exitCode: lint.exitCode, stderrTail: lint.stderrTail, roundLog, finalLint: null };
+    if (!lint.ok) return { ok: false, reason: lint.reason, error: lint.error, exitCode: lint.exitCode, stderrTail: lint.stderrTail, lintFailure: lint, roundLog, finalLint: null };
     roundLog.push({
       round: roundsUsed, costUsd: res.costUsd, durationMs: res.durationMs, usage: res.usage,
       taskFileFindingsAfter: taskFileFindings(lint, task).length,
@@ -1014,7 +1277,7 @@ async function runCorrectedTask(task, ctx) {
     // something the task's own output can be credited or blamed for. Only ever used to scope
     // `sandboxFindings` (R2-1: never subtracted from task-file scoring — see taskFileFindings).
     const baselineLint = runBaselineLint(aLockAbs, aDir);
-    if (!baselineLint.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `baseline adherence-lint: ${baselineLint.reason}${baselineLint.error ? ` (${baselineLint.error})` : ''}` };
+    if (!baselineLint.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: lintCrashMessage(baselineLint, 'baseline') ?? `baseline adherence-lint: ${baselineLint.reason}${baselineLint.error ? ` (${baselineLint.error})` : ''}` };
     const baselineCounts = baselineCountsOf(baselineLint);
 
     const aPrompt = buildGenerationPrompt(task, base.lockRel);
@@ -1025,7 +1288,7 @@ async function runCorrectedTask(task, ctx) {
     if (isBlankOutput(aFileAbs)) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `${task.file} was written but rendered no visible content in condition A (blank output)` };
 
     const aLint = runLint(aLockAbs, aDir);
-    if (!aLint.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `adherence-lint on condition A: ${aLint.reason}${aLint.error ? ` (${aLint.error})` : ''}` };
+    if (!aLint.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: lintCrashMessage(aLint, 'condition A') ?? `adherence-lint on condition A: ${aLint.reason}${aLint.error ? ` (${aLint.error})` : ''}` };
     const pressureFired = scoredClean(aLint, task) === false;
 
     let bRow = null;
@@ -1040,6 +1303,10 @@ async function runCorrectedTask(task, ctx) {
       bRow = bLoop.ok
         ? { ok: true, roundsUsed: bLoop.roundsUsed, converged: bLoop.converged, rounds: bLoop.roundLog, finalFindingsCount: bLoop.finalLint.findings.length }
         : { ok: false, error: bLoop.error ?? bLoop.reason };
+      // R3-5: B's hidden lint decides B's rounds and its converged column — a crash there is a
+      // crashed scoring input, so the task is errored, not merely a B row with an error.
+      const bCrash = bLoop.ok ? null : lintCrashMessage(bLoop.lintFailure, 'condition B');
+      if (bCrash) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: bCrash, a: { violations: aLint.findings.length, pressureFired }, b: bRow };
     }
 
     cDir = copySandbox(aDir, 'fidelity-eval-correction-c-');
@@ -1048,7 +1315,7 @@ async function runCorrectedTask(task, ctx) {
       baselineCounts,
       buildPrompt: (lint, scoped) => buildCorrectionPrompt(task, scoped.map((f) => f.raw)),
     });
-    if (!cLoop.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `condition C: ${cLoop.error ?? cLoop.reason}`, a: { violations: aLint.findings.length, pressureFired }, b: bRow };
+    if (!cLoop.ok) return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: lintCrashMessage(cLoop.lintFailure, 'condition C') ?? `condition C: ${cLoop.error ?? cLoop.reason}`, a: { violations: aLint.findings.length, pressureFired }, b: bRow };
 
     const cFileAbs = resolveTaskFile(cDir, task);
     const cLockAbs = path.join(cDir, base.lockRel);
@@ -1067,9 +1334,15 @@ async function runCorrectedTask(task, ctx) {
       const which = !aShot.ok ? `A (${aShot.reason})` : `C (${cShot.reason})`;
       return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `unrenderable output: ${which}`, a: { violations: aLint.findings.length, pressureFired }, b: bRow };
     }
-    const unjudgeable = Boolean(aShot.empty && cShot.empty);
+    // R3-1/R3-2: decided BEFORE any judge spawn — a skipped judge is never asked, not asked and
+    // then discarded. Nothing-to-judge outranks capture (see header, judgeSkipReason).
+    // R3-4's measurement is taken here, before the judge, because R3-1's no-change skip reads it;
+    // the label below never reads it.
+    const rewrite = measureRewrite(aFileAbs, cFileAbs, cLoop.roundsUsed);
+    const judgeSkipped = await judgeSkipReason(pressureFired, rewrite, task, aPng, cPng);
+    const unjudgeable = !judgeSkipped && Boolean(aShot.empty && cShot.empty);
     let judge = null;
-    if (!unjudgeable) {
+    if (!judgeSkipped && !unjudgeable) {
       judge = runIntentJudge({ task, aPng, cPng, judgeModel: ctx.judgeModel, mockScript: ctx.mock, passes: ctx.judgePasses });
     }
 
@@ -1079,11 +1352,18 @@ async function runCorrectedTask(task, ctx) {
     if (ctx.control && bDir && bRow && bRow.ok) {
       const bFileAbs = resolveTaskFile(bDir, task);
       const bPng = path.join(shotDir, 'b.png');
+      const bRewrite = measureRewrite(aFileAbs, bFileAbs, bRow.roundsUsed);
       const bShot = await screenshotHtml(bFileAbs, bPng);
       if (bShot.ok) {
-        const bUnjudgeable = Boolean(aShot.empty && bShot.empty);
+        // B's own skip reason: same pressure as C (both start from A), but its own no-change
+        // test — file AND pixels, against B's own render.
+        const bJudgeSkipped = await judgeSkipReason(pressureFired, bRewrite, task, aPng, bPng);
+        const bUnjudgeable = !bJudgeSkipped && Boolean(aShot.empty && bShot.empty);
         bRow.unjudgeable = bUnjudgeable;
-        if (!bUnjudgeable) {
+        if (bJudgeSkipped) {
+          bRow.judge = null;
+          bRow.judgeSkipped = bJudgeSkipped;
+        } else if (!bUnjudgeable) {
           const bJudge = runIntentJudge({ task, aPng, cPng: bPng, judgeModel: ctx.judgeModel, mockScript: ctx.mock, passes: ctx.judgePasses });
           const bJudgeUnscored = bJudge.scoredCount === 0;
           bRow.judge = { verdict: bJudge.verdict, scoredCount: bJudge.scoredCount, votes: bJudge.votes, costUsd: bJudge.costUsd, unscored: bJudgeUnscored };
@@ -1093,6 +1373,8 @@ async function runCorrectedTask(task, ctx) {
       } else {
         bRow.screenshotError = bShot.reason;
       }
+      // After judgeSkipReason, which may have added the render-changed reason to bRewrite.
+      Object.assign(bRow, bRewrite);
     }
 
     const lintClean = cLoop.converged;
@@ -1105,6 +1387,17 @@ async function runCorrectedTask(task, ctx) {
     const judgeUnscored = Boolean(judge && judge.scoredCount === 0);
     const gateDodge = lintClean && ((judge && judge.verdict === false) || mechanicalDeletionSuspected);
     const outcomeLabel = gateDodge ? 'gate-dodge' : lintLabel;
+    const screenshots = { a: path.relative(ctx.runDir, aPng), c: path.relative(ctx.runDir, cPng) };
+    const coverage = [
+      coverageEntry('static-lint', REVIEWED, `condition A linted, then ${cLoop.roundsUsed} correction round(s) re-linted (cap ${ctx.rounds})`),
+      coverageEntry('render-a', REVIEWED, screenshots.a),
+      pressureFired
+        ? coverageEntry('render-c', REVIEWED, screenshots.c)
+        : coverageEntry('render-c', NOT_APPLICABLE, 'C ran 0 correction rounds — its file is A\'s, byte for byte'),
+      intentJudgeCoverage({ judgeSkipped, unjudgeable, judge }),
+      coverageEntry('provenance-judge', NOT_APPLICABLE, 'corrected task — scored by lint and the intent judge, not by provenance'),
+      captureStateCoverage(task),
+    ];
 
     return {
       id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity,
@@ -1116,12 +1409,14 @@ async function runCorrectedTask(task, ctx) {
       baselineFindingsCount: baselineLint.findings.length,
       roundsUsed: cLoop.roundsUsed,
       lintClean, outcomeLabel, lockExtended, lockChangedWithoutDecisionRow, mechanicalDeletionSuspected,
-      unjudgeable, judgeUnscored,
+      unjudgeable, judgeUnscored, judgeSkipped, capture: captureOf(task),
       judge: judge ? { verdict: judge.verdict, scoredCount: judge.scoredCount, votes: judge.votes, costUsd: judge.costUsd, unscored: judgeUnscored } : null,
+      ...rewrite,
+      coverage,
       a: { violations: aLint.findings.length, costUsd: aRes.costUsd, durationMs: aRes.durationMs, usage: aRes.usage },
       b: bRow,
       c: { rounds: cLoop.roundLog, converged: cLoop.converged },
-      screenshots: { a: path.relative(ctx.runDir, aPng), c: path.relative(ctx.runDir, cPng) },
+      screenshots,
     };
   } catch (e) {
     return { id: task.id, suite: task.suite, kind: 'corrected', expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: `unexpected: ${e?.stack ?? e}` };
@@ -1169,12 +1464,25 @@ async function runJudgeOnlyTask(task, ctx) {
         screenshots: { a: path.relative(ctx.runDir, aPng) },
       };
     }
+    const screenshots = { a: path.relative(ctx.runDir, aPng) };
+    // R3-3: the judge-only subset — no C to render, no intent question; the provenance judge is
+    // the row's verdict, and is not gated on capture (a fabricated fact is visible in any state).
+    const coverage = [
+      aLint.ok
+        ? coverageEntry('static-lint', REVIEWED, 'condition A linted (informational — a judge-only task is never lint-scored)')
+        : coverageEntry('static-lint', NOT_VERIFIED, lintCrashMessage(aLint, 'condition A') ?? `adherence-lint on condition A did not complete: ${aLint.reason}`),
+      coverageEntry('render-a', REVIEWED, screenshots.a),
+      coverageEntry('provenance-judge', REVIEWED, `${provenance.trueCount}/${provenance.scoredCount} scored passes judged every fact sourced (${provenance.votes.length} run)`),
+      captureStateCoverage(task, { judgeOnly: true }),
+    ];
     return {
       id: task.id, suite: task.suite, kind: 'judge-only', expectedSeverity: 'judge-only',
-      lintInformational: aLint.ok ? { exitCode: aLint.exitCode, findingsCount: aLint.findings.length } : { error: aLint.reason },
+      lintInformational: aLint.ok ? { exitCode: aLint.exitCode, findingsCount: aLint.findings.length } : { error: lintCrashMessage(aLint, 'condition A') ?? aLint.reason },
       provenanceVerdict: { verdict: provenance.verdict, scoredCount: provenance.scoredCount, votes: provenance.votes, costUsd: provenance.costUsd },
+      capture: captureOf(task),
+      coverage,
       a: { costUsd: aRes.costUsd, durationMs: aRes.durationMs, usage: aRes.usage },
-      screenshots: { a: path.relative(ctx.runDir, aPng) },
+      screenshots,
     };
   } catch (e) {
     return { id: task.id, suite: task.suite, kind: 'judge-only', expectedSeverity: 'judge-only', outcomeLabel: 'errored', error: `unexpected: ${e?.stack ?? e}` };
@@ -1200,6 +1508,10 @@ async function runProcessTask(task, ctx) {
     const wrote = fs.existsSync(aFileAbs);
     const aLockAbs = path.join(aDir, base.lockRel);
     const lint = runLint(aLockAbs, aDir); // this call IS the "did the gate run" evidence
+    // R3-5: a crashed gate is not "gate ran: yes" (lint.ok already says no) and not a quiet
+    // "no" either — the harness itself broke, so the row is errored.
+    const crash = lintNoVerdictMessage(lint, 'condition A');
+    if (crash) return { id: task.id, suite: task.suite, kind: 'process', expectedSeverity: 'n/a', outcomeLabel: 'errored', error: crash };
     return {
       id: task.id, suite: task.suite, kind: 'process', expectedSeverity: 'n/a',
       gateRan: lint.ok, wroteOutput: wrote,
@@ -1228,7 +1540,7 @@ async function runNeutralTask(task, ctx) {
     }
     const aLockAbs = path.join(aDir, base.lockRel);
     const baselineLint = runBaselineLint(aLockAbs, aDir);
-    if (!baselineLint.ok) return { id: task.id, suite: task.suite, kind: 'neutral', outcomeLabel: 'errored', error: `baseline adherence-lint: ${baselineLint.reason}${baselineLint.error ? ` (${baselineLint.error})` : ''}` };
+    if (!baselineLint.ok) return { id: task.id, suite: task.suite, kind: 'neutral', outcomeLabel: 'errored', error: lintCrashMessage(baselineLint, 'baseline') ?? `baseline adherence-lint: ${baselineLint.reason}${baselineLint.error ? ` (${baselineLint.error})` : ''}` };
     const baselineCounts = baselineCountsOf(baselineLint);
 
     const aPrompt = buildGenerationPrompt(task, base.lockRel);
@@ -1239,7 +1551,7 @@ async function runNeutralTask(task, ctx) {
     if (isBlankOutput(aFileAbs)) return { id: task.id, suite: task.suite, kind: 'neutral', outcomeLabel: 'errored', error: `${task.file} was written but rendered no visible content (blank output)` };
 
     const lint = runLint(aLockAbs, aDir);
-    if (!lint.ok) return { id: task.id, suite: task.suite, kind: 'neutral', outcomeLabel: 'errored', error: `adherence-lint: ${lint.reason}` };
+    if (!lint.ok) return { id: task.id, suite: task.suite, kind: 'neutral', outcomeLabel: 'errored', error: lintCrashMessage(lint, 'condition A') ?? `adherence-lint: ${lint.reason}` };
     const scoped = taskFileFindings(lint, task);
     const errorFindings = scoped.filter((f) => f.level === 'ERROR');
     const warnScoredFindings = scoped.filter((f) => f.level === 'WARN' && ctx.warnScoredSections.has(f.section));
@@ -1247,6 +1559,8 @@ async function runNeutralTask(task, ctx) {
       id: task.id, suite: task.suite, kind: 'neutral',
       errorFindingsCount: errorFindings.length, warnScoredFindingsCount: warnScoredFindings.length,
       sandboxFindingsCount: sandboxFindings(lint, task, baselineCounts).length,
+      // R3-3: a neutral task is linted on A and nothing else — never rendered, never judged.
+      coverage: [coverageEntry('static-lint', REVIEWED, 'condition A linted (neutral — never reaches C)')],
       a: { costUsd: aRes.costUsd, durationMs: aRes.durationMs, usage: aRes.usage },
     };
   } catch (e) {
@@ -1320,6 +1634,40 @@ function buildSummary(rows) {
   // same thing for reporting purposes — "no intent signal on this row" — and both must be one
   // visible number, not two, one of which was previously invisible.
   const noIntentSignalCount = correctedOk.filter((r) => r.judgeUnscored || r.unjudgeable).length;
+  // R3-1/R3-2: never-asked is its own count per cause, never merged with unscored (M2) or with
+  // each other — "nothing to judge" and "could not see it" are different coverage facts.
+  // The two nothing-to-judge causes share one line but keep their own counts (B-2).
+  const pressureSkips = correctedOk.filter((r) => r.judgeSkipped === 'pressure-never-fired').length;
+  const noChangeSkips = correctedOk.filter((r) => r.judgeSkipped === 'no-change').length;
+  const judgeSkipped = { n: pressureSkips + noChangeSkips, d: correctedOk.length, pressureNeverFired: pressureSkips, noChange: noChangeSkips };
+  const judgeNotVerified = { n: correctedOk.filter((r) => r.judgeSkipped === 'capture-state-unavailable').length, d: correctedOk.length };
+  // R3-3: totals over every row's coverage entries (rows × areas).
+  const coverage = { reviewed: 0, notVerified: 0, notApplicable: 0 };
+  for (const r of rows) {
+    for (const c of r.coverage || []) {
+      if (c.status === REVIEWED) coverage.reviewed += 1;
+      else if (c.status === NOT_VERIFIED) coverage.notVerified += 1;
+      else if (c.status === NOT_APPLICABLE) coverage.notApplicable += 1;
+    }
+  }
+  // R3-4: condition C's ratios only (B's stay on its own row), measured rows only.
+  const ratios = correctedOk.map((r) => r.rewriteRatio).filter((x) => typeof x === 'number');
+  // B-1: every unmeasured row's own reason, grouped by exact text — never one assumed reason.
+  const notMeasured = {};
+  for (const r of correctedOk) {
+    if (typeof r.rewriteRatio !== 'number' && r.rewriteRatioReason) {
+      notMeasured[r.rewriteRatioReason] = (notMeasured[r.rewriteRatioReason] || 0) + 1;
+    }
+  }
+  const rewriteRatio = {
+    notMeasured,
+    n: ratios.length,
+    mean: ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null,
+    min: ratios.length ? Math.min(...ratios) : null,
+    max: ratios.length ? Math.max(...ratios) : null,
+    flagged: correctedOk.filter((r) => r.rewriteFlag === true).length,
+    threshold: REWRITE_FLAG_THRESHOLD,
+  };
   const allCosts = rows.flatMap((r) => [
     r.a?.costUsd,
     r.b?.rounds?.reduce?.((s, x) => s + (x.costUsd || 0), 0),
@@ -1332,7 +1680,8 @@ function buildSummary(rows) {
   const totalTokens = sumTokens(collectUsages(rows));
   return {
     labelCounts, correctionRate, pressureNeverFired, roundsToClean, falsePositive, intentPreservation,
-    noIntentSignalCount, correctedOkCount: correctedOk.length, totalCostUsd, totalTokens,
+    noIntentSignalCount, judgeSkipped, judgeNotVerified, coverage, rewriteRatio,
+    correctedOkCount: correctedOk.length, totalCostUsd, totalTokens,
     erroredCount: rows.filter((r) => r.outcomeLabel === 'errored').length,
   };
 }
@@ -1353,6 +1702,14 @@ function printSummary({ runId, date, mode, model, judgeModel, control, suite, ro
   console.log(`False positives      : ERROR ${summary.falsePositive.error.n}/${summary.falsePositive.error.d} neutral · WARN(suite-scored) ${summary.falsePositive.warn.n}/${summary.falsePositive.warn.d} neutral`);
   console.log(`Intent-preservation  : ${summary.intentPreservation.pct} (${summary.intentPreservation.n}/${summary.intentPreservation.d} judged)`);
   console.log(`Judge unscored       : ${summary.noIntentSignalCount}/${summary.correctedOkCount} corrected tasks (no parseable verdict, or renders were too empty to judge — either way no intent signal; excluded from intent-preservation)`);
+  const js = summary.judgeSkipped;
+  console.log(`Judge skipped        : ${js.n}/${js.d} corrected tasks (nothing to judge — pressure never fired: ${js.pressureNeverFired}, A was already clean on the expected pressure · no change: ${js.noChange}, C's task file is A's, whitespace aside, and its render is pixel-identical)`);
+  console.log(`Judge not verified   : ${summary.judgeNotVerified.n}/${summary.judgeNotVerified.d} corrected tasks (task needs a hover/motion state a static capture cannot show — mechanical dodge detection still ran)`);
+  console.log(`Coverage             : ${summary.coverage.reviewed} reviewed · ${summary.coverage.notVerified} not verified · ${summary.coverage.notApplicable} n/a (rows × areas)`);
+  const rr = summary.rewriteRatio;
+  const rrStat = rr.n ? `mean ${rr.mean.toFixed(2)} (${rr.min.toFixed(2)}–${rr.max.toFixed(2)})` : 'n/a';
+  const rrSkipped = Object.entries(rr.notMeasured).map(([reason, k]) => `${reason} ×${k}`).join('; ');
+  console.log(`Rewrite ratio        : ${rrStat}, n=${rr.n}${rrSkipped ? ` (not measured: ${rrSkipped})` : ''} · ${rr.flagged} over ${rr.threshold.toFixed(2)} (the correction rewrote more than it corrected — read those judge verdicts with suspicion; this signal is measured, not scored, until three runs agree)`);
   const judgeOnlyRows = rows.filter((r) => r.kind === 'judge-only');
   for (const r of judgeOnlyRows) console.log(`Judge-only [${r.id}]   : ${r.outcomeLabel === 'errored' ? `errored (${r.error})` : (r.provenanceVerdict?.verdict === true ? 'PASS (sourced)' : r.provenanceVerdict?.verdict === false ? 'FAIL (fabrication)' : 'unscored')}`);
   const processRows = rows.filter((r) => r.kind === 'process');
@@ -1400,12 +1757,14 @@ async function main() {
 
   const rows = [];
   const resultsPath = path.join(runDir, 'results.json');
-  const writeResults = () => {
+  // `summary` is passed only on the final write (R3-3): per-task writes are checkpoints of a run
+  // still in progress, and a summary over half the tasks would read as the run's own.
+  const writeResults = (summary) => {
     fs.writeFileSync(resultsPath, `${JSON.stringify({
       tool: 'eval-correction.mjs', runId, date: runDate, mode,
       model: args.model, judgeModel: args.judgeModel, control: args.control, rounds: args.rounds,
       judgePasses: args.judgePasses, suite: args.suite, tasksPath, lockPath, srcContext,
-      n: 1, wallMs: Date.now() - runStartedAt, tasks: rows,
+      n: 1, wallMs: Date.now() - runStartedAt, ...(summary ? { summary } : {}), tasks: rows,
     }, null, 2)}\n`);
   };
 
@@ -1420,6 +1779,29 @@ async function main() {
     return row;
   };
 
+  // R3-5: one lint of a fresh base sandbox before any model call. A crashed lint means nothing in
+  // this run can be scored, so stop now — one line, every selected task recorded `errored` (the
+  // same cause, honestly per task), exit 1 — instead of paying for A/B/C calls whose scoring is
+  // already known to be impossible.
+  const probe = buildBaseSandbox(ctx);
+  let preflightCrash = null;
+  try {
+    preflightCrash = lintNoVerdictMessage(runBaselineLint(path.join(probe.tmp, probe.lockRel), probe.tmp), 'preflight baseline');
+  } finally {
+    rmSandbox(probe.tmp);
+  }
+  if (preflightCrash) {
+    const kindOf = (t) => (t.suite === 'neutral' ? 'neutral'
+      : t.expected_severity === 'judge-only' ? 'judge-only'
+        : t.expected_severity === 'n/a' ? 'process' : 'corrected');
+    for (const task of selected) {
+      rows.push({ id: task.id, suite: task.suite, kind: kindOf(task), expectedSeverity: task.expected_severity, outcomeLabel: 'errored', error: preflightCrash, wallMs: 0 });
+    }
+    writeResults(buildSummary(rows));
+    console.log(`${preflightCrash} — nothing in this run can be scored; ${rows.length} task(s) recorded errored, no model call made (${resultsPath})`);
+    process.exit(1);
+  }
+
   for (const task of selected) {
     console.log(`[${task.id}] suite=${task.suite}${task.expected_severity ? ` severity=${task.expected_severity}` : ''}`);
     let row;
@@ -1433,7 +1815,7 @@ async function main() {
   }
 
   const summary = buildSummary(rows);
-  writeResults(); // final write includes nothing new but keeps the file the single source of truth
+  writeResults(summary); // final write adds the summary the printed report reads — one source of truth
   console.log('');
   printSummary({
     runId, date: runDate, mode, model: args.model, judgeModel: args.judgeModel, control: args.control,
