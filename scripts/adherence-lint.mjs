@@ -7,8 +7,9 @@
 //                     banned-fonts · contrast · transition-all · a11y ·
 //                     forbidden-substitutes                            (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
-//                     sentence-length · color-only-status · content-lock ·
-//                     signatures                                       (plan §5.7 mechanical subset)
+//                     sentence-length · color-only-status · content-lock (plan §5.7 mechanical subset)
+//   GATE INTEGRITY    signatures · imagery-provenance · figid-coverage · provenance ·
+//                     unreadable-values                                (SECTION_GROUPS is authoritative)
 //
 // Forked from hue's validate.mjs (findings model, section runner style, contrast/luminance
 // helpers, placeholder + em-dash logic), adapted to the design-lock.json SSOT.
@@ -41,13 +42,27 @@
 //     captures come from external design systems) and must not be able to inject its own report
 //     lines (e.g. a forged `RESULT: PASS …` or `[SKIP] …`) or terminal control sequences into
 //     this gate's output.
+//
+// Machine-readable output (--json). Consumers used to regex-parse the human lines above, with
+// the fix suggestion fused into the detail text. Under --json, stdout carries ONLY NDJSON, two
+// line types: one {"type":"finding"} line per finding (level, section, group, file, line,
+// detail, suggestion — `suggestion` is the "use this instead" text, kept out of `detail`), in
+// the same SECTIONS order as the human report, then exactly one {"type":"summary"} line last
+// (result, per-level counts, scanned file counts, lock/src paths, the sanitized lint note, and
+// per-section counts). It is the same information as the human report, not a second verdict:
+// same findings, same counts, same exit code. The lint note appears ONCE, in the summary,
+// instead of being appended to every finding. --list-sections dumps the section registry with
+// the levels each section can emit, read from this file's own source; --self-test proves the
+// registry and the source agree and that both output forms of a golden run say the same thing.
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join, dirname, resolve, relative, basename, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const SELF_PATH = fileURLToPath(import.meta.url);
+const SCRIPT_DIR = dirname(SELF_PATH);
 const SKILL_ROOT = dirname(SCRIPT_DIR);
 
 const SRC_EXTS = new Set(['.html', '.css', '.jsx', '.tsx', '.js']);
@@ -63,20 +78,66 @@ const WILL_CHANGE_ALLOWED = new Set(['auto', 'transform', 'opacity', 'filter', '
 const VOID_TAGS = new Set(['input', 'img', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col',
   'embed', 'source', 'track', 'wbr']);
 
-const SECTIONS = [
-  'schema-sanity', 'caps-enforcement', 'mask-budget',                                   // lock
-  'raw-hex', 'css-vars', 'tokens-only-spacing', 'type-scale', 'placeholders', 'em-dash', // source
-  'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
-  'banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',             // microcopy
-  'sentence-length', 'color-only-status', 'content-lock', 'signatures', 'imagery-provenance',
-  'figid-coverage', 'unreadable-values',                                                // gate integrity
-];
+// The registry, keyed by group. The groups used to live only in trailing comments on one flat
+// array; --json reports a group per finding, so they are data now. SECTIONS is derived from
+// this (insertion order = report order), so the two can never drift apart.
+const SECTION_GROUPS = {
+  'lock': ['schema-sanity', 'caps-enforcement', 'mask-budget'],
+  'source': ['raw-hex', 'css-vars', 'tokens-only-spacing', 'type-scale', 'placeholders', 'em-dash',
+    'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes'],
+  'microcopy': ['banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',
+    'sentence-length', 'color-only-status', 'content-lock'],
+  // provenance sat outside the registry for a while: its findings sorted last and never reached
+  // the Section summary. It is registered after figid-coverage so every pre-existing section
+  // keeps its report position; the only change is provenance gaining a summary row.
+  'gate-integrity': ['signatures', 'imagery-provenance', 'figid-coverage', 'provenance', 'unreadable-values'],
+};
+const SECTIONS = Object.values(SECTION_GROUPS).flat();
+const SECTION_GROUP = new Map(Object.entries(SECTION_GROUPS).flatMap(([g, names]) => names.map((n) => [n, g])));
 
 // ---------------------------------------------------------------- findings (hue model)
 
+// `suggestion` (optional) is the "use this instead" half of a finding — a token, a scale
+// value, a var name, a replacement word — computed per finding. It is stored apart from
+// `detail` so a machine consumer gets it as its own field; the human line re-joins the two
+// with " — ", which is exactly how the text was fused before, so printed output is unchanged.
+// Static rule text that reads the same on every finding (e.g. "list the exact properties")
+// is part of the diagnosis and stays in `detail`. A suggestion is advice for THIS finding, not
+// always a drop-in value: raw-hex's "no lock token is close — derive it and add it to the
+// lock…" names no token, but it is that slot's answer when the nearest-token search is empty.
+//
+// detail and suggestion are sanitized HERE, once, for every section — the same treatment
+// lock.lint.note gets at print time (see the report block in main()), minus the length cap.
+// Many details quote lock text verbatim (a bannedJargon term/replacement, a maskedRegions
+// reason, a screen id), and a lock is an input artifact: a replacement containing
+// "\nRESULT: PASS — …" printed a forged verdict line of its own, and an ESC byte could repaint
+// the terminal. Control/format characters (\p{Cc}, \p{Cf}) are blanked first — ESC is not
+// whitespace and would survive the collapse — then all whitespace, newlines included, collapses
+// to one space. Sanitizing at the single entry point means no future section can forget to.
+const cleanText = (s) => String(s).replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+// One NDJSON record. JSON.stringify leaves U+2028, U+2029 and U+0085 raw — legal inside a JSON
+// string, but Unicode-aware line splitters (Python's str.splitlines, many editors and log
+// tools) break lines on them, cutting one record into two unparseable halves. Escaping them
+// keeps every record on one line for ANY splitter; JSON.parse reads back the same value. Paths
+// (`file`, `lock`, `src`) are not run through cleanText, so they can still carry these.
+const ndjson = (obj) => JSON.stringify(obj)
+  .replace(/[\u2028\u2029\u0085]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+// `file` gets a narrower treatment. Two of its labels quote lock text (`screen "<id>"` in
+// disclosure-presence and content-lock), so a screen id holding "\nRESULT: PASS …" could forge
+// a report line the same way a detail could. But `file` is usually a real relative path, and
+// eval-correction compares it to its task paths: collapsing a double space or trimming would
+// make a real path stop matching. So only the characters that can break or repaint a line are
+// replaced, one for one, with a space — control and format characters (\p{Cc} covers \t \n \v
+// \f \r and U+0085; \p{Cf} the invisible marks) plus the Unicode line and paragraph separators
+// (\p{Zl}, \p{Zp}). Ordinary spaces and runs of them survive byte for byte.
+const cleanPath = (s) => String(s).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ');
 const findings = [];
-function add(level, section, file, detail, line) {
-  findings.push({ level, section, file, detail, line });
+function add(level, section, file, detail, line, suggestion) {
+  findings.push({
+    level, section, file: cleanPath(file), detail: cleanText(detail), line,
+    suggestion: suggestion == null ? null : (cleanText(suggestion) || null),
+  });
 }
 
 // ---------------------------------------------------------------- generic helpers
@@ -285,6 +346,39 @@ function checkSchemaSanity(lock, lockLabel) {
     }
   }
 
+  // Optional renderer policy (render.mjs, design-lock.schema.json "render"). render.mjs refuses
+  // a malformed policy with exit 2, but only when a render runs; checking it here moves that
+  // refusal to the cheap gate that runs first, so a lock that asked for "offline" and misspelled
+  // it is caught before anyone spends a render on it. Same rules as render.mjs's own parser.
+  if ('render' in lock) {
+    const r = lock.render;
+    const shape = 'allowed keys: network ("observe" | "offline"), allowHosts (array of non-empty host strings)';
+    if (!isObj(r)) {
+      add('ERROR', 'schema-sanity', lockLabel, `"render" must be an object — ${shape}`);
+    } else {
+      for (const k of Object.keys(r)) {
+        if (k !== 'network' && k !== 'allowHosts') add('ERROR', 'schema-sanity', lockLabel, `render has unknown key "${k}" — ${shape}`);
+      }
+      if ('network' in r && r.network !== 'observe' && r.network !== 'offline') {
+        add('ERROR', 'schema-sanity', lockLabel, `render.network ${JSON.stringify(r.network)} is not one of the allowed values "observe", "offline"`);
+      }
+      if ('allowHosts' in r) {
+        if (!Array.isArray(r.allowHosts)) {
+          add('ERROR', 'schema-sanity', lockLabel, '"render.allowHosts" must be an array of non-empty host strings, e.g. ["fonts.example.com"]');
+        } else {
+          r.allowHosts.forEach((h, i) => {
+            // Hostname only — render.mjs refuses a scheme, port, userinfo or whitespace in an
+            // entry (it would silently never match a request's host), so the same shape is
+            // refused here, before a render is spent on it.
+            if (typeof h !== 'string' || !/^[^:/@\s]+$/.test(h)) {
+              add('ERROR', 'schema-sanity', lockLabel, `render.allowHosts[${i}] ${JSON.stringify(h)} must be a bare hostname (no scheme, port, userinfo or whitespace), e.g. "fonts.example.com"`);
+            }
+          });
+        }
+      }
+    }
+  }
+
   if ('caps' in lock) {
     if (!isObj(lock.caps)) add('ERROR', 'schema-sanity', lockLabel, '"caps" must be an object');
     else {
@@ -461,23 +555,26 @@ function checkRawHex(lock, files, rel, tokensCssDesc) {
     for (const [valueLc, g] of grouped) {
       const line = lineOf(buf, g.firstIdx);
       const nearest = lockColors.length > 0 ? nearestLockColor(g.raw, lockColors) : null;
-      let suggestion = '';
+      // All three bands are suggestions (what to do instead of this hex), including "no lock
+      // token is close": it is the same slot's answer when the nearest-token search comes up
+      // empty. No lock colors at all → no search ran → no suggestion.
+      let suggestion = null;
       if (nearest) {
         const de = nearest.d < 1e-6 ? 'exact match' : nearest.d.toFixed(4);
         if (nearest.d <= OKLAB_SAME_COLOR) {
-          suggestion = ` — same color — use var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc}`;
+          suggestion = `same color — use var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc}`;
         } else if (nearest.d <= OKLAB_NEAR_MISS) {
-          suggestion = ` — nearest lock token var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc} — prefer reusing it; if the design truly needs a distinct value, lock change + DECISIONS.md entry first`;
+          suggestion = `nearest lock token var(--${nearest.name}) = #${nearest.hex} (mode ${nearest.mode}, ΔE-ok ${de}), ${tokensCssDesc} — prefer reusing it; if the design truly needs a distinct value, lock change + DECISIONS.md entry first`;
         } else {
-          suggestion = ' — no lock token is close — this is an off-lock value; derive it and add it to the lock plus a DECISIONS.md entry before using it';
+          suggestion = 'no lock token is close — this is an off-lock value; derive it and add it to the lock plus a DECISIONS.md entry before using it';
         }
       }
       if (ANCHOR_HEX.has(valueLc)) {
         add('WARN', 'raw-hex', rel(f.abs),
-          `absolute white/black #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw hex is an ERROR${suggestion}`, line);
+          `absolute white/black #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw hex is an ERROR`, line, suggestion);
       } else {
         add('ERROR', 'raw-hex', rel(f.abs),
-          `raw hex #${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars${suggestion}`, line);
+          `raw hex #${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars`, line, suggestion);
       }
     }
   }
@@ -524,9 +621,9 @@ function checkCssVars(files, rel, extraTokenCssPaths) {
       // Deterministic tie-break: lowest distance, then lexicographically smallest name — never
       // "whichever was declared first", which made the suggestion depend on file order.
       candidates.sort((a, b) => a.d - b.d || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-      const suggestion = candidates.length ? ` — did you mean var(${candidates[0].name})?` : '';
+      const suggestion = candidates.length ? `did you mean var(${candidates[0].name})?` : null;
       add('ERROR', 'css-vars', rel(f.abs),
-        `var(${name}) used ${g.count}x but never defined in the scanned files or assets/tokens.css${suggestion}`, lineOf(f.content, g.firstIdx));
+        `var(${name}) used ${g.count}x but never defined in the scanned files or assets/tokens.css`, lineOf(f.content, g.firstIdx), suggestion);
     }
   }
 }
@@ -561,8 +658,10 @@ function checkSpacing(files, rel, scale) {
       const key = `${n}`;
       if (seen.has(key)) return;
       seen.add(key);
+      // The full scale rides with the nearest value: it is the menu of legal replacements.
       add('WARN', 'tokens-only-spacing', rel(f.abs),
-        `spacing ${n}px (${where}) is off the lock's spacing scale — nearest scale value: ${nearestOnScale(n)}; full scale [${scale.join(', ')}]`, lineOf(f.content, absIdx));
+        `spacing ${n}px (${where}) is off the lock's spacing scale`, lineOf(f.content, absIdx),
+        `nearest scale value: ${nearestOnScale(n)}; full scale [${scale.join(', ')}]`);
     };
     const scanDecls = (cssText, baseOffset) => {
       let m;
@@ -650,14 +749,16 @@ function checkTypeScale(lock, files, rel) {
       seenSize.add(n);
       const near = nearestSize(n);
       add('WARN', 'type-scale', rel(f.abs),
-        `font-size ${n}px (${where}) is off the lock's type scale — nearest role size: ${near.role} ${near.size}px`, lineOf(f.content, absIdx));
+        `font-size ${n}px (${where}) is off the lock's type scale`, lineOf(f.content, absIdx),
+        `nearest role size: ${near.role} ${near.size}px`);
     };
     const reportWeight = (n, where, absIdx) => {
       if (weightEntries.length === 0 || legalWeights.has(n) || seenWeight.has(n)) return;
       seenWeight.add(n);
       const near = nearestWeight(n);
       add('WARN', 'type-scale', rel(f.abs),
-        `font-weight ${n} (${where}) is off the lock's type scale — nearest role weight: ${near.role} ${near.weight}`, lineOf(f.content, absIdx));
+        `font-weight ${n} (${where}) is off the lock's type scale`, lineOf(f.content, absIdx),
+        `nearest role weight: ${near.role} ${near.weight}`);
     };
     const scanDecls = (cssTextRaw, baseOffset) => {
       const cssText = stripMediaBlocks(cssTextRaw);
@@ -1182,9 +1283,11 @@ function checkBannedJargon(lock, htmlFiles, rel) {
         const count = hay.split(needle).length - 1;
         const rawNfc = f.content.normalize('NFC');
         const rawIdx = rawNfc.toLowerCase().indexOf(needle);
+        // No replacement in the lock → no suggestion; never print `use: "undefined"`.
+        const hasReplacement = typeof e.replacement === 'string' && e.replacement.trim() !== '';
         add('ERROR', 'banned-jargon', rel(f.abs),
-          `banned jargon (${locale}) "${e.term}" found ${count}x — use: "${e.replacement}"`,
-          rawIdx >= 0 ? lineOf(rawNfc, rawIdx) : undefined);
+          `banned jargon (${locale}) "${e.term}" found ${count}x`,
+          rawIdx >= 0 ? lineOf(rawNfc, rawIdx) : undefined, hasReplacement ? `use: "${e.replacement}"` : null);
       }
     }
   }
@@ -1606,8 +1709,16 @@ function checkSignatures(lock, files) {
 
 function usage() {
   return [
-    'Usage: node scripts/adherence-lint.mjs --lock <path/to/design-lock.json> [--src <dir>]',
+    'Usage: node scripts/adherence-lint.mjs --lock <path/to/design-lock.json> [--src <dir>] [--json]',
+    '       node scripts/adherence-lint.mjs --list-sections [--json]',
+    '       node scripts/adherence-lint.mjs --self-test',
     '  --src defaults to the lock file\'s directory. Scans .html/.css/.jsx/.tsx/.js.',
+    '  --json           stdout is NDJSON only: one {"type":"finding"} line per finding, then one',
+    '                   {"type":"summary"} line. Same findings, counts and exit code as the human report.',
+    '  --list-sections  print the section registry (name, group, levels each can emit, read from',
+    '                   this file\'s own source). No --lock needed; wins over --lock and --self-test.',
+    '  --self-test      call-site scan accounting, registry integrity (both directions), level',
+    '                   spelling, golden-fixture pass + JSON/human parity. Exit 0 pass, 1 fail.',
     '  Exit: 0 pass · 1 fidelity/lint failure (>=1 ERROR) · 2 setup/usage error',
   ].join('\n');
 }
@@ -1620,10 +1731,13 @@ function die2(msg) {
 }
 
 function parseArgs(argv) {
-  const args = { lock: null, src: null };
+  const args = { lock: null, src: null, json: false, listSections: false, selfTest: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--lock') args.lock = argv[++i];
+    if (a === '--json') args.json = true;
+    else if (a === '--list-sections') args.listSections = true;
+    else if (a === '--self-test') args.selfTest = true;
+    else if (a === '--lock') args.lock = argv[++i];
     else if (a.startsWith('--lock=')) args.lock = a.slice('--lock='.length);
     else if (a === '--src') args.src = argv[++i];
     else if (a.startsWith('--src=')) args.src = a.slice('--src='.length);
@@ -1633,8 +1747,356 @@ function parseArgs(argv) {
   return args;
 }
 
+// ---------------------------------------------------------------- registry introspection
+//
+// --list-sections and --self-test read which levels each section can emit from THIS file's own
+// source text, never from a hand-kept list: a list maintained beside the code drifts the first
+// time someone adds a finding and forgets the list (the same static technique the scaffold
+// gauntlet's evals-files lane uses).
+//
+// Reading the source takes a small lexer, not a regex over raw text. The first version was a
+// regex, and it was fooled three ways: an `add(` inside a string literal counted as a call (so
+// a dead section looked alive); a `//` inside a string blanked a real call later on the same
+// line; and any call not spelled exactly `'LEVEL', 'section'` (double quotes, a template, a
+// ternary, a property lookup, a spread) was dropped silently instead of reported — which let an
+// unregistered section pass the very check meant to catch it. So: lex the file into code and
+// non-code (comments, strings, template text, regex literals), visit EVERY `add(` in code
+// position, and classify each of its first two arguments. A single-quoted literal followed by
+// the argument's end is read as a value; anything else is dynamic(<nearest preceding function
+// declaration>). Nothing is skipped, and the self-test proves the accounting adds up.
+const LEVEL_ORDER = ['ERROR', 'WARN', 'SKIP'];
+// A `/` after one of these characters or keywords starts a regex literal; otherwise it is
+// division. The standard heuristic — this file never needs the cases it gets wrong, and if it
+// ever did, the lexer would end in an unbalanced state and say so (see `clean`).
+const REGEX_AFTER_CHAR = new Set([...'(,=:[!&|?{};+-*%<>~^']);
+const REGEX_AFTER_WORD = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'void',
+  'yield', 'await', 'delete', 'instanceof', 'new', 'throw']);
+
+// Returns { code, strings, clean, why }. `code` is the source with every comment, string body,
+// template text and regex body blanked to spaces — newlines and quote characters kept, so
+// offsets, line numbers and argument boundaries survive. `${…}` inside a template stays code.
+// `strings` maps each '…'/"…" opening offset to { q, value, end }. `clean` is false when the
+// lexer ended inside something or with unbalanced braces: it lost track, so nothing it found
+// may be trusted.
+function lexJs(src) {
+  const out = src.split('');
+  const strings = new Map();
+  const n = src.length;
+  const blank = (a, b) => { for (let k = a; k < b; k++) if (out[k] !== '\n') out[k] = ' '; };
+  const done = (clean, why) => ({ code: out.join(''), strings, clean, why });
+  const tplStack = []; // brace depth at each open `${`
+  let depth = 0;
+  let mode = 'code';
+  let tplStart = 0;
+  let prev = ''; // last significant code character
+  let word = ''; // last identifier/keyword read
+  let i = 0;
+  if (src.startsWith('#!')) { i = src.indexOf('\n'); if (i === -1) i = n; blank(0, i); }
+  while (i < n) {
+    const c = src[i];
+    if (mode === 'tpl') {
+      if (c === '\\') { i += 2; continue; }
+      if (c === '`') { blank(tplStart, i); mode = 'code'; prev = '`'; word = ''; i += 1; continue; }
+      if (c === '$' && src[i + 1] === '{') {
+        blank(tplStart, i); tplStack.push(depth); depth += 1; mode = 'code'; prev = '{'; word = ''; i += 2; continue;
+      }
+      i += 1; continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      const e = src.indexOf('\n', i);
+      const end = e === -1 ? n : e;
+      blank(i, end); i = end; continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const e = src.indexOf('*/', i + 2);
+      if (e === -1) return done(false, `unterminated block comment at line ${lineOf(src, i)}`);
+      blank(i, e + 2); i = e + 2; continue;
+    }
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < n && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+      if (j >= n || src[j] !== c) return done(false, `unterminated string at line ${lineOf(src, i)}`);
+      strings.set(i, { q: c, value: src.slice(i + 1, j), end: j + 1 });
+      blank(i + 1, j); prev = c; word = ''; i = j + 1; continue;
+    }
+    if (c === '`') { mode = 'tpl'; tplStart = i + 1; i += 1; continue; }
+    if (c === '/') {
+      const isRegex = prev === '' || REGEX_AFTER_CHAR.has(prev) || (/[\w$]/.test(prev) && REGEX_AFTER_WORD.has(word));
+      if (!isRegex) { prev = '/'; word = ''; i += 1; continue; }
+      let j = i + 1;
+      let inClass = false;
+      while (j < n && src[j] !== '\n') {
+        const d = src[j];
+        if (d === '\\') { j += 2; continue; }
+        if (d === '[') inClass = true;
+        else if (d === ']') inClass = false;
+        else if (d === '/' && !inClass) break;
+        j += 1;
+      }
+      if (j >= n || src[j] !== '/') return done(false, `unterminated regex literal at line ${lineOf(src, i)}`);
+      blank(i + 1, j);
+      j += 1;
+      while (j < n && /[a-z]/i.test(src[j])) j += 1; // flags
+      prev = ')'; word = ''; i = j; continue; // a regex is a value: a `/` after it is division
+    }
+    if (c === '{') { depth += 1; prev = c; word = ''; i += 1; continue; }
+    if (c === '}') {
+      if (tplStack.length && tplStack.at(-1) === depth - 1) { // closes a template's `${`
+        tplStack.pop(); depth -= 1; mode = 'tpl'; tplStart = i + 1; i += 1; continue;
+      }
+      depth -= 1; prev = c; word = ''; i += 1; continue;
+    }
+    if (/[\w$]/.test(c)) {
+      let j = i;
+      while (j < n && /[\w$]/.test(src[j])) j += 1;
+      word = src.slice(i, j); prev = src[j - 1]; i = j; continue;
+    }
+    if (!/\s/.test(c)) { prev = c; word = ''; }
+    i += 1;
+  }
+  if (mode !== 'code') return done(false, 'unterminated template literal');
+  if (depth !== 0 || tplStack.length) return done(false, `unbalanced braces (depth ${depth} at end of file)`);
+  return done(true, null);
+}
+
+// One argument starting at `pos` in lexed code: its literal value when it is exactly one
+// single-quoted string, else null; and where it ends (the top-level `,` or `)`).
+function readArg(code, strings, pos) {
+  let p = pos;
+  while (p < code.length && /\s/.test(code[p])) p += 1;
+  let literal = null;
+  const s = strings.get(p);
+  if (s && s.q === "'") {
+    let q = s.end;
+    while (q < code.length && /\s/.test(code[q])) q += 1;
+    if (code[q] === ',' || code[q] === ')') literal = s.value;
+  }
+  let d = 0;
+  let j = p;
+  for (; j < code.length; j++) {
+    const c = code[j];
+    if (c === '(' || c === '[' || c === '{') d += 1;
+    else if (c === ')' || c === ']' || c === '}') { if (d === 0) break; d -= 1; }
+    else if (c === ',' && d === 0) break;
+  }
+  return { literal, end: j, term: code[j] };
+}
+
+// Every `add(` occurrence in this file, accounted for. `tally.raw` counts the raw-text matches;
+// each lands in exactly one bucket: inside non-code (comment/string/template/regex), add's own
+// definition, or a call site. Call sites carry level/section — the literal value, or null
+// when the argument is anything but a single-quoted literal (then the site is dynamic).
+function scanAddSites() {
+  const src = readFileSync(SELF_PATH, 'utf8');
+  const { code, strings, clean, why } = lexJs(src);
+  const fns = []; // { name, index } in source order, code positions only
+  let m;
+  const fnRe = /\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  while ((m = fnRe.exec(code))) fns.push({ name: m[1], index: m.index });
+  const enclosing = (idx) => {
+    let name = '(top level)';
+    for (const f of fns) { if (f.index > idx) break; name = f.name; }
+    return name;
+  };
+  const tally = { raw: 0, nonCode: 0, definition: 0 };
+  const sites = []; // { level|null, section|null, fn, line }
+  const rawRe = /(?<![\w$.])add\s*\(/g;
+  while ((m = rawRe.exec(src))) {
+    tally.raw += 1;
+    if (code.slice(m.index, m.index + 3) !== 'add') { tally.nonCode += 1; continue; }
+    if (/\bfunction\s+$/.test(code.slice(Math.max(0, m.index - 30), m.index))) { tally.definition += 1; continue; }
+    const a1 = readArg(code, strings, m.index + m[0].length);
+    const a2 = a1.term === ',' ? readArg(code, strings, a1.end + 1) : { literal: null };
+    sites.push({ level: a1.literal, section: a2.literal, fn: enclosing(m.index), line: lineOf(src, m.index) });
+  }
+  return { sites, tally, clean, why };
+}
+
+const isDynamic = (s) => s.level === null || s.section === null;
+const describeSite = (s) => `${s.fn} line ${s.line} (level ${s.level === null ? 'dynamic' : `'${s.level}'`}, section ${s.section === null ? 'dynamic' : `'${s.section}'`})`;
+
+// section → ordered levels; a variable level becomes "dynamic(<function>)".
+function sectionLevels(sites) {
+  const bySection = new Map();
+  for (const s of sites) {
+    if (!s.section) continue;
+    if (!bySection.has(s.section)) bySection.set(s.section, new Set());
+    bySection.get(s.section).add(s.level ?? `dynamic(${s.fn})`);
+  }
+  const out = new Map();
+  for (const [section, set] of bySection) {
+    const lits = LEVEL_ORDER.filter((l) => set.has(l));
+    const dyn = [...set].filter((l) => !LEVEL_ORDER.includes(l)).sort();
+    out.set(section, [...lits, ...dyn]);
+  }
+  return out;
+}
+
+// The registry first, in report order. Then, so the listing never reads more complete than it
+// is: any section the source names that the registry does not (group null), and one row per
+// call whose SECTION is not a literal (name null, `site` says where). --self-test fails on
+// both; this only shows them. A lexer that lost track is a crash-class result (exit 2): a
+// listing built from a misread file would be confidently wrong.
+function listSections(json) {
+  const { sites, clean, why } = scanAddSites();
+  if (!clean) {
+    console.error(`adherence-lint: cannot read own source for --list-sections: ${why}`);
+    console.error('exit 2 (setup/usage error)');
+    return 2;
+  }
+  const levels = sectionLevels(sites);
+  const emit = (row, text) => console.log(json ? ndjson(row) : text);
+  for (const name of SECTIONS) {
+    const group = SECTION_GROUP.get(name);
+    const lv = levels.get(name) ?? [];
+    emit({ type: 'section', name, group, levels: lv },
+      `${name.padEnd(22)} ${group.padEnd(15)} ${lv.length ? lv.join(', ') : '(none)'}`);
+  }
+  for (const [name, lv] of levels) {
+    if (SECTION_GROUP.has(name)) continue;
+    emit({ type: 'section', name, group: null, levels: lv },
+      `${name.padEnd(22)} ${'(unregistered)'.padEnd(15)} ${lv.join(', ')}`);
+  }
+  for (const s of sites.filter((x) => x.section === null)) {
+    const lv = [s.level ?? `dynamic(${s.fn})`];
+    emit({ type: 'section', name: null, group: null, levels: lv, site: `${s.fn} line ${s.line}` },
+      `${'(dynamic section)'.padEnd(22)} ${'-'.padEnd(15)} ${lv[0]} — in ${s.fn}, line ${s.line}`);
+  }
+  if (json) console.log(ndjson({ type: 'summary', sections: SECTIONS.length }));
+  return 0;
+}
+
+// Registry integrity. The failure this exists for: a test suite that names a rule the gate
+// does not have, or a gate that emits a section its own summary does not list, passes every
+// run while checking nothing. Checks 5-6 spawn this script rather than calling main()
+// in-process, because main() ends in process.exit and would end the test with it.
+function selfTest() {
+  const results = []; // { ok, label, detail }
+  const check = (ok, label, detail) => results.push({ ok: Boolean(ok), label, detail });
+
+  const { sites, tally, clean, why } = scanAddSites();
+  const literal = new Map(); // section → { count, fns:Set }
+  for (const s of sites) {
+    if (s.section === null) continue;
+    const e = literal.get(s.section) ?? { count: 0, fns: new Set() };
+    e.count += 1;
+    e.fns.add(s.fn);
+    literal.set(s.section, e);
+  }
+  const dynamicSites = sites.filter(isDynamic);
+
+  // 1 — the scan itself is trustworthy: the lexer ended balanced, every raw `add(` match landed
+  // in exactly one bucket, and every call site is either literal or dynamic — none skipped.
+  // Dynamic sites are legal here (a level chosen from a table is fine); they are listed so a
+  // reader sees exactly what the remaining checks could not read.
+  const literalCount = sites.length - dynamicSites.length;
+  const accounted = tally.raw === tally.nonCode + tally.definition + sites.length && tally.definition === 1;
+  check(clean && accounted,
+    'the call-site scan accounts for every add( occurrence in this file',
+    !clean ? `lexer lost track of the source: ${why}`
+      : `${tally.raw} occurrence(s) = ${tally.definition} definition + ${tally.nonCode} in comments/strings/regex + ${sites.length} call site(s); `
+        + `call sites = ${literalCount} literal + ${dynamicSites.length} dynamic`
+        + (dynamicSites.length ? ` [${dynamicSites.map(describeSite).join('; ')}]` : '')
+        + (accounted ? '' : ` — tally does NOT add up (definition count ${tally.definition}, expected 1)`));
+
+  // 2 — a registered section with no call site can never fire, so it reads "ok" forever.
+  const dead = SECTIONS.filter((s) => !literal.has(s));
+  check(clean && dead.length === 0,
+    `every registered section (${SECTIONS.length}) has at least one finding call site`,
+    dead.length ? `no call site for: ${dead.join(', ')}` : `${literal.size} distinct literal section names seen`);
+
+  // 3 — an unregistered section's findings sort last (order 99) and never reach the Section
+  // summary. A section that is not a literal cannot be proven registered, so it fails too.
+  const unregistered = [...literal.keys()].filter((s) => !SECTION_GROUP.has(s));
+  const dynSection = sites.filter((s) => s.section === null);
+  const problems = [
+    ...unregistered.map((s) => `"${s}" is not in SECTIONS (${literal.get(s).count} call site(s) in ${[...literal.get(s).fns].join(', ')}) — its findings print last and are missing from the Section summary`),
+    ...dynSection.map((s) => `section is not a single-quoted literal in ${s.fn} (line ${s.line}) — registration cannot be proven statically`),
+  ];
+  check(clean && problems.length === 0,
+    'every section named at a finding call site is registered in SECTIONS',
+    problems.length ? problems.join('; ') : `${literal.size} distinct section names, all registered`);
+
+  // 4 — a misspelled level ('EROR') would print a line no consumer's level regex matches and
+  // that no RESULT count includes: a finding that exists and is counted nowhere.
+  const badLevels = sites.filter((s) => s.level !== null && !LEVEL_ORDER.includes(s.level));
+  check(clean && badLevels.length === 0,
+    `every literal level at a call site is one of ${LEVEL_ORDER.join(', ')}`,
+    badLevels.length ? badLevels.map(describeSite).join('; ') : `${sites.filter((s) => s.level !== null).length} literal level(s), all valid`);
+
+  // 5 — the certified-good fixture passes. It carries WARN/SKIP findings by design (see the
+  // raw-hex carve-out in the header), so the bar is "no ERROR, exit 0", not "no findings".
+  const golden = join(SKILL_ROOT, 'fixtures', 'golden', 'design-lock.json');
+  const run = (extra) => spawnSync(process.execPath, [SELF_PATH, '--lock', golden, ...extra],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const j = run(['--json']);
+  let rows = null;
+  let parseErr = null;
+  try { rows = String(j.stdout ?? '').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l)); }
+  catch (e) { parseErr = e.message; }
+  const summaries = (rows ?? []).filter((r) => r?.type === 'summary');
+  const jFindings = (rows ?? []).filter((r) => r?.type === 'finding');
+  const summary = summaries.length === 1 && rows.at(-1) === summaries[0] ? summaries[0] : null;
+  const shapeOk = rows !== null && summary !== null && jFindings.length === rows.length - 1;
+  const byLevel = (lvl) => jFindings.filter((f) => f.level === lvl).length;
+  const countsOk = shapeOk && summary.errors === byLevel('ERROR') && summary.warns === byLevel('WARN')
+    && summary.skips === byLevel('SKIP');
+  check(j.status === 0 && shapeOk && countsOk && summary.result === 'PASS' && summary.errors === 0,
+    `golden fixture passes under --json (${relative(SKILL_ROOT, golden)})`,
+    parseErr ? `stdout line is not JSON: ${parseErr}`
+      : !shapeOk ? `NDJSON shape wrong: need finding lines then exactly one summary line, last (exit ${j.status}${j.stderr ? `, stderr: ${String(j.stderr).split('\n')[0]}` : ''})`
+      : `exit ${j.status}, result ${summary.result}, ${summary.errors} error(s), ${summary.warns} warning(s), ${summary.skips} skipped${countsOk ? '' : ' — summary counts DISAGREE with the finding lines'}`);
+
+  // 6 — JSON/human parity on the same golden run: same (level, section, file, line) tuples,
+  // same counts, same exit. Uses eval-correction's human-line regex so the parity proven here
+  // is parity with what that consumer actually parses.
+  const h = run([]);
+  const HUMAN_LINE = /^\[(ERROR|WARN|SKIP)\]\s+(\S+)\s+—\s+(.+)$/;
+  const humanTuples = [];
+  let resultLine = null;
+  for (const line of String(h.stdout ?? '').split('\n')) {
+    const m = line.match(HUMAN_LINE);
+    if (m) {
+      const sep = m[3].indexOf(' — ');
+      const loc = (sep === -1 ? m[3] : m[3].slice(0, sep)).match(/^(.*?)(?::(\d+))?$/);
+      humanTuples.push(`${m[1]}|${m[2]}|${loc[1]}|${loc[2] ?? ''}`);
+    }
+    const r = line.match(/^RESULT: (PASS|FAIL) — (\d+) error\(s\), (\d+) warning\(s\), (\d+) skipped/);
+    if (r) resultLine = r;
+  }
+  const jsonTuples = jFindings.map((f) => `${f.level}|${f.section}|${f.file}|${f.line ?? ''}`);
+  const a = [...jsonTuples].sort();
+  const b = [...humanTuples].sort();
+  const tuplesOk = a.length === b.length && a.every((t, i) => t === b[i]);
+  const resultOk = resultLine !== null && summary !== null && resultLine[1] === summary.result
+    && Number(resultLine[2]) === summary.errors && Number(resultLine[3]) === summary.warns
+    && Number(resultLine[4]) === summary.skips;
+  check(shapeOk && h.status === j.status && resultLine !== null && tuplesOk && resultOk,
+    'golden fixture: --json and human output report the same findings, counts and exit code',
+    !shapeOk ? 'JSON run did not parse (see check 5)'
+      : resultLine === null ? `human run printed no RESULT line (exit ${h.status})`
+      : `${a.length} JSON vs ${b.length} human finding tuple(s)${tuplesOk ? ', identical' : ', DIFFERENT'}; exit ${j.status} vs ${h.status}; RESULT line ${resultOk ? 'matches' : 'DISAGREES with'} the summary`);
+
+  console.log('adherence-lint — self-test');
+  results.forEach((r, i) => {
+    console.log(`  [${r.ok ? 'PASS' : 'FAIL'}] ${i + 1}. ${r.label}`);
+    console.log(`         ${r.detail}`);
+  });
+  const failed = results.filter((r) => !r.ok).length;
+  if (failed) {
+    console.log(`\nSELF-TEST: FAIL — ${failed} of ${results.length} check(s) failed (exit 1)`);
+    return 1;
+  }
+  console.log(`\nSELF-TEST: PASS — ${results.length} of ${results.length} checks passed (exit 0)`);
+  return 0;
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  // Introspection modes need no lock; they set exitCode and return rather than exit(), so
+  // buffered stdout is flushed before the process ends.
+  if (args.listSections) { process.exitCode = listSections(args.json); return; }
+  if (args.selfTest) { process.exitCode = selfTest(); return; }
   if (!args.lock) die2('--lock is required');
   const lockPath = resolve(args.lock);
   if (!existsSync(lockPath) || !statSync(lockPath).isFile()) die2(`lock not found: ${lockPath}`);
@@ -1698,9 +2160,11 @@ function main() {
   checkUnreadableValues(files, rel);
 
   // ---- report
-  console.log('adherence-lint — static gate');
-  console.log(`  lock: ${lockPath}`);
-  console.log(`  src:  ${srcDir}  (${files.length} source file(s), ${htmlFiles.length} html)\n`);
+  if (!args.json) { // under --json, stdout carries NDJSON only — no header
+    console.log('adherence-lint — static gate');
+    console.log(`  lock: ${lockPath}`);
+    console.log(`  src:  ${srcDir}  (${files.length} source file(s), ${htmlFiles.length} html)\n`);
+  }
 
   const order = new Map(SECTIONS.map((s, i) => [s, i]));
   findings.sort((a, b) => (order.get(a.section) ?? 99) - (order.get(b.section) ?? 99));
@@ -1718,9 +2182,40 @@ function main() {
     ? lock.lint.note.replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim()
     : '';
   const note = rawNote ? rawNote.slice(0, 200) : null;
+
+  if (args.json) {
+    const count = (level, section) => findings.filter((f) => f.level === level && (section === undefined || f.section === section)).length;
+    for (const f of findings) {
+      console.log(ndjson({
+        type: 'finding', level: f.level, section: f.section, group: SECTION_GROUP.get(f.section) ?? null,
+        file: f.file, line: f.line ? f.line : null, detail: f.detail, suggestion: f.suggestion,
+      }));
+    }
+    // Every registered section, in report order. Should a future edit emit an UNREGISTERED
+    // section (--self-test check 3 fails on that), it is appended with group null rather than
+    // dropped: the human Section summary would omit it, but here the per-section counts must
+    // still add up to the totals, or a consumer could not trust either.
+    const fired = [...new Set(findings.map((f) => f.section))].filter((s) => !SECTION_GROUP.has(s));
+    const sections = {};
+    for (const s of [...SECTIONS, ...fired]) {
+      sections[s] = { group: SECTION_GROUP.get(s) ?? null, errors: count('ERROR', s), warns: count('WARN', s), skips: count('SKIP', s) };
+    }
+    const errors = count('ERROR');
+    console.log(ndjson({
+      type: 'summary', result: errors > 0 ? 'FAIL' : 'PASS', errors, warns: count('WARN'), skips: count('SKIP'),
+      files: files.length, html: htmlFiles.length, lock: lockPath, src: srcDir, note, sections,
+    }));
+    // exitCode + return, not exit(): stdout to a pipe can be asynchronous, and exit() would cut
+    // a long NDJSON stream short. Same codes as the human path below.
+    process.exitCode = errors > 0 ? 1 : 0;
+    return;
+  }
+
   for (const f of findings) {
     const loc = f.line ? `${f.file}:${f.line}` : f.file;
-    const detail = note ? `${f.detail} — ${note}` : f.detail;
+    // detail — suggestion — note: the suggestion re-joins exactly where it was fused before.
+    const base = f.suggestion ? `${f.detail} — ${f.suggestion}` : f.detail;
+    const detail = note ? `${base} — ${note}` : base;
     console.log(`[${f.level}] ${f.section} — ${loc} — ${detail}`);
   }
   if (findings.length === 0) console.log('No findings.');
