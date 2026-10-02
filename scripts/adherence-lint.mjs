@@ -58,7 +58,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join, dirname, resolve, relative, basename, extname } from 'node:path';
+import { join, dirname, resolve, relative, basename, extname, sep, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SELF_PATH = fileURLToPath(import.meta.url);
@@ -219,16 +219,31 @@ function decodeEntities(s) {
 
 // Visible page text: strip <head> (title/meta are not page copy), <style>, <script>,
 // comments, then all tags; decode entities; collapse whitespace.
+// `fill` is what each stripped region becomes: ' ' for the collapsed text below, spaceFill for
+// a line-aligned twin when a finding needs a line number. One sequence serves both, so the
+// twin can never disagree with visibleHtmlText about what counts as visible.
+// <head[\s>] (here and in blankNonContent): a bare <head also matched <header>. On a page with
+// no </head> each <header> then scanned to the end of the file and failed — quadratic in the
+// header count — and a <header> before a stray </head> would have blanked real copy.
+const stripNonVisible = (html, fill) => html
+  .replace(/<head[\s>][\s\S]*?<\/head>/gi, fill)
+  .replace(/<title[\s\S]*?<\/title>/gi, fill)
+  .replace(/<style[\s\S]*?<\/style>/gi, fill)
+  .replace(/<script[\s\S]*?<\/script>/gi, fill)
+  .replace(/<!--[\s\S]*?-->/g, fill)
+  .replace(/<[^>]+>/g, fill);
 function visibleHtmlText(html) {
-  const s = html
-    .replace(/<head[\s\S]*?<\/head>/gi, ' ')
-    .replace(/<title[\s\S]*?<\/title>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ');
-  return decodeEntities(s).replace(/\s+/g, ' ').trim().normalize('NFC');
+  return decodeEntities(stripNonVisible(html, ' ')).replace(/\s+/g, ' ').trim().normalize('NFC');
 }
+// The same visible text, one entry per raw line, for findings that need a line number (f.vis
+// is collapsed to one line and cannot be mapped back). Each stripped region is whitespace in
+// both forms, so later strips match the same spans. decodeEntities' patterns cannot match a
+// newline, so decoding line by line equals decoding the whole and splitting; a newline an
+// entity decodes to (&#10;) becomes a space so entry i stays raw line i+1. Whitespace is not
+// collapsed here: collapsing is the only other step to f.vis, and it keeps order, so the k-th
+// occurrence of anything in f.vis is the k-th here.
+const visibleLines = (html) => stripNonVisible(html, spaceFill).split('\n')
+  .map((l) => decodeEntities(l).replace(/\n/g, ' '));
 
 const stripCssComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, spaceFill);
 const stripHtmlComments = (s) => s.replace(/<!--[\s\S]*?-->/g, spaceFill);
@@ -293,6 +308,50 @@ function walkSourceFiles(dir) {
   };
   visit(dir);
   return out;
+}
+
+// Returns f => true when a scanned file is a derived asset rather than screen source, for the
+// checks that only judge screen source (imagery-provenance, signatures). The derived folder is
+// the LOCK's assets/ (CONTRACT layout: <lock dir>/assets/tokens.css and siblings, derived from
+// the lock), so that one folder is excluded and nothing else. It is anchored on the lock, not on
+// --src: the two differ whenever --src is wider than the lock's directory (eval-correction lints
+// a skill root holding captures/<name>/design-lock.json), and anchoring on --src would both miss
+// the real derived folder there and exclude some unrelated assets/ that merely sits at the top
+// of --src. Any other folder called assets (screens/assets/, src/assets/) has no such meaning
+// and stays screen source: excluding it would let a file dodge both checks by its folder name,
+// turning a FAIL into a PASS. Failing closed is the safe side of that ambiguity.
+// One exception wins over the folder: a file some lock screens[].url resolves to (render.mjs's
+// resolution: file:// as given, http(s) never local, anything else relative to the lock's
+// directory) is the screen the gate renders, so it is screen source wherever it sits. A
+// relative url is entered twice: as given (render.mjs encodes '#'/'?' into the file name, so
+// that literal file is what it loads) and with any ?query/#fragment cut off (the file the
+// author meant). Extra entries only widen screen source, so the double entry can only fail
+// closed. A file:// url needs neither: fileURLToPath already drops query and fragment.
+// Containment is relative() from the anchor, never a [\\/] class: on POSIX a backslash is a
+// legal filename character, so "weird\assets\x.html" is one file, not a file under assets/. On
+// Windows relative() returns '\'-joined paths (it normalizes '/'), so the '..' + sep test is
+// right there too.
+// --src pointed AT the lock's assets folder (or inside it) leaves nothing to treat as screen
+// source: every file is a derived asset, so imagery-provenance has nothing to judge and
+// signatures takes its existing "no generated screen source under --src yet" SKIP — which is
+// then the truth, not a dodge.
+function derivedAssetTest(lock, lockDir) {
+  const declared = new Set();
+  for (const s of Array.isArray(lock.screens) ? lock.screens : []) {
+    const u = String(s?.url || '');
+    if (!u) continue;
+    if (/^file:\/\//i.test(u)) { try { declared.add(fileURLToPath(u)); } catch { /* not a local path */ } }
+    else if (!/^https?:\/\//i.test(u)) {
+      declared.add(resolve(lockDir, u));
+      declared.add(resolve(lockDir, u.replace(/[?#][\s\S]*$/, '')));
+    }
+  }
+  const anchor = resolve(lockDir, 'assets');
+  return (f) => {
+    const r = relative(anchor, f.abs);
+    const inside = r !== '' && r !== '..' && !r.startsWith('..' + sep) && !isAbsolute(r);
+    return inside && !declared.has(f.abs);
+  };
 }
 
 // ================================================================ LOCK INVARIANTS
@@ -835,10 +894,13 @@ function checkEmDash(htmlFiles, rel) {
     const count = (f.vis.match(/—/g) || []).length;
     if (count === 0) continue;
     const idx = f.vis.indexOf('—');
-    const rawIdx = f.content.indexOf('—');
+    // The count is taken from visible text, so the line must be too. The first raw '—' in the
+    // file can sit in a comment, the <head> or an attribute and name the wrong line (or none,
+    // when the copy uses &mdash;). See visibleLines for why its first '—' is f.vis's first.
+    const at = visibleLines(f.content).findIndex((l) => l.includes('—'));
     add('ERROR', 'em-dash', rel(f.abs),
       `${count} em-dash(es) in visible text (hard rule: never ship em-dashes): ${snippet(f.vis, idx, 60)}`,
-      rawIdx >= 0 ? lineOf(f.content, rawIdx) : undefined);
+      at >= 0 ? at + 1 : undefined);
   }
 }
 
@@ -869,7 +931,13 @@ function checkBannedFonts(lock, lockLabel, files, rel) {
     const defRe = /(--[\w-]+)\s*:\s*([^;}]+)[;}]/g;
     while ((m = defRe.exec(css))) defs[m[1]] = m[2].trim();
     const flagged = new Set();
-    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    // The (?<![^{}]) pin is the same performance guard as stripTokenScopes', with the same
+    // proof: [^{}]+ cannot cross a brace, so every start inside one brace-free run reaches the
+    // same '{' and the same body — all succeed or all fail — and the leftmost, which the
+    // engine returns, is the run's first character (offset 0 or just after a brace). Unpinned,
+    // a run with no '{' after it (stripped comments trailing the last rule) was rescanned from
+    // every offset: O(run^2), 2 000 comment lines took ~2 s and 8 000 ~38 s, all of it here.
+    const ruleRe = /(?<![^{}])([^{}]+)\{([^{}]*)\}/g;
     while ((m = ruleRe.exec(css))) {
       const selector = m[1].trim();
       if (selector.startsWith('@')) continue;
@@ -1014,7 +1082,7 @@ function checkTransitionAll(files, rel) {
 
 // Blank out non-content regions but keep byte offsets, so lineOf() stays accurate.
 const blankNonContent = (html) => stripHtmlComments(html)
-  .replace(/<head[\s\S]*?<\/head>/gi, spaceFill)
+  .replace(/<head[\s>][\s\S]*?<\/head>/gi, spaceFill)
   .replace(/<script[\s\S]*?<\/script>/gi, spaceFill)
   .replace(/<style[\s\S]*?<\/style>/gi, spaceFill);
 
@@ -1281,13 +1349,18 @@ function checkBannedJargon(lock, htmlFiles, rel) {
         const hay = f.vis.toLowerCase();
         if (!hay.includes(needle)) continue;
         const count = hay.split(needle).length - 1;
-        const rawNfc = f.content.normalize('NFC');
-        const rawIdx = rawNfc.toLowerCase().indexOf(needle);
+        // Line of the first VISIBLE occurrence. The first raw occurrence can sit in a comment,
+        // the <head> or an attribute. Searched in the line-aligned visible text, folded the way
+        // hay is (NFC, lower case); f.vis collapsed every whitespace run to one space, so each
+        // run in the needle matches \s+ here, line breaks included: a term wrapped across two
+        // source lines is still found, and the line reported is where it starts.
+        const text = visibleLines(f.content).map((l) => l.normalize('NFC').toLowerCase()).join('\n');
+        const m = new RegExp(needle.split(/\s+/).map(escapeRe).join('\\s+')).exec(text);
         // No replacement in the lock → no suggestion; never print `use: "undefined"`.
         const hasReplacement = typeof e.replacement === 'string' && e.replacement.trim() !== '';
         add('ERROR', 'banned-jargon', rel(f.abs),
           `banned jargon (${locale}) "${e.term}" found ${count}x`,
-          rawIdx >= 0 ? lineOf(rawNfc, rawIdx) : undefined, hasReplacement ? `use: "${e.replacement}"` : null);
+          m ? lineOf(text, m.index) : undefined, hasReplacement ? `use: "${e.replacement}"` : null);
       }
     }
   }
@@ -1463,14 +1536,14 @@ function checkContentLock(lock, lockDir, srcDir, rel) {
   }
 }
 
-function checkImageryProvenance(lock, files, rel) {
+function checkImageryProvenance(lock, files, rel, isDerivedAsset) {
   // Only enforced when the lock declares an imagery library (lock.imagery). Every inline <svg>
   // in generated screen source must declare what it is: a captured library asset
   // (data-fig-name), a chart (data-chart), or an explicitly declared derived composition
   // (data-derived-art, Tier 2/3 of imagery.policy). Undeclared artwork = invented artwork.
   if (!lock.imagery) { add('SKIP', 'imagery-provenance', '(lock)', 'lock has no imagery section'); return; }
   const screenSource = files.filter((f) =>
-    (f.ext === '.html' || f.ext === '.jsx' || f.ext === '.tsx') && !/[\\/]assets[\\/]/.test(f.path));
+    (f.ext === '.html' || f.ext === '.jsx' || f.ext === '.tsx') && !isDerivedAsset(f));
   for (const f of screenSource) {
     let m;
     const re = /<svg\b[^>]*>/gi;
@@ -1667,7 +1740,7 @@ function findClassStyleSinks(text) {
   return spans;
 }
 
-function checkSignatures(lock, files) {
+function checkSignatures(lock, files, isDerivedAsset) {
   const signatures = Array.isArray(lock.signatures) ? lock.signatures : [];
   // Signature greps target GENERATED SCREEN SOURCE (.html/.jsx/.tsx), not derived token assets —
   // a freshly-captured project has no screens yet; that's a skip, not a failure. Enforced once
@@ -1676,7 +1749,7 @@ function checkSignatures(lock, files) {
   // co-located stylesheets; screens inline theirs in .html — both are signature-bearing source.
   const screenSource = files.filter((f) =>
     (f.ext === '.html' || f.ext === '.jsx' || f.ext === '.tsx' || f.ext === '.css') &&
-    !/[\\/]assets[\\/]/.test(f.path));
+    !isDerivedAsset(f));
   if (signatures.some((s) => s?.grep) && screenSource.length === 0) {
     add('SKIP', 'signatures', '(src)',
       'no generated screen source (.html/.jsx/.tsx) under --src yet — signature greps are enforced at generation time');
@@ -1969,7 +2042,8 @@ function listSections(json) {
 // Registry integrity. The failure this exists for: a test suite that names a rule the gate
 // does not have, or a gate that emits a section its own summary does not list, passes every
 // run while checking nothing. Checks 5-6 spawn this script rather than calling main()
-// in-process, because main() ends in process.exit and would end the test with it.
+// in-process, because main() exits the process on a setup error (die2) and accumulates into
+// the module-level findings list, either of which would corrupt the test.
 function selfTest() {
   const results = []; // { ok, label, detail }
   const check = (ok, label, detail) => results.push({ ok: Boolean(ok), label, detail });
@@ -2154,8 +2228,9 @@ function main() {
   checkSentenceLength(htmlFiles, rel);
   checkColorOnlyStatus(htmlFiles, rel);
   checkContentLock(lock, lockDir, srcDir, rel);
-  checkSignatures(lock, files);
-  checkImageryProvenance(lock, files, rel);
+  const isDerivedAsset = derivedAssetTest(lock, lockDir);
+  checkSignatures(lock, files, isDerivedAsset);
+  checkImageryProvenance(lock, files, rel, isDerivedAsset);
   checkFigIdCoverage(lock, lockDir, lockLabel, rel);
   checkUnreadableValues(files, rel);
 
@@ -2240,12 +2315,17 @@ function main() {
   const errors = findings.filter((f) => f.level === 'ERROR').length;
   const warns = findings.filter((f) => f.level === 'WARN').length;
   const skips = findings.filter((f) => f.level === 'SKIP').length;
+  // exitCode + return, never process.exit(), once the report is printed: stdout to a pipe is
+  // asynchronous on macOS, and exit() drops whatever the reader has not drained yet. With a slow
+  // reader that is everything past the 64 KB pipe buffer — the section summary and the RESULT
+  // line included, while the exit code still says 1. Same reason as the introspection modes.
   if (errors > 0) {
     console.log(`\nRESULT: FAIL — ${errors} error(s), ${warns} warning(s), ${skips} skipped (exit 1: fidelity/lint failure — feed the findings back to the model)`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(`\nRESULT: PASS — 0 error(s), ${warns} warning(s), ${skips} skipped (exit 0)`);
-  process.exit(0);
+  process.exitCode = 0;
 }
 
 try {
