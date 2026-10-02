@@ -46,8 +46,8 @@ Emit per screen, BEFORE any code. Every claim a number, hex, or token name — a
 cannot state that way means capture is incomplete: back to `./spec-capture.md`.
 
     <spec_adherence screen="home" mode="B1">
-    tokens: background #F7F6F3 (rung 1, tokens.colors.light.background);
-            accent #0F5132 (rung 1); spacing 8/12/16/24/32 only; radii control 8 / container 16
+    tokens: background #F7F6F3 (rung 1, measured, tokens.colors.light.background);
+            accent #0F5132 (rung 1, measured); spacing 8/12/16/24/32 only; radii control 8 / container 16
     fonts:  heading 700 26px/1.2 "Helvetica Neue" ls -0.01em (tokens.typography.heading);
             fontChecks to pass: ['700 26px "Helvetica Neue"', '400 15px "Helvetica Neue"']
     nodes:  1:100 header → no map → B1, rect {x:24,y:32,w:672,h:67} (get_metadata);

@@ -50,3 +50,12 @@ skill-scaffold/root/evals/HARNESS.md and skill-scaffold/root/evals/tasks.json ad
 before/after correction-experiment methodology from @shadcn/lint,
 Copyright (c) 2026 shadcn, MIT License
 (https://github.com/shadcn-ui/lint).
+
+scripts/adherence-lint.mjs (the machine-readable findings stream and section registry),
+scripts/eval-correction.mjs and skill-scaffold/root/evals/HARNESS.md (the coverage statuses
+and the rewrite-ratio diagnostic), scripts/render.mjs (external-request observation and
+offline enforcement), scripts/lint-negatives.mjs with fixtures/lint/ (the expected-findings
+fixture manifest), and references/spec-capture.md (the evidence tiers) re-express mechanisms
+from visualize,
+Copyright (c) 2026 Carl Rannaberg, MIT License
+(https://github.com/display-dev/visualize).

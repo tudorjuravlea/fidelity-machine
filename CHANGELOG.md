@@ -7,6 +7,119 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **`adherence-lint.mjs --json`, `--list-sections`, `--self-test`, and a `suggestion` field**
+  (class: patch — the human report is unchanged byte for byte except the `provenance` row noted
+  under Changed; exit codes unchanged). `--json` emits NDJSON: one finding per line (`level`,
+  `section`, `group`, `file`, `line`, `detail`, `suggestion`) and one summary line with
+  per-section counts, the sanitized `lint.note` once, and the PASS/FAIL result; it carries the
+  same information as the human report, so `eval-correction.mjs` and any future wrapper can
+  stop regex-parsing prose. The "use this instead" text (nearest token, nearest scale value,
+  did-you-mean variable, jargon replacement) is its own field at the six sites that had fused it
+  into the message. `--list-sections [--json]` prints the registry — name, group (lock / source /
+  microcopy / gate-integrity), and the levels each section can emit, read from the script's own
+  call sites, never a hand-kept list; a level or section passed as a variable is listed as
+  dynamic with its function. `--self-test` checks the registry against itself: every registered
+  section has a call site, every call site names a registered section and a correctly spelled
+  level, the golden fixture passes under `--json`, and JSON and human output report the same
+  findings. CONTRACT.md §Invocation contract. Re-expresses the shared-findings-stream and
+  rule-registry ideas of display-dev/visualize (MIT, see NOTICE), with the self-test they lacked.
+
+- **`eval-correction.mjs` judges only what changed, says what it did not verify, and never scores
+  a crashed gate as clean** (class: minor — new optional task field `capture`; results.json rows
+  and summary gain fields; no outcome label changes meaning). The first real run exposed three
+  ways the runner could flatter itself. (1) A task whose pressure never fired — condition A was
+  already clean, so no correction happened — was still judged, A against itself, and counted
+  toward the intent-preservation rate; the judge now runs only when pressure fired, when the
+  task's `capture` state (`static` | `hover` | `motion`, default static) is one a static render
+  can show — hover/motion rows report the judge as Not verified while the mechanical deletion
+  check still runs — and when C's result differs from A's in file content after whitespace
+  trimming or in rendered pixels (a correction that lands in `tokens.css` leaves the file
+  unchanged and the render changed; it is judged). Skipped and unscored judges keep separate
+  counters. (2) Every corrected row carries a coverage table — Reviewed / Not verified / Not
+  applicable per area (static lint, A/C renders, intent judge, provenance judge, capture state)
+  — and the summary prints the not-verified count beside the rate it would have inflated.
+  (3) A lint result without a verdict is not a clean verdict: the `RESULT` line must be present,
+  must match the exit code, and its counts must equal the finding lines actually parsed;
+  anything else is a crash that errors the task, and a crash on the preflight baseline stops
+  the run before the first model call (previously a lint that died on load read as "no
+  findings" — every task clean, exit 0). Also new: a rewrite ratio per row and in aggregate
+  (share of lines not preserved between A's and C's output, via a line LCS, whitespace-
+  insensitive) with a 0.40 reading line adapted from display-dev/visualize's iteration-verb
+  guard — reported as a diagnostic, never folded into a rate or a label, until three runs
+  agree on its meaning. HARNESS.md (the normative contract) states each rule first; LANES.md's
+  `evals-files` lane validates `capture`.
+
+- **`render.mjs` records every request that leaves the lock's tree, and refuses them when the
+  lock says offline** (class: minor — new optional lock field `render`; geometry JSON gains
+  `network`, `externalRequests`, `externalRequestCount`; an untouched screen renders byte-
+  identically, same stdout, same PNG). Pixel-diff determinism assumes every byte the page
+  paints came from the lock's own tree; a stylesheet or font fetched off-tree can change
+  between runs and the diff blames the generator. Every request is classified — the main
+  document (found structurally through the navigation request and its redirects, never by
+  string equality with the lock url), `data:`/`blob:`/`about:`, and `file://` paths inside the
+  lock's directory are internal; everything else is external — and the external ones are
+  recorded with host, resource type, failed/blocked flags, credentials stripped. When there are
+  any, one stderr line names up to five hosts and the two fixes (bundle it, or allow the host);
+  `verify.mjs` forwards that line on a passing run. `render.network: "offline"` (with bare
+  hostnames in `allowHosts`) aborts any external request to a host not allowed and exits 5 — a
+  packaging fact about the screen, not a styling fault — naming the URLs; the check runs after
+  readiness and again after the screenshot, which is captured to a buffer and written only when
+  clean, so a refused run leaves no new output; it also covers what the route hook never sees
+  (WebSockets, which cannot be aborted; credentialed URLs, which Chromium drops first). Nothing
+  in a listener can throw: an unparseable URL is external with a null host. Known limits are in
+  the header comment (symlink inside the lock pointing outside counts as inside; a different-
+  case path counts as outside; the refusal message can be lost when the page navigates away
+  after readiness — the exit code is still 5). CONTRACT.md §Determinism invariants 8.
+
+- **`scripts/lint-negatives.mjs` and `fixtures/lint/` — every lint section proven able to fail**
+  (class: minor, new script + fixtures + one CI step). The gate had 26 sections and one
+  expected-pass fixture; nothing proved each section still fires on the fault it exists for.
+  Each section now has a minimal negative fixture — a clean base lock plus source with exactly
+  one planted fault — and a manifest row naming the section and level it must fire at. The
+  runner asserts the declared finding, rejects any finding outside the fixture's own section,
+  checks every section and level the manifest names against the registry (a fixture claiming a
+  level its section cannot emit tests nothing), and fails when a registered section has neither
+  a fixture nor a reasoned `uncovered` entry — uncovered entries print every run, never silently.
+  The fixture manifest shape re-expresses display-dev/visualize's (MIT); the coverage gate is
+  the part they lacked. Exit 0 all pass · 1 any failure · 2 setup/usage.
+
+- **`release-check.mjs` lane 1 gains two prose-leak pattern classes** (class: patch; Markdown
+  files only — in code the same shapes are legitimate identifiers and string data). One catches
+  prose that cites an agent's private memory or feedback notes as authority — a public reader
+  cannot open the cited note, so the claim is unverifiable. The other catches the doubled or
+  clashing article a find-and-replace of a name leaves behind, across whitespace and emphasis
+  markers, with the capitalisation cases that are labels (an A/B/C design) kept silent. Each
+  class prints its own Fix line; output for the existing classes is unchanged. Known limit: a
+  scar split across a line wrap is not caught. Both shapes were found in a sibling tool's public
+  docs during the review that motivated this release.
+
+- **`references/spec-capture.md` — evidence tiers** (class: patch, docs only). The context
+  ladder said WHERE a value came from (rung 1–6); a new subsection says HOW it was obtained:
+  Measured / Derived / Inferred, with the rules never promote a tier, a screenshot-only capture
+  is a reconstruction (name what stays relative), and disagreeing sources stay visible as a
+  provisional `decisions[]` row rather than averaged. The tier travels with the rung into the
+  pre-flight (`references/mode-b.md`) and into `decisions[].rationale`.
+
+### Changed
+
+- **`adherence-lint.mjs` registers `provenance`** (class: patch; human output gains one Section
+  summary row). The section had fired at five call sites since the provenance work landed but
+  was never added to `SECTIONS`, so its findings sorted last and never appeared in the summary
+  — the golden fixture carries one such WARN. Found by `--self-test` on its first run. Now in
+  the gate-integrity group after `figid-coverage`, so no other section's position changes.
+- **`adherence-lint.mjs` sanitizes every lock-sourced string it echoes** (class: patch; no change
+  on well-formed locks). `lint.note` had been sanitized since the previous release; a jargon
+  replacement, a mask reason or a screen id could still inject a forged `RESULT: PASS` or
+  `[SKIP]` line into the human report. `detail` and `suggestion` now get the same treatment
+  (control and format characters blanked, whitespace collapsed); the `file` label has control
+  characters and line terminators blanked without collapsing spaces, so real relative paths
+  survive byte for byte. `--json` additionally escapes the U+2028/U+2029/U+0085 separators.
+- **`adherence-lint.mjs` schema-sanity validates the optional `render` lock policy** (class:
+  patch): object with only `network` ("observe" | "offline") and `allowHosts` (bare hostnames —
+  no scheme, port, userinfo or whitespace, which render.mjs would refuse and which would
+  silently never match a request). A misspelled policy is caught by the cheap gate that runs
+  first, before a render is spent on it.
+
 - **`references/print-collateral.md`** (class: patch, docs only, no lock impact). The process
   for objects that leave the screen (badges, lanyards, roll-ups, backdrops, lectern panels,
   print specification sheets): intake as a checklist with the applied-element rule (design for

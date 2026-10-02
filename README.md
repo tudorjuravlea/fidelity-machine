@@ -194,6 +194,8 @@ Read the report. Green shows the measurements. Red shows the defect, the region,
 | Verify one screen | `node scripts/verify.mjs --lock <path> --screen <id>` |
 | Measure the machine floor | `node scripts/verify.mjs --lock <path> --calibrate` |
 | Check the tree before a release | `node scripts/release-check.mjs` |
+| Prove every lint section can fail | `node scripts/lint-negatives.mjs` |
+| Lint findings as NDJSON (for tools) | `node scripts/adherence-lint.mjs --lock <path> --json` |
 
 All scripts use the same exit codes: `0` = pass, `1` = a real finding, `2` = a setup or usage error. The full contract is in `CONTRACT.md`.
 
