@@ -270,3 +270,39 @@ trusts it.
 Each rung beats everything below it. The rung travels with the value into the
 `<spec_adherence>` pre-flight (`./mode-b.md`) so every number in generated code traces
 to its source.
+
+### Evidence tier — declare how, not just where
+
+The rung says where a value came from, not how it was obtained. A hex read from a Figma
+variable and a hex eyeballed off a compressed marketing JPEG can both claim a rung; only
+the method separates a fact from a reading. Every captured value names one tier beside
+its rung.
+
+| Tier | Meaning here | Example from this flow |
+|---|---|---|
+| Measured | read off the source by a tool call or a pixel probe, value unchanged | `get_variable_defs` returns the accent `#0F5132`; a B2 crop's pixel probe samples the CTA background |
+| Derived | computed from Measured values by a stated rule | a type ratio from two measured sizes; capture-figma's px lineHeight → ratio |
+| Inferred | what the source suggests but does not state | "the sparse palette suggests a restrained register"; a hover color the statics never show |
+
+B2's "Derived Design" (a component the references do not show) is Inferred by this table —
+the name predates the tier, and its `Justified by:` line is what an Inferred value owes.
+
+- **Never promote.** A value keeps the tier it was obtained at until it is re-obtained a
+  better way. An Inferred hex that looks right stays Inferred; a Derived ratio that lands
+  on a round number stays Derived. Promotion is how a guess becomes a token nobody
+  re-checks, and the gates then defend the guess.
+- **Screenshot-only is a reconstruction.** From images alone (B2: exported mocks,
+  live-product shots, any rung 3–5 image) colors and proportions can be Measured; font
+  identity, CSS-pixel spacing when the export scale is unknown, breakpoints, motion and
+  every unseen state stay relative or Inferred. Name what stayed relative in the capture
+  notes — a reconstruction that reads as a full capture is the thin lock's confident drift
+  with better paperwork.
+- **Disagreement stays visible.** Two sources, two values for one slot (variable vs
+  component spec, swatch vs implementation, codebase vs Figma): keep both with rung and
+  tier, never average, and record which one generation uses as a `decisions[]` DEC-*
+  entry (`../CONTRACT.md` §Decisions ledger), `status: "provisional"` while it rests on an
+  unconfirmed reading. An averaged value was measured nowhere.
+
+The tier travels with the rung: into the `<spec_adherence>` pre-flight
+(`accent #0F5132 (rung 1, measured)`) and into the `rationale` of any `decisions[]` entry
+that rests on the value, so a later pass can tell a settled number from a reading.

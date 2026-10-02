@@ -12,7 +12,9 @@
  * Checks (each failure prints a concrete `Fix:` line):
  *   1. brand-leakage   banned terms (literal list, optionally extended via --ban /
  *                      --ban-file) PLUS pattern-class scanning for credential shapes,
- *                      local user paths and private hosts — every text file, file:line
+ *                      local user paths and private hosts — every text file, file:line;
+ *                      plus prose-only classes (.md only): private-memory-reference,
+ *                      scrub-scar
  *   2. clean-tree      DEFAULT-DENY: only allowlisted suffixes ship (.mjs/.md/.json/
  *                      .cjs/.css/.html + reviewed fixtures/golden/reference/*.png
  *                      verified by magic bytes + size cap); symlinks fail; plus the
@@ -76,7 +78,10 @@ Flags:
 
 Checks (each failure prints a concrete Fix line):
   1. brand-leakage  banned terms + pattern classes (credential shapes, local user
-                    paths, private hosts) in every text file, as file:line
+                    paths, private hosts) in every text file, plus two prose-only
+                    classes in .md only (private-memory-reference: citing an agent's
+                    private memory or feedback notes; scrub-scar: doubled or clashing
+                    articles a name scrub leaves), as file:line
   2. clean-tree     default-deny suffix allowlist + reviewed-PNG carve-out + symlink
                     refusal, plus .env*, *.log, .DS_Store, .render/, .report/, fonts
   3. completeness   files CONTRACT.md names exist; deps <-> imports agree
@@ -174,19 +179,40 @@ section('1. Brand leakage');
   // below necessarily contain their own shapes, so scripts/release-check.mjs itself is
   // excluded from the pattern-class scan (named carve-out, stated in the output line);
   // the literal ban-list scan above still covers this file in full.
+  // The last two classes are prose leaks, so they are scoped to Markdown (`scope`): in code,
+  // `feedback_*` identifiers and doubled words in string data are legitimate. Markdown is where
+  // the engine's prose lives; the other shippable text (fixture html, LICENSE, NOTICE) is not
+  // scanned by these two classes — a known, named gap, not an oversight (.txt cannot ship at
+  // all: clean-tree's allowlist rejects it).
+  //   private-memory-reference — prose citing an agent's private memory/feedback notes as
+  //     authority. A public reader cannot open the cited note, so the claim is unverifiable.
+  //   scrub-scar — the doubled or clashing article a find-and-replace of a name leaves
+  //     behind ("the The host"), across any whitespace and up to two emphasis markers
+  //     ("the **the**", "_the_ the" — so the ends are letter/digit lookarounds, not \b,
+  //     which `_` would defeat). A capital A/An after an article is a label ("an A/B/C design"),
+  //     not a scar, so only "The" may be capitalised in second place. "this" is not a first
+  //     word ("is this the output", "is this a bug"), and "no" pairs only with "the"
+  //     ("no a priori"). Generic doubled words are not matched: "that that" and "had had"
+  //     are English. Known limit: lines are scanned one at a time, so a scar split across a
+  //     line wrap (article ending one line, article starting the next) is not caught.
   const PATTERN_CLASSES = [
     { label: 'credential-shape', re: /ghp_[A-Za-z0-9]{20,}|github_pat_|xox[baprs]-|\bsk-[A-Za-z0-9]{16,}/ },
     { label: 'local-user-path', re: /\/Users\/[^/\s]+|\/home\/[^/\s]+|C:\\Users\\/ },
     { label: 'private-host', re: /localhost|127\.0\.0\.1|\b[\w.-]+\.(?:internal|corp|local)\b/i },
+    { label: 'private-memory-reference', scope: ['.md'], fix: "cite the repo's own doc or test instead of an agent's private notes",
+      re: /\bfeedback_[a-z0-9_]+\b|\bMEMORY\.md\b|\bper (?:my|the|our|your) memory\b|\bmemory (?:file|note|drawer)s?\b/i },
+    { label: 'scrub-scar', scope: ['.md'], fix: 'a name scrub left a doubled word — reread the sentence and rewrite it',
+      re: /(?<![A-Za-z0-9])(?:(?:[Tt]he|[Aa]n?|[Oo]ur|[Yy]our)[*_]{0,2}\s+[*_]{0,2}(?:[Tt]he|an?)|[Nn]o[*_]{0,2}\s+[*_]{0,2}[Tt]he|[Pp]roduct[*_]{0,2}\s+[*_]{0,2}[Pp]roduct|[Pp]latform[*_]{0,2}\s+[*_]{0,2}[Pp]latform|[Tt]ool[*_]{0,2}\s+[*_]{0,2}[Tt]ool|[Ss]ervice[*_]{0,2}\s+[*_]{0,2}[Ss]ervice)(?![A-Za-z0-9])/ },
   ];
   const PATTERN_CARVE_OUT = 'scripts/release-check.mjs'; // FILES paths are posix-normalized
   const textFiles = FILES.filter(isText);
   p(`  scanning ${textFiles.length} text files (${FILES.length - textFiles.length} binary skipped) for ${terms.length} banned terms: ${terms.join(', ')}`);
-  p(`  pattern classes: ${PATTERN_CLASSES.map((c) => c.label).join(', ')} (carve-out: ${PATTERN_CARVE_OUT} — it defines these regexes and would self-flag)`);
+  p(`  pattern classes: ${PATTERN_CLASSES.map((c) => (c.scope ? `${c.label} (${c.scope.join('/')} only)` : c.label)).join(', ')} (carve-out: ${PATTERN_CARVE_OUT} — it defines these regexes and would self-flag)`);
   const hits = [];
   for (const rel of textFiles) {
     const lines = readFileSync(path.join(ENGINE, rel), 'utf8').split(/\r?\n/);
-    const classesHere = rel === PATTERN_CARVE_OUT ? [] : PATTERN_CLASSES;
+    const ext = path.extname(rel).toLowerCase();
+    const classesHere = rel === PATTERN_CARVE_OUT ? [] : PATTERN_CLASSES.filter((c) => !c.scope || c.scope.includes(ext));
     lines.forEach((line, i) => {
       const matched = matchers.filter((m) => m.re.test(line)).map((m) => m.term);
       for (const c of classesHere) if (c.re.test(line)) matched.push(`class:${c.label}`);
@@ -208,6 +234,11 @@ section('1. Brand leakage');
     p('        For package name/description, pick a neutral name and run npm install to');
     p('        regenerate the lockfile. Machine paths inside fixture artifacts disappear');
     p('        with the clean-tree fixes below.');
+    // Class-specific Fix lines print only when such a class actually hit, so a failure from
+    // the original lanes reads exactly as it always has.
+    for (const c of PATTERN_CLASSES) {
+      if (c.fix && hits.some((h) => h.matched.includes(`class:${c.label}`))) p(`        Fix (${c.label}): ${c.fix}`);
+    }
     summary.brand = { state: 'FAIL', note: `${hits.length} hits in ${files.size} files` };
   }
 }
