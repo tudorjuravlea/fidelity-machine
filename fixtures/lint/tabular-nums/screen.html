@@ -1,9 +1,9 @@
-<!-- lint-negative: transition-all — .btn animates every property; its duration comes from a token-scope custom property and a reduced-motion guard is present, so only this rule fires -->
+<!-- lint-negative: tabular-nums — a table of amounts and dates whose numeric cells no tabular-figures rule reaches -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lint negative: transition-all</title>
+<title>Lint negative: tabular-nums</title>
 <style>
   :root {
     --background: #F7F6F3;
@@ -12,7 +12,6 @@
     --text2: #6B675E;
     --accent: #0F5132;
     --space-2: 8px; --space-4: 16px; --space-6: 24px;
-    --motion-base: 250ms;
   }
   body { font-family: "Helvetica Neue", sans-serif; background: var(--background); color: var(--text1); font-size: 15px; line-height: 1.45; margin: 0; }
   main { padding: var(--space-6); }
@@ -20,8 +19,6 @@
   .sub { color: var(--text2); margin-top: var(--space-2); }
   .amount { font-variant-numeric: tabular-nums; }
   .btn { background: var(--accent); color: var(--surface1); border: 0; padding: var(--space-2) var(--space-4); font: inherit; }
-  .btn { transition: all var(--motion-base); }
-  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
   :focus-visible { outline: 2px solid var(--text1); outline-offset: 2px; }
 </style>
 </head>
@@ -31,6 +28,10 @@
   <p class="sub">Checking account balance.</p>
   <p class="amount">$12,480 available.</p>
   <p class="sub">You can cancel a scheduled payment until the payment day.</p>
+  <table>
+    <tr><td>Rent</td><td>$1,200.00</td><td>10/01/2026</td></tr>
+    <tr><td>Coffee</td><td>$18.00</td><td>10/02/2026</td></tr>
+  </table>
   <button class="btn">Send money</button>
 </main>
 </body>

@@ -67,7 +67,9 @@ cells, not through them; four filled rainbow quadrants are an instant fail; unna
 Decks often need a dark variant for stage projection. The lock carries both color schemes;
 the derivation rule when capturing: flip ink-derived rgba values to paper-derived at the
 same opacities, and shift the accent slightly brighter so it holds on dark ground. Each
-slide declares its scheme; mixing schemes within one slide is a lint error.
+slide declares its scheme; mixing schemes within one slide is a lint ERROR (`scheme-mixing`:
+the slide's `data-theme`/`color-scheme` must match its lock `colorScheme`, and no raw hex from
+the other mode's palette when the lock carries both modes).
 
 ## Deck workflow
 

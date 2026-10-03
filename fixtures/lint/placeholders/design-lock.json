@@ -5,7 +5,7 @@
     "chromiumBuild": "chromium-1228",
     "provenance": {
       "generatedAt": "2026-10-03T00:00:00Z",
-      "lockTokensHash": "sha256:076bf3178d3d2c8c2cccdcf4742c6e584279a3b6d093ab42a2e4a09d356adb96",
+      "lockTokensHash": "sha256:4ea56a4eab5f753988791b80d03a52a8d570a9b79c8840cc96de260897a7248d",
       "artifacts": {
         "tokens.dtcg.json": "sha256:707a9e6c454b997fca975081039662ae3adc8e03770d8bd2e8e2a0df34d5de47"
       }
@@ -26,6 +26,10 @@
       16,
       24
     ],
+    "radii": {
+      "control": 8,
+      "container": 16
+    },
     "typography": {
       "heading": {
         "family": "Helvetica Neue",
@@ -38,6 +42,15 @@
         "sizePx": 15,
         "weight": 400,
         "lineHeight": 1.45
+      }
+    },
+    "motion": {
+      "durationsMs": {
+        "fast": 150,
+        "base": 250
+      },
+      "easings": {
+        "standard": "cubic-bezier(0.2, 0, 0, 1)"
       }
     }
   },

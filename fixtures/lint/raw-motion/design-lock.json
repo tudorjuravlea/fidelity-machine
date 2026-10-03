@@ -1,6 +1,6 @@
 {
   "meta": {
-    "name": "lint-negative-tokens-only-spacing",
+    "name": "lint-negative-raw-motion",
     "capturedAt": "2026-10-03",
     "chromiumBuild": "chromium-1228",
     "provenance": {

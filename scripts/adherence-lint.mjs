@@ -5,7 +5,8 @@
 //   LOCK INVARIANTS   caps-enforcement · mask-budget · schema-sanity   (on the lock itself)
 //   SOURCE ADHERENCE  raw-hex · css-vars · tokens-only-spacing · placeholders · em-dash ·
 //                     banned-fonts · contrast · transition-all · a11y ·
-//                     forbidden-substitutes                            (on --src files)
+//                     forbidden-substitutes · raw-motion · tabular-nums · text-wrap ·
+//                     radius-arithmetic · scheme-mixing                (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
 //                     sentence-length · color-only-status · content-lock (plan §5.7 mechanical subset)
 //   GATE INTEGRITY    signatures · imagery-provenance · figid-coverage · provenance ·
@@ -30,6 +31,11 @@
 //     certified-good fixture. EVERY other raw hex outside :root/[data-theme] is an ERROR.
 //   * em-dash: "visible text" excludes <head> (title/meta are browser chrome, not page copy)
 //     in addition to <style>/<script>. Entities (&mdash; &#8212; &#x2014;) are decoded first.
+//   * text-wrap: headings of one or two words are exempt. Wrapped, they break one word per line
+//     whatever text-wrap says, so the property cannot change them (the golden fixture's only
+//     heading is two words and sets none).
+//   * raw-motion / radius-arithmetic: with no tokens.motion / tokens.radii in the lock, each
+//     reports one SKIP and enforces nothing: there is no token to name in the suggestion.
 //
 // Optional lock fields this file reads:
 //   * lock.lint.note (string): appended to every PRINTED finding's detail as " — <note>" at
@@ -84,7 +90,9 @@ const VOID_TAGS = new Set(['input', 'img', 'br', 'hr', 'meta', 'link', 'area', '
 const SECTION_GROUPS = {
   'lock': ['schema-sanity', 'caps-enforcement', 'mask-budget'],
   'source': ['raw-hex', 'css-vars', 'tokens-only-spacing', 'type-scale', 'placeholders', 'em-dash',
-    'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes'],
+    'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
+    // Appended after forbidden-substitutes so every pre-existing section keeps its report position.
+    'raw-motion', 'tabular-nums', 'text-wrap', 'radius-arithmetic', 'scheme-mixing'],
   'microcopy': ['banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',
     'sentence-length', 'color-only-status', 'content-lock'],
   // provenance sat outside the registry for a while: its findings sorted last and never reached
@@ -1332,6 +1340,791 @@ function checkForbiddenSubstitutes(lock, files, rel) {
   }
 }
 
+// ---------------------------------------------------------------- shared readers for the five sections below
+//
+// raw-motion, tabular-nums, text-wrap, radius-arithmetic and scheme-mixing read CSS and markup
+// through the same primitives the sections above use (styleBlocks, the comment strippers,
+// stripTokenScopes, blankNonContent, decodeEntities). What follows only packages them: one open-tag
+// walk with an attribute reader, and a flat rule reader. It is not a second CSS parser.
+
+// Index just past the '}' that closes the JSX expression opening at s[i] === '{', or -1 when it
+// never closes. Nested braces are counted, and quoted or template strings inside are skipped whole,
+// so a '}' or '>' in a string, an arrow `=>`, or a `style={{ … }}` object never ends it early.
+function skipBraces(s, i) {
+  let depth = 0;
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (c === '"' || c === "'" || c === '`') {
+      j += 1;
+      while (j < s.length && s[j] !== c) j += s[j] === '\\' ? 2 : 1;
+      if (j >= s.length) return -1;
+      continue;
+    }
+    if (c === '{') depth += 1;
+    else if (c === '}') { depth -= 1; if (depth === 0) return j + 1; }
+  }
+  return -1;
+}
+
+// The open tags in a text, in order: [{ index, tag }]. Quote-aware: a '>' inside a quoted
+// attribute value does not end the tag. In JSX source (jsx = true) a `{…}` expression is skipped
+// whole with skipBraces, so `onClick={() => go()}` or `style={{ padding: 8 }}` before another
+// attribute does not end the tag at its '>' or '}' (a tag inside such an expression is not
+// visited). Text content and escaped samples (&lt;section …&gt;) are never tags, so nothing in
+// them reads as an attribute. A tag whose quote or brace never closes is not a tag.
+function openTagsOf(text, jsx) {
+  const out = [];
+  const startRe = /<[a-zA-Z][\w:.-]*/g;
+  let m;
+  while ((m = startRe.exec(text))) {
+    let j = m.index + m[0].length;
+    let end = -1;
+    while (j < text.length) {
+      const c = text[j];
+      if (c === '"' || c === "'") {
+        const k = text.indexOf(c, j + 1);
+        if (k === -1) break;
+        j = k + 1;
+        continue;
+      }
+      if (jsx && c === '{') {
+        const k = skipBraces(text, j);
+        if (k === -1) break;
+        j = k;
+        continue;
+      }
+      if (c === '>') { end = j + 1; break; }
+      j += 1;
+    }
+    if (end === -1) continue;
+    out.push({ index: m.index, tag: text.slice(m.index, end) });
+    startRe.lastIndex = end;
+  }
+  return out;
+}
+
+// Attributes of one open tag, read left to right so each value is consumed with its name: a
+// `data-theme="dark"` written INSIDE another attribute's value (title='… data-theme="dark"') is
+// part of that value and never reads as an attribute. Map lower-case name → { value, offset },
+// offset = where the value starts inside the tag (-1 for a bare attribute; for line numbers). A
+// JSX `{…}` value is read whole with skipBraces and keeps its inner text. Attributes must be
+// separated by whitespace; reading stops at the first thing that is not one. Unlike tagAttr
+// (whose \bname= also matches inside values and inside data-name=), this is safe for a verdict.
+function attributesOf(openTag) {
+  const out = new Map();
+  const head = openTag.match(/^<[a-zA-Z][\w:.-]*/);
+  if (!head) return out;
+  const n = openTag.length;
+  const skipWs = (k) => { while (k < n && /\s/.test(openTag[k])) k += 1; return k; };
+  let i = head[0].length;
+  while (i < n) {
+    const afterWs = skipWs(i);
+    if (afterWs === i) break;
+    const nameRe = /[^\s"'<>/={}]+/y;
+    nameRe.lastIndex = afterWs;
+    const nameM = nameRe.exec(openTag);
+    if (!nameM) break;
+    i = nameRe.lastIndex;
+    let value = '';
+    let offset = -1;
+    let k = skipWs(i);
+    if (openTag[k] === '=') {
+      k = skipWs(k + 1);
+      const c = openTag[k];
+      if (c === '"' || c === "'") {
+        const e = openTag.indexOf(c, k + 1);
+        if (e === -1) break;
+        value = openTag.slice(k + 1, e); offset = k + 1; i = e + 1;
+      } else if (c === '{') {
+        const e = skipBraces(openTag, k);
+        if (e === -1) break;
+        value = openTag.slice(k + 1, e - 1); offset = k + 1; i = e;
+      } else {
+        const u = /[^\s"'=<>`]+/y;
+        u.lastIndex = k;
+        const um = u.exec(openTag);
+        if (!um) break;
+        value = um[0]; offset = k; i = u.lastIndex;
+      }
+    }
+    const name = nameM[0].toLowerCase();
+    if (!out.has(name)) out.set(name, { value, offset });
+  }
+  return out;
+}
+
+// Declaration text a file carries OUTSIDE token scopes: a .css file whole, an html file's <style>
+// blocks and the style attributes of its tags (read with attributesOf, so a style="…" quoted in
+// prose or inside another attribute is not a declaration). This is the reach checkSpacing has,
+// with the stripping checkRawHex applies, so a value inside :root or [data-theme] is a definition
+// and never a finding. HTML comments are blanked first (spaceFill keeps offsets), so commented-out
+// rules and tags are not read. `offset` maps a match back into f.content for lineOf.
+function declarationTexts(f) {
+  if (f.ext === '.css') return [{ css: stripTokenScopes(stripCssComments(f.content)), offset: 0 }];
+  if (f.ext !== '.html') return [];
+  const html = stripHtmlComments(f.content);
+  const out = styleBlocks(html).map((b) => ({ css: stripTokenScopes(stripCssComments(b.css)), offset: b.offset }));
+  const tagsOnly = html.replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, spaceFill); // a tag inside JS/CSS text is not markup
+  for (const t of openTagsOf(tagsOnly, false)) {
+    const s = attributesOf(t.tag).get('style');
+    if (s && s.offset >= 0 && s.value.trim()) out.push({ css: s.value, offset: t.index + s.offset });
+  }
+  return out;
+}
+
+// var(...) blanked to spaces (one level of nested parens, e.g. a calc() fallback), so a value
+// read through a custom property is never mistaken for a literal. The fallback inside var() is
+// blanked with it: it only applies when the property is undefined, which css-vars reports.
+const blankVars = (v) => v.replace(/var\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/g, spaceFill);
+
+// The stylesheets one html file links (<link> tags, read with attributesOf). A link counts only
+// when its rel tokens include "stylesheet" and not "alternate": a preload (whatever its href ends
+// in) is never applied, and an alternate stylesheet is off until the reader opts in. Each resolves
+// to a scanned .css file: the path relative to the screen first, else a11y's rule (a scanned file
+// whose path ends with the href). `unread` holds { href, index, data } for every counted link no
+// scanned file answers to: a data: URL, remote, or outside --src (index = the <link> tag's offset,
+// for a line number).
+function linkedStylesheets(f, cssFiles) {
+  const sheets = [];
+  const unread = [];
+  for (const t of stripHtmlComments(f.content).matchAll(/<link\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
+    const attrs = attributesOf(t[0]);
+    const href = (attrs.get('href')?.value ?? '').trim();
+    if (!href) continue;
+    const path = href.replace(/[?#][\s\S]*$/, '');
+    const rels = (attrs.get('rel')?.value ?? '').toLowerCase().split(/\s+/);
+    if (!rels.includes('stylesheet') || rels.includes('alternate')) continue;
+    let hit = null;
+    if (!/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) {
+      const exact = resolve(dirname(f.abs), path);
+      const tail = path.replace(/^\.?\//, '');
+      hit = cssFiles.find((c) => c.abs === exact) ?? cssFiles.find((c) => tail && c.abs.endsWith(tail)) ?? null;
+    }
+    if (hit) { if (!sheets.includes(hit)) sheets.push(hit); } else unread.push({ href, index: t.index, data: /^data:/i.test(href) });
+  }
+  return { sheets, unread };
+}
+
+// The CSS that can style one html file: its own <style> blocks plus every scanned stylesheet it
+// links. The evidence rule is a11y's (a stylesheet vouches only for a screen that links it), so
+// an orphan stylesheet cannot excuse a screen it never reaches.
+function cssReaching(f, cssFiles) {
+  const own = styleBlocks(stripHtmlComments(f.content)).map((b) => stripCssComments(b.css));
+  const linked = linkedStylesheets(f, cssFiles).sheets.map((c) => stripCssComments(c.content));
+  return [...own, ...linked].join('\n');
+}
+
+// Flat rules { selector, body }, nested @media bodies included (the inner rule matches on its
+// own). The pinned rule regex is checkBannedFonts', for the same performance reason.
+function cssRules(css) {
+  const out = [];
+  const re = /(?<![^{}])([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(css))) {
+    const selector = m[1].trim();
+    if (!selector.startsWith('@')) out.push({ selector, body: m[2] });
+  }
+  return out;
+}
+
+// A rule body (or a style attribute) as [{ prop, value }]: split on ';', property name before the
+// first ':'. A property is matched by NAME, so `font-family: "text-wrap: balance"` is a
+// font-family declaration and vouches for nothing.
+const declsOf = (body) => body.split(';').map((d) => {
+  const i = d.indexOf(':');
+  return i === -1 ? null : { prop: d.slice(0, i).trim().toLowerCase(), value: d.slice(i + 1).trim() };
+}).filter(Boolean);
+
+// Split on a separator character at nesting depth 0 (outside (...) and [...]).
+function splitTopLevel(s, sepRe) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const c of s) {
+    if (c === '(' || c === '[') depth += 1;
+    else if (c === ')' || c === ']') depth = Math.max(0, depth - 1);
+    if (depth === 0 && sepRe.test(c)) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+const selectorList = (sel) => splitTopLevel(sel, /,/);
+// The subject compound: the last compound of a complex selector (`.ledger td.num` → `td.num`).
+// The ancestor part is NOT checked, so `.other-table td` vouches for every table's cells. That is
+// the lenient side on purpose: a WARN that fires on correct code teaches people to ignore it.
+const subjectCompound = (complex) => splitTopLevel(complex, /[\s>+~]/).at(-1) ?? '';
+// font-variant-numeric and text-wrap are both inherited, so a rule on the document root reaches
+// every element.
+const isGlobalCompound = (c) => /^(?:html|body|\*|:root)(?![\w-])/i.test(c);
+
+// The parts of an element a compound selector can test, read with attributesOf:
+// { tag, classes, id, attrs (names), style (the style attribute's text, or null) }.
+function elementOf(openTag) {
+  const tag = (openTag.match(/^<([a-zA-Z][\w-]*)/)?.[1] ?? '').toLowerCase();
+  const a = attributesOf(openTag);
+  const classes = new Set((a.get('class')?.value ?? '').split(/\s+/).filter(Boolean));
+  const id = (a.get('id')?.value ?? '').trim();
+  return { tag, classes, id, attrs: new Set(a.keys()), style: a.get('style')?.value ?? null };
+}
+
+// Does one compound selector match the element? Resolved: a type, .class, #id and [attr]
+// (presence only, the value is not compared), and :is()/:where() alternatives. Every other
+// pseudo-class (:hover, :nth-child(2), :not(...)) is dropped, which again errs toward "reaches":
+// `td:nth-child(3) { tabular-nums }` is the usual way to set one column, and the gate cannot
+// evaluate which column a cell sits in.
+function compoundMatches(compound, el) {
+  let c = compound.replace(/::[\w-]+(?:\([^)]*\))?/g, '');
+  const alternatives = [];
+  c = c.replace(/:(?:is|where|matches|any|-webkit-any)\(((?:[^()]|\([^()]*\))*)\)/gi, (_, inner) => {
+    alternatives.push(selectorList(inner).map(subjectCompound));
+    return '';
+  });
+  c = c.replace(/:[\w-]+(?:\((?:[^()]|\([^()]*\))*\))?/g, '');
+  const attrNames = [...c.matchAll(/\[\s*([\w:-]+)/g)].map((m) => m[1].toLowerCase());
+  c = c.replace(/\[[^\]]*\]/g, '');
+  const tag = c.match(/^([a-zA-Z][\w-]*|\*)/)?.[1];
+  const classes = [...c.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+  const ids = [...c.matchAll(/#([\w-]+)/g)].map((m) => m[1]);
+  // Nothing left to test (a bare :hover, say) is not evidence about this element.
+  if (!tag && classes.length === 0 && ids.length === 0 && attrNames.length === 0 && alternatives.length === 0) return false;
+  if (tag && tag !== '*' && tag.toLowerCase() !== el.tag) return false;
+  if (classes.some((k) => !el.classes.has(k))) return false;
+  if (ids.some((k) => k !== el.id)) return false;
+  if (attrNames.some((k) => !el.attrs.has(k))) return false;
+  return alternatives.every((alts) => alts.some((a) => compoundMatches(a, el)));
+}
+
+// `reaches(el)`: does any rule whose declarations satisfy `ok` style the element (its subject
+// compound matches, or it sits on the document root and the property inherits), or does the
+// element's own style attribute satisfy `ok`? `@media print` blocks are blanked first: a rule
+// that only applies on paper does not style the screen.
+function reachingRules(css, ok) {
+  const screenCss = css.replace(/@media\s+(?:only\s+)?print\s*(?:and[^{,]*)?\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gi, spaceFill);
+  const subjects = cssRules(screenCss).filter((r) => ok(declsOf(r.body)))
+    .flatMap((r) => selectorList(r.selector).map(subjectCompound));
+  return (el) => (el.style !== null && ok(declsOf(el.style)))
+    || subjects.some((s) => isGlobalCompound(s) || compoundMatches(s, el));
+}
+
+const plainText = (html) => decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+// ---------------------------------------------------------------- raw-motion
+//
+// Checks, outside :root/[data-theme] (the token scopes checkRawHex honours), in .css files,
+// <style> blocks (@media, @supports and @keyframes bodies included) and style attributes:
+//   * transition, animation and their -duration, -delay and -timing-function longhands. A literal
+//     time (180ms, .2s) or a literal easing (cubic-bezier(), steps(), linear(), ease, ease-in,
+//     ease-out, ease-in-out, linear, step-start, step-end) is a finding. In a shorthand the first
+//     time of each comma-separated item is its duration and the second its delay; when the item
+//     also reads a var() the position is unknown and the finding says "duration or delay".
+//   * a custom property declared outside a token scope whose value holds such a literal
+//     (`.btn { --d: 333ms }`). raw-hex reports `.btn { --c: #123456 }` the same way, with the same
+//     message shape: a literal parked in a local variable is still a literal.
+// Anything read through var() is not a finding, nor is text inside a quoted string
+// (`--brand-font: "Linear Sans"`), nor a zero time (`0s`), which animates nothing. One finding per
+// distinct value per file, listing every spelling of it (`.25s, 250ms`); the suggested rewrite
+// replaces every occurrence in the declaration it shows and names the occurrences elsewhere. The suggestion names the lock's nearest
+// duration token by absolute ms difference (both on a tie) or the easing token with the same
+// value, and writes it out: the custom property to declare in :root and the declaration rewritten
+// to read it (capture-figma derives no motion variables into tokens.css, so the name is
+// --motion-<token> / --motion-ease-<token> by this section's convention).
+//
+// Cannot see: JS style objects and CSS-in-JS (the transition-all section reads those for `all`
+// only), Tailwind duration-/ease- utilities, vendor-prefixed properties, and a rule whose
+// selector list also names :root or [data-theme] (stripTokenScopes blanks the whole rule, the
+// same limit raw-hex has).
+//
+// Level: ERROR when the lock declares tokens.motion (durationsMs and/or easings), the same class
+// as a raw hex: a hand-typed value where the system has a named one. With no motion tokens the
+// section has nothing to point to, so it reports ONE SKIP per run and enforces nothing; a
+// lock-less ERROR would demand a token that does not exist. `transition: all 250ms` fires both
+// here (the duration) and in transition-all (the property list). They are two faults, both kept.
+function checkRawMotion(lock, files, rel) {
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const motion = lock.tokens?.motion;
+  const durations = isObj(motion?.durationsMs)
+    ? Object.entries(motion.durationsMs).filter(([, v]) => typeof v === 'number' && Number.isFinite(v)) : [];
+  const easings = isObj(motion?.easings)
+    ? Object.entries(motion.easings).filter(([, v]) => typeof v === 'string' && v.trim() !== '') : [];
+  if (durations.length === 0 && easings.length === 0) {
+    add('SKIP', 'raw-motion', '(lock)',
+      'lock declares no tokens.motion (durationsMs/easings) — raw-motion cannot name a token to use, so raw durations and easings are not enforced until motion tokens are declared');
+    return;
+  }
+  const LOCK_CHANGE = 'derive it and add it to the lock plus a DECISIONS.md entry before using it';
+  // "declare `--motion-fast: 150ms` in :root and write `transition: opacity var(--motion-fast)`".
+  // Every occurrence of the value in that declaration is rewritten (`.25s, 250ms` both become the
+  // var), so the declaration shown passes this section as written; occurrences elsewhere in the
+  // file are named, not shown.
+  const howTo = (varName, varValue, g) => {
+    let v = g.value;
+    for (const sp of [...g.spans].sort((a, b) => b.at - a.at)) v = `${v.slice(0, sp.at)}var(${varName})${v.slice(sp.at + sp.len)}`;
+    const elsewhere = g.count > g.inFirst ? `; replace each other occurrence of ${[...g.spellings].join(', ')} in this file with var(${varName}) the same way` : '';
+    return `declare \`${varName}: ${varValue}\` in :root and write \`${g.prop}: ${v}\`${elsewhere}`;
+  };
+  const timeSuggestion = (g) => {
+    if (durations.length === 0) return `the lock declares no durations — ${LOCK_CHANGE} (tokens.motion.durationsMs)`;
+    let best = Infinity;
+    let names = [];
+    for (const [name, v] of durations) {
+      const d = Math.abs(v - g.ms);
+      if (d < best) { best = d; names = [[name, v]]; } else if (d === best) names.push([name, v]);
+    }
+    const [name, v] = names[0];
+    const also = names.length > 1 ? ` (equally near: ${names.slice(1).map(([n, x]) => `tokens.motion.durationsMs.${n} = ${x}ms`).join(', ')})` : '';
+    const how = howTo(`--motion-${name}`, `${v}ms`, g);
+    return best === 0
+      ? `same value as tokens.motion.durationsMs.${name} — ${how}`
+      : `nearest lock duration: tokens.motion.durationsMs.${name} = ${v}ms${also} — ${how}; if the design truly needs ${g.ms}ms, ${LOCK_CHANGE}`;
+  };
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, '');
+  const easingSuggestion = (g) => {
+    if (easings.length === 0) return `the lock declares no easings — ${LOCK_CHANGE} (tokens.motion.easings)`;
+    const match = easings.find(([, v]) => norm(v) === g.norm);
+    if (match) return `same value as tokens.motion.easings.${match[0]} — ${howTo(`--motion-ease-${match[0]}`, match[1], g)}`;
+    const [n0, v0] = easings[0];
+    return `no lock easing matches — use one of ${easings.map(([n, v]) => `tokens.motion.easings.${n} (${v})`).join(', ')}, e.g. ${howTo(`--motion-ease-${n0}`, v0, g)}; or ${LOCK_CHANGE}`;
+  };
+
+  const DECL_RE = /(?<![\w-])((?:transition|animation)(?:-duration|-delay|-timing-function)?|--[\w-]+)\s*:\s*([^;{}]+)/gi;
+  const TIME_RE = /(?<![\w.#-])(\d*\.?\d+)(ms|s)(?![\w-])/gi;
+  const EASE_RE = /(?<![\w-])(cubic-bezier\([^)]*\)|steps\([^)]*\)|linear\([^)]*\)|ease-in-out|ease-in|ease-out|ease|linear|step-start|step-end)(?![\w(-])/gi;
+  for (const f of files) {
+    // key → { kind, ms|norm, spellings, count, prop, value, idx (first declaration), spans (every
+    // equivalent literal in that declaration: same ms, or same normalized easing), inFirst }
+    const grouped = new Map();
+    for (const { css, offset } of declarationTexts(f)) {
+      let m;
+      DECL_RE.lastIndex = 0;
+      while ((m = DECL_RE.exec(css))) {
+        const prop = m[1].startsWith('--') ? m[1] : m[1].toLowerCase();
+        const raw = m[2].replace(/\s+$/, '');
+        // var() and quoted strings blanked (lengths kept): `--brand-font: "Linear Sans"` or
+        // `--label: "5s left"` is text, not an easing or a duration.
+        const value = blankVars(raw).replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, spaceFill);
+        const idx = offset + m.index;
+        const found = []; // { key, kind, literal, at, ms | norm }
+        const isShorthand = prop === 'transition' || prop === 'animation';
+        const timeKind = prop.endsWith('-duration') ? 'duration' : prop.endsWith('-delay') ? 'delay' : null;
+        // Shorthand: the n-th time of each comma-separated item (commas at depth 0 only, so the
+        // ones inside cubic-bezier()/steps() do not split) is duration, then delay.
+        const itemStarts = [0];
+        let depth = 0;
+        for (let i = 0; i < value.length; i++) {
+          const ch = value[i];
+          if (ch === '(') depth += 1;
+          else if (ch === ')') depth = Math.max(0, depth - 1);
+          else if (ch === ',' && depth === 0) itemStarts.push(i + 1);
+        }
+        const nthInItem = new Map(); // item start → times seen so far
+        let d;
+        TIME_RE.lastIndex = 0;
+        while ((d = TIME_RE.exec(value))) {
+          const ms = parseFloat(d[1]) * (d[2].toLowerCase() === 's' ? 1000 : 1);
+          let kind = timeKind ?? 'duration';
+          if (isShorthand) {
+            const start = itemStarts.filter((x) => x <= d.index).at(-1);
+            const nth = (nthInItem.get(start) ?? 0) + 1;
+            nthInItem.set(start, nth);
+            kind = /var\(/i.test(raw.slice(start, d.index)) ? 'duration or delay' : nth === 1 ? 'duration' : 'delay';
+          }
+          if (ms === 0) continue;
+          found.push({ key: `t:${kind}:${ms}`, kind, literal: `${d[1]}${d[2]}`, at: d.index, ms });
+        }
+        if (!timeKind) {
+          EASE_RE.lastIndex = 0;
+          while ((d = EASE_RE.exec(value))) {
+            found.push({ key: `e:${norm(d[1])}`, kind: 'easing', literal: d[1], at: d.index, norm: norm(d[1]) });
+          }
+        }
+        const same = (a, b) => (a.kind === 'easing') === (b.kind === 'easing') && (a.kind === 'easing' ? a.norm === b.norm : a.ms === b.ms);
+        for (const h of found) {
+          let g = grouped.get(h.key);
+          if (!g) {
+            g = { kind: h.kind, ms: h.ms, norm: h.norm, spellings: new Set(), count: 0, inFirst: 0, prop, value: raw, idx,
+              spans: found.filter((x) => same(x, h)).map((x) => ({ at: x.at, len: x.literal.length })) };
+            grouped.set(h.key, g);
+          }
+          g.count += 1;
+          if (g.idx === idx) g.inFirst += 1;
+          g.spellings.add(h.literal.replace(/\s+/g, ' '));
+        }
+      }
+    }
+    for (const g of grouped.values()) {
+      add('ERROR', 'raw-motion', rel(f.abs),
+        `raw ${g.kind} ${[...g.spellings].join(', ')} in "${g.prop}: ${g.value.trim().replace(/\s+/g, ' ')}" (${g.count}x) outside a token scope — motion values must come from tokens.motion`,
+        lineOf(f.content, g.idx), g.kind === 'easing' ? easingSuggestion(g) : timeSuggestion(g));
+    }
+  }
+}
+
+// ---------------------------------------------------------------- tabular-nums
+//
+// Checks: every html <table> whose body cells are predominantly numeric (at least half of the
+// non-empty <td> cells read as a number, money, a percentage or a date) needs each numeric cell
+// reached by `font-variant-numeric: tabular-nums`, or by font-feature-settings naming "tnum" on
+// ("tnum", "tnum" 1, "tnum" on; "tnum" 0 and "tnum" off switch it OFF and do not count). Reached
+// means a rule's subject compound matches the cell, its row, its thead/tbody/tfoot, the table, an
+// element inside the cell, or the document root (the property is inherited), or one of those
+// carries the declaration in its own style attribute. Selector matching is by text: a type,
+// .class, #id, [attr] and :is()/:where(); the ancestor part of a selector is not checked. Rules
+// inside `@media print` do not count. One WARN per table, at the table's line.
+//
+// Cannot see: tables built from divs or ARIA grids, cells without a closing </td>, nested
+// tables, inheritance from any other ancestor (a wrapper div), JSX/TSX markup, stylesheets the
+// screen links that are not among the scanned files, and the cascade: a later rule that resets
+// the cells to proportional-nums does not undo an earlier tabular-nums rule here.
+//
+// Level: WARN. Proportional digits in a column misalign, which is a craft defect, not a broken
+// screen, and the resolution above is heuristic. The lock schema has no typography field for
+// numerals, so the suggestion names a rule, not a token.
+function checkTabularNums(htmlFiles, cssFiles, rel) {
+  const isNumeric = (t) => {
+    if (!/\d/.test(t)) return false;
+    const s = t.replace(/[\s  ]/g, '')
+      .replace(/^[A-Z]{3}|[A-Z]{3}$/g, '') // ISO currency code before or after the amount
+      .replace(/[$€£¥₹¢+\-−–%.,:/'’()]/g, '')
+      .replace(/[kKmMB]$/, '');
+    return /^\d+$/.test(s);
+  };
+  const tnumOn = (decls) => decls.some((d) =>
+    (d.prop === 'font-variant-numeric' && /(?<![\w-])tabular-nums(?![\w-])/i.test(d.value))
+    || (d.prop === 'font-feature-settings' && /["']tnum["'](?!\s*(?:0|off)(?![\w.]))/i.test(d.value)));
+  for (const f of htmlFiles) {
+    const body = blankNonContent(f.content);
+    if (!/<table\b/i.test(body)) continue;
+    const reaches = reachingRules(cssReaching(f, cssFiles), tnumOn);
+    const tableRe = /<table\b[^>]*>[\s\S]*?<\/table>/gi;
+    let t;
+    while ((t = tableRe.exec(body))) {
+      const table = t[0];
+      const tableOpen = table.match(/^<table\b[^>]*>/i)[0];
+      if (reaches(elementOf(tableOpen))) continue;
+      let nonEmpty = 0;
+      let numeric = 0;
+      let unreached = 0;
+      // One pass over the table's row/section/cell open tags, remembering the current row and
+      // section, so a cell's ancestors are known without rescanning the table per cell (which
+      // made a long ledger quadratic).
+      const lower = table.toLowerCase();
+      const tagRe = /<(t(?:r|head|body|foot|d))\b[^>]*>/gi;
+      let row = null;
+      let group = null;
+      let c;
+      while ((c = tagRe.exec(table))) {
+        const name = c[1].toLowerCase();
+        if (name === 'tr') { row = c[0]; continue; }
+        if (name !== 'td') { group = c[0]; continue; }
+        const end = lower.indexOf('</td', tagRe.lastIndex);
+        if (end === -1) continue; // no closing tag: not read (named in the header)
+        const inner = table.slice(tagRe.lastIndex, end);
+        const text = plainText(inner);
+        if (!text) continue;
+        nonEmpty += 1;
+        if (!isNumeric(text)) continue;
+        numeric += 1;
+        const chain = [c[0], row, group, ...openTagsOf(inner, false).map((x) => x.tag)].filter(Boolean);
+        if (!chain.some((tag) => reaches(elementOf(tag)))) unreached += 1;
+      }
+      if (numeric === 0 || numeric * 2 < nonEmpty || unreached === 0) continue;
+      const attrs = attributesOf(tableOpen);
+      const id = attrs.get('id')?.value;
+      const cls = attrs.get('class')?.value;
+      const name = id ? `<table id="${id}">` : cls ? `<table class="${cls}">` : '<table>';
+      add('WARN', 'tabular-nums', rel(f.abs),
+        `${name}: ${numeric} of ${nonEmpty} body cells are numeric and ${unreached} of them ${unreached === 1 ? 'is' : 'are'} reached by no font-variant-numeric: tabular-nums rule — proportional digits misalign in a column (resolved statically: the cell, its row/section/table, an element inside it, their style attributes, or html/body/:root/*; other ancestors are not resolved)`,
+        lineOf(f.content, t.index),
+        'td.numeric { font-variant-numeric: tabular-nums } on the numeric cells, or the same declaration on the table (the lock schema has no typography field for numerals, so there is no token to name)');
+    }
+  }
+}
+
+// ---------------------------------------------------------------- text-wrap
+//
+// Checks: in each html file, every <h1>/<h2>/<h3> of three or more words must be reached by a
+// `text-wrap` or `text-wrap-style` declaration whose value is balance or pretty. Reached uses the
+// same matcher as tabular-nums: `h1`, `h1, h2, h3`, a class on the heading, `:is(h1,h2,h3)`, the
+// document root (text-wrap is inherited), or the heading's own style attribute; `@media print`
+// rules do not count. One WARN per file, naming the first unreached heading.
+//
+// Headings of one or two words are exempt, and that is exact rather than a threshold: wrapped,
+// they break one word per line whatever text-wrap says, so the property cannot change them. Words
+// joined by a no-break space (&nbsp;) count as one word for the same reason. (The certified-good
+// golden fixture's only heading is two words and sets no text-wrap.)
+//
+// Cannot see: inheritance from any ancestor other than the root (a `header { text-wrap }`), JSX/
+// TSX markup, headings built from divs with role="heading", h4-h6, stylesheets the screen links
+// that are not among the scanned files, `white-space: nowrap` (such a heading cannot wrap, but it
+// still needs a text-wrap rule here), and whether a heading actually wraps at the rendered width.
+//
+// Level: WARN. A ragged heading is a typographic defect the render still shows correctly, and
+// whether it wraps at all depends on width and copy the static gate does not know.
+function checkTextWrap(htmlFiles, cssFiles, rel) {
+  const wrapOn = (decls) => decls.some((d) =>
+    (d.prop === 'text-wrap' || d.prop === 'text-wrap-style') && /(?<![\w-])(?:balance|pretty)(?![\w-])/i.test(d.value));
+  // Words as a line breaker sees them: a no-break space (entity or character) joins, it does not
+  // separate. decodeEntities turns &nbsp; into a plain space, so it is pinned to U+00A0 first, and
+  // the split is on breaking whitespace only (\s would include U+00A0).
+  const words = (inner) => decodeEntities(inner.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;|&#x0*a0;/gi, ' '))
+    .split(/[ \t\n\r\f\v]+/).filter((w) => w.replace(/ /g, '') !== '').length;
+  for (const f of htmlFiles) {
+    const body = blankNonContent(f.content);
+    const heads = [...body.matchAll(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)]
+      .filter((m) => words(m[2]) >= 3)
+      .map((m) => ({ index: m.index, open: m[0].match(/^<h[1-3]\b[^>]*>/i)[0], tag: m[1].toLowerCase(), text: plainText(m[2]) }));
+    if (heads.length === 0) continue;
+    const reaches = reachingRules(cssReaching(f, cssFiles), wrapOn);
+    const unreached = heads.filter((h) => !reaches(elementOf(h.open)));
+    if (unreached.length === 0) continue;
+    const first = unreached[0];
+    const quoted = first.text.length > 60 ? `${first.text.slice(0, 57)}…` : first.text;
+    add('WARN', 'text-wrap', rel(f.abs),
+      `<${first.tag}> "${quoted}"${unreached.length > 1 ? ` and ${unreached.length - 1} more heading(s)` : ''} of 3+ words reached by no text-wrap: balance|pretty rule — a wrapped heading can strand one word on its last line`,
+      lineOf(f.content, first.index), 'h1, h2, h3 { text-wrap: balance }');
+  }
+}
+
+// ---------------------------------------------------------------- radius-arithmetic
+//
+// Checks: border-radius, its four physical corner longhands and its four logical ones
+// (border-start-start-radius …), outside token scopes, in .css files, <style> blocks and style
+// attributes. Allowed values are the lock's tokens.radii, plus r − s for every lock radius r and
+// every spacing step s where r − s > 0 (the concentric rule in
+// references/taste-and-composition.md: inner = outer − padding; every radius is treated as a
+// possible container), plus 0 and the pill values 9999px, 999px, 50%, 100vmax. Every px literal
+// outside that set is a finding; multi-value shorthands (`8px 8px 0 0`, `8px / 4px`) check each
+// value; var() is not a finding. The suggestion is the nearest allowed value and how it is derived.
+//
+// Cannot see: whether a derived value actually sits inside the container it was derived from
+// (any r − s is accepted anywhere), a px value parked in a local custom property and read through
+// var() (a custom property's role is not knowable, so it is not judged as a radius), JSX style
+// objects, Tailwind rounded-[…] utilities, and values in other units or calc() with a literal,
+// which are counted into one SKIP per file ("unchecked, not clean") rather than passed silently.
+//
+// Level: WARN, the same class as tokens-only-spacing: an off-system radius is drift a reviewer
+// should see, and the arithmetic cannot tell an intended one-off from an accident. No
+// tokens.radii means no allowed set to compare against: one SKIP per run, nothing enforced.
+function checkRadiusArithmetic(lock, files, rel) {
+  const radii = lock.tokens?.radii;
+  const entries = radii && typeof radii === 'object' && !Array.isArray(radii)
+    ? Object.entries(radii).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v >= 0) : [];
+  if (entries.length === 0) {
+    add('SKIP', 'radius-arithmetic', '(lock)',
+      'lock declares no tokens.radii — radius-arithmetic cannot name an allowed radius, so border radii are not checked until radii tokens are declared');
+    return;
+  }
+  const spacing = Array.isArray(lock.tokens?.spacing)
+    ? lock.tokens.spacing.filter((n) => typeof n === 'number' && Number.isFinite(n) && n > 0) : [];
+  const allowed = new Map(); // px → how it is derived; a token wins over a derivation of the same value
+  for (const [name, r] of entries) if (!allowed.has(r)) allowed.set(r, `lock radii.${name} = ${r} (var(--radius-${name}))`);
+  for (const [name, r] of entries) {
+    for (const s of spacing) {
+      const d = r - s;
+      if (d > 0 && !allowed.has(d)) allowed.set(d, `${r} − ${s} = ${d}: radii.${name} minus spacing step ${s} (concentric)`);
+    }
+  }
+  const allowedList = [...allowed.keys()].sort((a, b) => a - b);
+  const nearest = (n) => {
+    let best = Infinity;
+    let vals = [];
+    for (const v of allowedList) {
+      const d = Math.abs(v - n);
+      if (d < best) { best = d; vals = [v]; } else if (d === best) vals.push(v);
+    }
+    return vals.map((v) => `${v}px — ${allowed.get(v)}`).join('; or ');
+  };
+  const PILLS = new Set(['9999px', '999px', '50%', '100vmax']);
+  const KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+  const DECL_RE = /(?<![\w-])(border-radius|border-(?:top|bottom)-(?:left|right)-radius|border-(?:start|end)-(?:start|end)-radius)\s*:\s*([^;{}]+)/gi;
+  for (const f of files) {
+    const seen = new Set();
+    let unreadable = 0;
+    for (const { css, offset } of declarationTexts(f)) {
+      let m;
+      DECL_RE.lastIndex = 0;
+      while ((m = DECL_RE.exec(css))) {
+        const value = blankVars(m[2].replace(/!important/i, '')).trim();
+        if (/[\w-]+\(/.test(value)) { if (/\d/.test(value)) unreadable += 1; continue; } // calc()/min()/…
+        for (const tok of value.split(/[\s/]+/).filter(Boolean)) {
+          const v = tok.toLowerCase();
+          if (KEYWORDS.has(v) || PILLS.has(v) || /^0(?:\.0+)?(?:px|%|r?em)?$/.test(v)) continue;
+          const px = v.match(/^(\d*\.?\d+)px$/);
+          if (!px) { unreadable += 1; continue; }
+          const n = parseFloat(px[1]);
+          if (allowed.has(n) || seen.has(n)) continue;
+          seen.add(n);
+          add('WARN', 'radius-arithmetic', rel(f.abs),
+            `radius ${n}px (${m[1]}: ${m[2].trim()}) is neither a lock radius nor a lock radius minus a spacing step`,
+            lineOf(f.content, offset + m.index), `nearest allowed: ${nearest(n)}; allowed [${allowedList.join(', ')}] plus 0 and pills`);
+        }
+      }
+    }
+    if (unreadable > 0) {
+      add('SKIP', 'radius-arithmetic', rel(f.abs),
+        `${unreadable} border-radius value(s) in units or functions the static check cannot read (rem/em/%/calc() with a literal) — unchecked, not clean`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- scheme-mixing
+//
+// Checks, per lock screen that declares a colorScheme and whose url resolves to a scanned local
+// file (content-lock's resolution: file:// as given, http(s) never local, anything else relative
+// to the lock's directory with --src as the fallback, the url taken as written):
+//   (a) every data-theme ATTRIBUTE on a tag that names light or dark, every
+//       <meta name="color-scheme"> content, and every `color-scheme:` declaration outside token
+//       scopes (in the screen's <style> blocks, its style attributes, and the scanned stylesheets
+//       it links with rel="stylesheet", not "alternate" and never "preload") must agree with the
+//       screen's scheme: a color-scheme value that names schemes must include the screen's own;
+//   (b) one file carries at most one distinct data-theme attribute value;
+//   (c) when the lock declares both colour modes, no raw hex outside token scopes, in the screen
+//       or a stylesheet it links, may equal a token of the OTHER mode that is not also a token of
+//       the screen's own mode.
+// Attributes are read tag by tag (openTagsOf, which skips whole `{…}` expressions in JSX, so an
+// `onClick={() => …}` or `style={{ … }}` before data-theme does not end the tag) with attributesOf,
+// so prose, an escaped code sample
+// (&lt;section data-theme="dark"&gt;) or a data-theme="…" written inside another attribute's
+// value is never an attribute. A finding in a linked stylesheet is reported at that stylesheet's
+// own file and line. A linked stylesheet that is not among the scanned files (remote, outside
+// --src, or a data: URL this check does not decode) gets a SKIP naming it (at most 80 characters
+// of the URL): its declarations and hex values are unchecked, not clean.
+// `@media (prefers-color-scheme: …)` blocks are blanked for (a) and (c): a scheme-conditional
+// block is how one source serves both schemes, not mixing. Screens without colorScheme, with a
+// remote url, or whose file is not among the scanned files are skipped silently.
+//
+// Cannot see: a theme switched from script (a <script> body is blanked), colours reached through
+// var() (the token layer decides those), rgb()/rgba()/hsl() literals, other-mode values when the
+// lock carries only one mode, a tag whose attributes are not separated by whitespace, and
+// data-theme values that name neither scheme (they count for (b) only).
+//
+// Level: ERROR. A screen that renders half in the other scheme fails its pixel reference and
+// its contrast pairs, and the lock already says which scheme it is. (c) always co-fires with
+// raw-hex, which reports every raw hex; this section adds which palette the value came from.
+function checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel) {
+  const colors = lock.tokens?.colors;
+  const modes = ['light', 'dark'].filter((m) => colors?.[m] && typeof colors[m] === 'object' && Object.keys(colors[m]).length > 0);
+  const lockColors = collectLockColorHexes(lock);
+  const byFile = new Map(files.map((f) => [f.abs, f]));
+  const done = new Set();
+  const namesScheme = (v) => String(v).toLowerCase().match(/(?:^|[^a-z])(light|dark)(?![a-z])/)?.[1] ?? null;
+  const conflicts = (value, scheme) => {
+    const named = String(value).toLowerCase().match(/\b(?:light|dark)\b/g) ?? [];
+    return named.length > 0 && !named.includes(scheme);
+  };
+  const blankSchemeMedia = (s) => s.replace(/@media[^{]*prefers-color-scheme[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gi, spaceFill);
+  for (const s of Array.isArray(lock.screens) ? lock.screens : []) {
+    const scheme = s?.colorScheme;
+    if (scheme !== 'light' && scheme !== 'dark') continue;
+    const u = String(s.url || '');
+    let p = null;
+    if (/^file:\/\//i.test(u)) { try { p = fileURLToPath(u); } catch { p = null; } }
+    else if (u && !/^https?:\/\//i.test(u)) {
+      p = resolve(lockDir, u);
+      if (!existsSync(p)) { const alt = resolve(srcDir, u); p = existsSync(alt) ? alt : p; }
+    }
+    const f = p ? byFile.get(p) : null;
+    if (!f || done.has(`${f.abs}|${scheme}`)) continue;
+    done.add(`${f.abs}|${scheme}`);
+    const other = scheme === 'light' ? 'dark' : 'light';
+    const who = `screen "${s.id}" is ${scheme} in the lock`;
+    const FIX = `remove the override, or register this view as its own lock screen with colorScheme "${other}"`;
+
+    // (a) + (b): data-theme attributes, tag by tag (html body incl. <html>, or JSX source).
+    const markup = f.ext === '.html' ? blankNonContent(f.content) : JSY_EXTS.has(f.ext) ? stripJsComments(f.content) : '';
+    const themes = new Map(); // lower-case value → { value, index, tag }
+    for (const t of openTagsOf(markup, JSY_EXTS.has(f.ext))) {
+      const a = attributesOf(t.tag).get('data-theme');
+      if (!a || a.offset < 0) continue;
+      const value = a.value.trim().replace(/^["'`]|["'`]$/g, '').trim();
+      const tag = t.tag.match(/^<([a-zA-Z][\w:.-]*)/)[1];
+      const at = t.index + a.offset;
+      if (!themes.has(value.toLowerCase())) themes.set(value.toLowerCase(), { value, index: at, tag });
+      const named = namesScheme(value);
+      if (named && named !== scheme) {
+        add('ERROR', 'scheme-mixing', rel(f.abs),
+          `<${tag} data-theme="${value}"> switches part of the screen to ${named}, but ${who} — one screen, one scheme`,
+          lineOf(f.content, at), FIX);
+      }
+    }
+    if (themes.size > 1) {
+      const list = [...themes.values()];
+      add('ERROR', 'scheme-mixing', rel(f.abs),
+        `${themes.size} distinct data-theme values in one screen (${list.map((t) => `<${t.tag} data-theme="${t.value}">`).join(', ')}) — mixing themes within one screen (${who})`,
+        lineOf(f.content, list[1].index), 'keep one data-theme per screen; a second theme is a second lock screen');
+    }
+
+    // The CSS this screen carries: its own file, then each scanned stylesheet it links.
+    const sheets = [f];
+    if (f.ext === '.html') {
+      const { sheets: linked, unread } = linkedStylesheets(f, cssFiles);
+      sheets.push(...linked);
+      const seenHref = new Set();
+      for (const { href, index, data } of unread) {
+        if (seenHref.has(href)) continue;
+        seenHref.add(href);
+        const shown = href.length > 80 ? `${href.slice(0, 80)}…` : href; // a data: URL can be kilobytes of base64
+        add('SKIP', 'scheme-mixing', rel(f.abs),
+          `linked stylesheet "${shown}" ${data ? 'is a data URL, which this check does not decode' : 'is not among the scanned files (remote, or outside --src)'} — its color-scheme declarations and hex values are unchecked for screen "${s.id}" (${scheme}), not clean`,
+          lineOf(f.content, index));
+      }
+      for (const t of stripHtmlComments(f.content).matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
+        const attrs = attributesOf(t[0]);
+        if ((attrs.get('name')?.value ?? '').trim().toLowerCase() !== 'color-scheme') continue;
+        const content = attrs.get('content')?.value ?? '';
+        if (conflicts(content, scheme)) {
+          add('ERROR', 'scheme-mixing', rel(f.abs),
+            `<meta name="color-scheme" content="${content}"> does not include ${scheme}, but ${who}`,
+            lineOf(f.content, t.index), FIX);
+        }
+      }
+    }
+    const own = new Set(lockColors.filter((c) => c.mode === scheme).map((c) => c.hex));
+    const foreign = new Map();
+    if (modes.length >= 2) for (const c of lockColors) if (c.mode === other && !own.has(c.hex) && !foreign.has(c.hex)) foreign.set(c.hex, c.name);
+    const ownColors = lockColors.filter((c) => c.mode === scheme);
+    for (const sheet of sheets) {
+      if (sheet !== f && done.has(`${sheet.abs}|${scheme}|sheet`)) continue;
+      done.add(`${sheet.abs}|${scheme}|sheet`);
+      const via = sheet === f ? '' : ` (linked by ${rel(f.abs)})`;
+      for (const { css, offset } of declarationTexts(sheet)) {
+        const text = blankSchemeMedia(css);
+        const declRe = /(?<![\w-])color-scheme\s*:\s*([^;{}]+)/gi;
+        let m;
+        while ((m = declRe.exec(text))) {
+          if (!conflicts(m[1], scheme)) continue;
+          add('ERROR', 'scheme-mixing', rel(sheet.abs),
+            `"color-scheme: ${m[1].trim()}" outside a token scope does not include ${scheme}, but ${who}${via}`,
+            lineOf(sheet.content, offset + m.index), FIX);
+        }
+      }
+
+      // (c): a raw value from the other mode's palette.
+      if (foreign.size === 0) continue;
+      let buf;
+      if (sheet.ext === '.css') buf = blankSchemeMedia(stripTokenScopes(stripCssComments(sheet.content)));
+      else if (sheet.ext === '.html') buf = blankSchemeMedia(stripTokenScopes(stripCssComments(stripHtmlComments(sheet.content))));
+      else buf = stripJsComments(sheet.content);
+      const grouped = new Map();
+      for (const h of scanHexHits(buf)) {
+        const n = normalizeHex(h.value);
+        if (!n || !foreign.has(n)) continue;
+        const g = grouped.get(n) ?? { count: 0, index: h.index, raw: h.value };
+        g.count += 1;
+        grouped.set(n, g);
+      }
+      for (const [n, g] of grouped) {
+        const name = foreign.get(n);
+        const near = ownColors.find((c) => c.name === name) ?? nearestLockColor(n, ownColors);
+        add('ERROR', 'scheme-mixing', rel(sheet.abs),
+          `raw #${g.raw} (${g.count}x) is the ${other}-mode token ${name}, but ${who}${via} — a ${other} palette value inside a ${scheme} screen`,
+          lineOf(buf, g.index), near ? `use var(--${near.name}), which is #${near.hex} in ${scheme}` : null);
+      }
+    }
+  }
+}
+
 // ================================================================ MICROCOPY GATE (plan §5.7 mechanical subset)
 
 function checkBannedJargon(lock, htmlFiles, rel) {
@@ -2219,6 +3012,12 @@ function main() {
   checkTransitionAll(files, rel);
   checkA11y(files, htmlFiles, rel);
   checkForbiddenSubstitutes(lock, files, rel);
+  const cssFiles = files.filter((f) => f.ext === '.css');
+  checkRawMotion(lock, files, rel);
+  checkTabularNums(htmlFiles, cssFiles, rel);
+  checkTextWrap(htmlFiles, cssFiles, rel);
+  checkRadiusArithmetic(lock, files, rel);
+  checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel);
 
   // ---- MICROCOPY GATE
   checkBannedJargon(lock, htmlFiles, rel);

@@ -187,6 +187,11 @@ bans.
   the ship report (e.g. the system mandates identical card grids → the "cards are lazy"
   heuristic yields; the type scale caps title/body below 2.5× → compose with weight + space
   and say so).
-- The lint owns the checkable subset (spacing-on-scale, title/body ratio, one-accent,
-  tabular-nums, text-wrap, concentric-radius arithmetic, em-dash, signature greps). Passing
-  this file's judgment never skips the lint; passing the lint never skips this judgment.
+- The lint owns the checkable subset: spacing on the scale (tokens-only-spacing, WARN), type
+  sizes and weights on the lock's roles (type-scale, WARN; the title/body ratio itself is not
+  computed), tabular figures in numeric tables (tabular-nums, WARN), balanced or pretty wrapping
+  on h1-h3 headings of three or more words (text-wrap, WARN), radii on the lock's radii scale or
+  a lock radius minus a spacing step (radius-arithmetic, WARN), em-dashes (em-dash, ERROR),
+  and signature greps (signatures, ERROR), which is also the only way the lint enforces
+  one-accent: as a lock signature with a grep. Passing this file's judgment never skips the
+  lint; passing the lint never skips this judgment.

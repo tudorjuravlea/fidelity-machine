@@ -105,7 +105,7 @@ So this reference and the scripts agree rather than drift:
 | `will-change` on anything outside transform, opacity, filter, clip-path | `adherence-lint` transition-all | ERROR |
 | Motion with no reduced-motion guard | `adherence-lint` a11y | WARN |
 | Interactive elements with no visible focus style | `adherence-lint` a11y | ERROR |
-| Raw duration or curve values outside a token scope | `adherence-lint` raw-hex and css-vars family | ERROR |
+| Raw duration, delay or easing values outside a token scope, in CSS (transition/animation properties and custom properties; not JS style objects) | `adherence-lint` raw-motion — ERROR when the lock declares `tokens.motion`; otherwise the section reports SKIP and does not enforce | ERROR / SKIP |
 
 Animate transform and opacity. Anything that triggers layout (width, height, top, left,
 margin) is both a performance defect and, in a pixel-verified pipeline, a source of

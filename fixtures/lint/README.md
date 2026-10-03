@@ -10,14 +10,18 @@ One folder per section, `fixtures/lint/<section>/`:
 
 - `design-lock.json`: a complete lock. It carries every optional field a section reads
   (imagery, figIds, lockedStrings, signatures, banned jargon, a disclosure inventory, a
-  provenance receipt), so no section skips and none fires on its own.
+  provenance receipt, radii and motion tokens), so no section skips and none fires on its own.
 - `screen.html`: the screen the lock points at. It opens with
   `<!-- lint-negative: <section> — <what was planted> -->`.
 - `tokens.dtcg.json`: a stand-in derived artifact whose hash the provenance receipt records.
 
-All 26 folders share one clean base, which lints to `No findings.`. Its copy is short on
+All 31 folders share one clean base, which lints to `No findings.`. Its copy is short on
 purpose: real sentence punctuation, the longest sentence 10 words, the button 2 words. A
-change to how a copy rule counts must not tip the base over a limit.
+change to how a copy rule counts must not tip the base over a limit. Two folders add to the
+base what their section needs in order to run at all, not a fault: `scheme-mixing` carries a
+second colour mode (in the lock and as a `[data-theme="dark"]` token block), and
+`transition-all` reads its duration from a token-scope custom property so `raw-motion` stays
+quiet.
 
 ## The one-fault rule
 

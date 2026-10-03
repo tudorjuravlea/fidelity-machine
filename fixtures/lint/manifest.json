@@ -106,7 +106,7 @@
       "lock": "transition-all/design-lock.json",
       "src": "transition-all",
       "minCount": 1,
-      "planted": ".btn animates every property; a reduced-motion guard is present so only this rule fires"
+      "planted": ".btn animates every property (its duration comes from a token-scope custom property); a reduced-motion guard is present so only this rule fires"
     },
     {
       "id": "a11y",
@@ -125,6 +125,51 @@
       "src": "forbidden-substitutes",
       "minCount": 1,
       "planted": "design-lock.json forbids the Arial family; body font stack names it as a fallback"
+    },
+    {
+      "id": "raw-motion",
+      "section": "raw-motion",
+      "level": "ERROR",
+      "lock": "raw-motion/design-lock.json",
+      "src": "raw-motion",
+      "minCount": 1,
+      "planted": ".btn fades with a hand-typed 180ms duration outside a token scope; a reduced-motion guard is present so only this rule fires"
+    },
+    {
+      "id": "tabular-nums",
+      "section": "tabular-nums",
+      "level": "WARN",
+      "lock": "tabular-nums/design-lock.json",
+      "src": "tabular-nums",
+      "minCount": 1,
+      "planted": "a table of amounts and dates whose numeric cells no font-variant-numeric: tabular-nums rule reaches"
+    },
+    {
+      "id": "text-wrap",
+      "section": "text-wrap",
+      "level": "WARN",
+      "lock": "text-wrap/design-lock.json",
+      "src": "text-wrap",
+      "minCount": 1,
+      "planted": "a three-word h2 that no text-wrap: balance|pretty rule reaches"
+    },
+    {
+      "id": "radius-arithmetic",
+      "section": "radius-arithmetic",
+      "level": "WARN",
+      "lock": "radius-arithmetic/design-lock.json",
+      "src": "radius-arithmetic",
+      "minCount": 1,
+      "planted": ".btn border-radius 12px, neither a lock radius (8, 16) nor a radius minus a spacing step"
+    },
+    {
+      "id": "scheme-mixing",
+      "section": "scheme-mixing",
+      "level": "ERROR",
+      "lock": "scheme-mixing/design-lock.json",
+      "src": "scheme-mixing",
+      "minCount": 1,
+      "planted": "design-lock.json carries both colour modes and the screen is light; one paragraph sets data-theme=\"dark\""
     },
     {
       "id": "banned-jargon",
