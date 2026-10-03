@@ -83,6 +83,34 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   The fixture manifest shape re-expresses display-dev/visualize's (MIT); the coverage gate is
   the part they lacked. Exit 0 all pass · 1 any failure · 2 setup/usage.
 
+- **`adherence-lint.mjs` — five sections the references had promised and the gate did not have**
+  (class: minor — new sections, new findings; golden gains one SKIP line and five summary rows, no
+  ERROR). A constraint audit found three references stating the lint enforced things it did not.
+  Now it does, and the sentences say exactly what fires. `raw-motion` (ERROR when the lock declares
+  `tokens.motion`, otherwise one SKIP saying so): a literal duration or easing in a transition or
+  animation declaration outside token scope — or in a custom property declared outside token scope,
+  the same dodge raw-hex closes for colour — with the nearest lock duration or the matching easing as
+  the suggestion, including the property name and syntax to write. `tabular-nums` (WARN): a table whose
+  body cells are predominantly numeric with no rule reaching those cells that sets
+  `font-variant-numeric: tabular-nums` or `"tnum"` on (`"tnum" 0`/`off` do not count; `@media print`
+  rules do not reach). `text-wrap` (WARN): headings of three words or more with no rule reaching them
+  that sets `text-wrap: balance|pretty`. `radius-arithmetic` (WARN; SKIP per value it cannot read): a
+  radius literal — shorthand, physical and logical longhands, inline style — that is neither on the
+  lock's radii scale nor a container radius minus a spacing step (the concentric rule made
+  checkable), with the derivation as the suggestion. `scheme-mixing` (ERROR; SKIP per linked
+  stylesheet it cannot read): for a screen with `colorScheme`, a `data-theme`/`color-scheme`
+  attribute on a tag, a `color-scheme:` declaration or `<meta name="color-scheme">` that disagrees
+  with the screen's scheme, more than one `data-theme` value in the file, or — when the lock has
+  more than one mode — a raw value from the other mode's palette, read across the screen and its
+  linked stylesheets. Each ships with its negative fixture (31/31); the 26 existing fixture bases
+  gained motion and radii tokens so every fixture still fires only its own section. The
+  enforcement sentences in `references/motion-craft.md`, `references/taste-and-composition.md` and
+  `references/slides-and-decks.md` were narrowed to what the code does — including the admission
+  that "title/body ratio" and "one-accent" have no section (type-scale checks sizes, not the ratio;
+  one-accent is enforceable only as a lock signature grep). Known limit, stated in the headers:
+  selector matching is by last compound; a rule whose selector list includes `:root` hides inside
+  token scope from raw-hex, raw-motion and radius-arithmetic alike.
+
 - **`release-check.mjs` lane 1 gains two prose-leak pattern classes** (class: patch; Markdown
   files only — in code the same shapes are legitimate identifiers and string data). One catches
   prose that cites an agent's private memory or feedback notes as authority — a public reader
@@ -99,6 +127,31 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   is a reconstruction (name what stays relative), and disagreeing sources stay visible as a
   provisional `decisions[]` row rather than averaged. The tier travels with the rung into the
   pre-flight (`references/mode-b.md`) and into `decisions[].rationale`.
+
+### Fixed
+
+- **`adherence-lint.mjs` — three defects the negative-fixture suite and the review surfaced** (class:
+  patch; golden output byte-identical; the em-dash fixture's reported line changes because it was
+  wrong). (1) `em-dash` and `banned-jargon` reported the line of the first RAW occurrence in the
+  file — an HTML comment, the `<head>`, an attribute — while their counts came from visible text;
+  the non-visible stripper gained a line-preserving twin, so the line is now the first visible one
+  and multi-word jargon is matched across line breaks (fuzzed against an independent oracle: zero
+  mismatches, visible text unchanged). (2) The `assets/` exclusion in `imagery-provenance` and
+  `signatures` tested a field the file records never had, so it never applied — an undeclared svg
+  under `assets/` was flagged as screen source and a signature living only in `assets/tokens.css`
+  satisfied a check meant for generated screens, including on the layout `eval-correction.mjs`
+  lints; it now excludes exactly the lock's own derived folder, and a file any `screens[].url`
+  resolves to is never excluded whatever its folder (two candidate rules — any parent named
+  `assets`, or `--src`-relative — both failed open and were rejected with proofs). A verdict can
+  change: a signature that only matched under `assets/` now fails. (3) A stylesheet of a few
+  thousand lines took seconds to minutes: `banned-fonts`' rule regex rescanned every brace-free
+  suffix when the sheet ended in a comment (quadratic); the lookbehind pin `stripTokenScopes`
+  already carried fixes it — 8k comment lines ~38 s → 0.13 s, 20k from past the eval timeout to
+  0.2 s, identical output over 300k fuzzed stylesheets. The `<head` pattern in both scanners also
+  matched `<header` (quadratic without `</head>`, 16k headers 8.2 s → 0.1 s) and hid header text
+  browsers show. Also: the human report is no longer truncated when piped to a slow reader
+  (`process.exit()` right after the last write dropped everything past 64 KiB, RESULT line
+  included; lint runs now set `exitCode` and return).
 
 ### Changed
 
