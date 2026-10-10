@@ -10,7 +10,11 @@ brand-neutral on purpose; the client's brand belongs in the lock, never here.
 Read first: `scope-contract.md` (what runs and what is claimed), `surface-classes.md` (a print
 surface is a class of its own), `slides-and-decks.md` (page anatomy carries over). The scaffold's
 `tools/README.md` holds the tool contracts named below (`export-print`, `print-boxes`,
-`print-check`).
+`print-check`). Companions for the pieces this file only names: `large-format-textile.md`
+(banners, photo walls, stage backdrops), `multi-page-print.md` (brochures and booklets),
+`print-guides.md` (the one-page guide every piece ships with), `event-screens.md` (the same
+system on the room's screens, with an editable deck), `measurement-discipline.md` (numbers from
+renders, not from memory).
 
 ## 1. Intake is a checklist, not a conversation
 
@@ -165,6 +169,7 @@ legitimate only at error correction H, on a white plate of about 26 % of the cod
 - Backdrops (pop-up frames): only the printer's dieline is authoritative for size; curved frames
   need a curved-cut file; the bottom ~1.2 m and the head-height band are covered in every photo,
   so logos go high and to the sides. For roll-ups, the cassette hides the bottom 10 to 15 cm.
+  Frame banners, photo walls and stage backdrops in detail: `large-format-textile.md`.
 
 ## 10. Questions to ask before the next pieces
 
@@ -174,3 +179,52 @@ owner and file deadline; floor plan and photos; photographer or livestream frami
 size and system for roll-ups; frame model, dieline, single/double-sided, what stands in front for
 backdrops; whose lectern, mounting method, visible area in use for lectern panels; purpose,
 photographer vs selfies, lighting and floor for a photo corner.
+
+## 11. Shapes beyond rectangles: dielines
+
+A tapered lectern front, a shaped sign, anything a cutter follows: the artwork page is the
+shape's **bounding box plus bleed**; the fill is clipped to the shape **grown by the bleed**
+(path operators and a clip in the PDF, computed from the measured corners); the cut path ships as
+a **separate PDF** on the same page size, a 0.5 pt magenta line and nothing else, so the printer
+can drop it on a cutter layer. The client's photo with their tape-measure letters (A, B, C …)
+goes on the guide beside the artwork with the measures restated; ask them to re-measure the real
+object before cutting. Vinyl wraps 10 mm round the panel edges (the bleed); a rigid board is cut
+to the dieline and fixed with tape or hook-and-loop so the object can be returned unmarked.
+
+## 12. Apparel and objects: print areas measured on the object
+
+A tote bag, a cap, a mug: the file is the print area, not the object. Rules that survived four
+rounds of correction:
+
+- Get the object's model number and its data sheet; the printable area and the cost tiers (edge
+  to edge costs double on a stock bag) decide the format before any design.
+- One file per applied piece, page = the piece, no bleed; the printer places it by a rule they
+  can measure on the object ("the outer circle ends on the base of the left handle strap", "the
+  wordmark sits on the bottom seam, seam to seam"). Solve the size numerically from that rule
+  and verify it on the render against the mock-up photo.
+- A client's two references disagree (a mock-up photo and a crop file): say so in one sentence
+  and ask which governs; registering the crop numerically (intersection over union against the
+  full mark) settles it.
+- Visual equality between elements ("the contour as thick as the letters") is one measured
+  ratio (stems as a share of wordmark width, arcs as a share of symbol height) and every size is
+  derived from it; see `measurement-discipline.md`.
+- One version unless the client asks for alternatives; when they do, present them as a numbered
+  sheet with the physical consequence of each (margins under the handle bases, cost tier), then
+  delete the rejected ones from the folder once decided.
+
+## 13. Many pieces, one system
+
+- The headline, once the client locks wording and casing, is identical on every piece; grep all
+  sources for the old wording after the change and rebuild every zip.
+- Brand strips and rules follow per-piece rules (on the seen edge of a banner, bleeding off the
+  trim of a badge, absent from a stage backdrop when the client says so) and the guide records
+  which rule applies.
+- Partner and member logos: vector where a vector exists (public emblems from an institutional
+  wiki, official SVGs; check an SVG for an embedded raster before trusting it), the official PNG
+  where none exists, said so in the guide; when the client wants their real colours, a white band
+  is the honest ground, reversed versions are a courtesy.
+- Shared assets that several builds read (a white logo PNG) vanish from working folders during
+  long jobs; regenerate them from the vector source with a script rather than copying a file
+  around, and give them a specific name.
+- Deliver per piece (PDF, trim PNG, preview, guide, zip) and once more as a combined handover
+  when asked. Rebuild zips; never patch them.

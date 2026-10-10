@@ -5,13 +5,22 @@
     "social-portrait": { "w": 1080, "h": 1350, "use": "LinkedIn / IG feed (default social format)" },
     "social-square":   { "w": 1080, "h": 1080, "use": "IG, WhatsApp" },
     "story":           { "w": 1080, "h": 1920, "use": "IG/LinkedIn story", "safeZone": { "topPx": 250, "bottomPx": 300 } },
-    "event-banner":    { "w": 1600, "h": 900,  "use": "LinkedIn event cover, webinar/meetup banner" }
+    "event-banner":    { "w": 1600, "h": 900,  "use": "LinkedIn event cover, webinar/meetup banner" },
+    "screen-4k":       { "w": 3840, "h": 2160, "use": "event screens (opening, agenda, speaker slides) on a 4K wall; build in px of this frame, RGB" }
   },
   "print": {
     "a4-onepager": { "trimMm": [210, 297], "bleedMm": 0, "dpi": 300, "pxAtDpi": [2480, 3508], "use": "one-pager, handout; zero bleed is only valid while the template design avoids full-bleed art" },
     "a5-flyer":    { "trimMm": [148, 210], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1748, 2480], "use": "event flyer" },
     "a6-postcard": { "trimMm": [105, 148], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1240, 1748], "use": "postcard, handout" },
     "a3-poster":   { "trimMm": [297, 420], "bleedMm": 3, "dpi": 300, "pxAtDpi": [3508, 4961], "use": "poster" },
-    "a2-poster":   { "trimMm": [420, 594], "bleedMm": 3, "dpi": 200, "pxAtDpi": [3307, 4677], "use": "large poster; 200 dpi is acceptable at A2 viewing distance — ink/scaling risk, stage last" }
+    "a2-poster":   { "trimMm": [420, 594], "bleedMm": 3, "dpi": 200, "pxAtDpi": [3307, 4677], "use": "large poster; 200 dpi is acceptable at A2 viewing distance — ink/scaling risk, stage last" },
+    "badge":       { "trimMm": [103, 120], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1217, 1417], "use": "conference badge, portrait; check the holder window, hole/grommet zones and any stuck-on label zone before designing" },
+    "lanyard-strip": { "trimMm": [900, 20], "bleedMm": 2, "dpi": 300, "pxAtDpi": [10630, 236], "use": "sublimated lanyard, one strip per width (15/20/25 mm) plus a seamless repeat tile; see print-collateral §9" },
+    "square-brochure": { "trimMm": [210, 210], "bleedMm": 3, "dpi": 300, "pxAtDpi": [2480, 2480], "use": "4- or 8-page square booklet; pages imposed on 420 × 210 sheets; see multi-page-print" },
+    "frame-banner":  { "trimMm": [1000, 2500], "bleedMm": 10, "dpi": 100, "pxAtDpi": [3937, 9843], "use": "textile for a 1 × 2.5 m aluminium frame; hemmed, no marks; raster ≥ 100 dpi comfortable, flag < 60; see large-format-textile" },
+    "photo-wall":    { "trimMm": [3500, 2500], "bleedMm": 10, "dpi": 50,  "pxAtDpi": [6890, 4921], "use": "photocall wall on a floor frame; lower 1.2 m is covered by people; raster ≥ 50 dpi, flag < 35" },
+    "stage-backdrop": { "trimMm": [5000, 2300], "safetyMm": 50, "bleedMm": 0, "dpi": 50, "pxAtDpi": [9843, 4528], "use": "textile behind a centred lectern; the printer asks for a printed safety margin, not a bleed; nothing informational within 150 mm of the trim or in the lectern zone" },
+    "shaped-panel":  { "trimMm": [550, 1250], "bleedMm": 10, "dpi": 150, "pxAtDpi": [3248, 7382], "shape": "trapezoid 550 top / 430 foot (example); page = bounding box + bleed, fill clipped to the shape grown by the bleed, cut path as a separate dieline PDF", "use": "lectern front, shaped signs; see print-collateral §11" },
+    "object-print-area": { "trimMm": [340, 380], "bleedMm": 0, "dpi": 300, "pxAtDpi": [4016, 4488], "use": "a stock tote bag's single-colour print area inside the maker's margins (example values); the file is the print area, not the object; see print-collateral §12" }
   }
 }

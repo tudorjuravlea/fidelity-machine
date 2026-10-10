@@ -16,7 +16,7 @@
  *                      plus prose-only classes (.md only): private-memory-reference,
  *                      scrub-scar
  *   2. clean-tree      DEFAULT-DENY: only allowlisted suffixes ship (.mjs/.md/.json/
- *                      .cjs/.css/.html + reviewed fixtures/golden/reference/*.png
+ *                      .cjs/.css/.html/.yml/.swift + reviewed fixtures/golden/reference/*.png
  *                      verified by magic bytes + size cap); symlinks fail; plus the
  *                      named assertions (no .env*, *.log, .DS_Store, .render/ or
  *                      .report/ artifacts, no font binaries)
@@ -250,7 +250,7 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   // DEFAULT-DENY: everything that ships must be an allowlisted text suffix, an allowlisted
   // extensionless basename, or the one reviewed binary carve-out below. Anything else fails
   // BY NAME — new file types enter the release surface only by a conscious allowlist edit.
-  const SHIP_SUFFIXES = new Set(['.mjs', '.md', '.json', '.cjs', '.css', '.html', '.yml']);
+  const SHIP_SUFFIXES = new Set(['.mjs', '.md', '.json', '.cjs', '.css', '.html', '.yml', '.swift']); // .swift: the scaffold's local foreground cut-out tool (source only, compiled in the skill)
   const SHIP_BASENAMES = new Set(['LICENSE', 'NOTICE', '.gitignore', '.npmignore']);
   // Reviewed binary carve-outs: the golden fixture's reference screenshots, and the README
   // demo GIF(s) under docs/ — each only when the magic bytes match and the size is sane.

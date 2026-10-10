@@ -7,6 +7,33 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Event collateral beyond the badge: five references, format presets, layout skeletons and
+  seven shipped helpers** (class: minor — scaffold additions only; the lock schema, the lint and
+  the gates are unchanged). `references/large-format-textile.md` (frame banners, photo walls,
+  stage backdrops: safety margin vs bleed, dpi as a viewing-distance budget with a flag table,
+  the image's own colour as the ground, one gradient PNG per veil instead of abutting bands,
+  people and lecterns modelled in the file, five-minute-render hygiene), `multi-page-print.md`
+  (brochures and booklets: format from the word count, one hero per page on a shared grid, two
+  inks on dark pages, body and titles fitted by measurement, annotated-PDF feedback rounds),
+  `event-screens.md` (the room's 4K screens from the same system, portrait cut-outs and shadows,
+  an editable PowerPoint from plates with embedded fonts), `print-guides.md` (the anatomy of the
+  one-page guide generated from the print file), `measurement-discipline.md` (bounding boxes,
+  run-width histograms, sketch registration, measured cap heights, the measuring-window edge
+  signature, "verify that what is defined is drawn"). `print-collateral.md` gains §11 shaped
+  panels and dielines, §12 apparel and object print areas, §13 many pieces as one system, and
+  pointers to the companions; `skill-template.md` §3 routes each surface to its reference.
+  `skill-scaffold/capture/formats.json` adds `screen-4k` and the print presets `badge`,
+  `lanyard-strip`, `square-brochure`, `frame-banner`, `photo-wall`, `stage-backdrop`
+  (`safetyMm`), `shaped-panel` (`shape`) and `object-print-area`; `PRINT-LAYOUTS.md` and
+  `LAYOUTS.md` gain the matching skeletons. `skill-scaffold/root/tools/` now ships brand-free
+  code beside the contracts: `lib/print-kit.mjs`, `measure-render.mjs`, `guide-sheet.mjs`,
+  `cutout.swift`, `prep-cutouts.mjs`, `embed-fonts.mjs`, `pptx-from-plates.cjs`, each with a
+  `--self-test` that proves one refusal; their dependencies are installed in the skill, never
+  borrowed from the engine. `release-check.mjs` admits `.swift` to the ship allowlist for that
+  one source file (a conscious allowlist edit, as the checker demands). Distilled from a multi-piece event job (badge, lanyard, tote,
+  banner, photo wall, brochure, lectern, backdrop, screens, editable deck) with the client's
+  brand kept out of the engine by name and by sweep.
+
 - **`adherence-lint.mjs --json`, `--list-sections`, `--self-test`, and a `suggestion` field**
   (class: patch — the human report is unchanged byte for byte except the `provenance` row noted
   under Changed; exit codes unchanged). `--json` emits NDJSON: one finding per line (`level`,

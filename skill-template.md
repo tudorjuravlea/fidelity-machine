@@ -92,7 +92,13 @@ navigation → `ENGINE/references/ia-and-navigation.md`; alternative solutions t
 problem → `ENGINE/references/variations.md` (after the baseline passes, never before);
 anything that leaves the screen (badges, lanyards, roll-ups, backdrops, lectern panels, print
 specification sheets) → `ENGINE/references/print-collateral.md` (constraints in mm as code, two
-render routes, the print gates, measured iteration, rebuildable delivery);
+render routes, the print gates, measured iteration, rebuildable delivery); frame banners, photo
+walls and stage backdrops → `ENGINE/references/large-format-textile.md` (safety margins, dpi as a
+viewing-distance budget, gradient veils, people in front); brochures, booklets and folded
+leaflets → `ENGINE/references/multi-page-print.md`; the room's screens (opening, agenda, speaker
+slides) and an editable deck with embedded fonts → `ENGINE/references/event-screens.md`; the
+one-page guide every print piece ships with → `ENGINE/references/print-guides.md`; placing against
+imagery, matching strokes, cap heights and client sketches → `ENGINE/references/measurement-discipline.md`;
 anything that animates → `ENGINE/references/motion-craft.md` (durations and curves come from
 `tokens.motion` by name, never invented; the pixel gate cannot see motion, so say what was
 reviewed); platform CSS features (scroll-driven animation, view transitions, `@starting-style`,

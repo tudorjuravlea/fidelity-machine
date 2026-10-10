@@ -24,3 +24,12 @@ scaled for viewing distance, and record the scale as a DECISIONS.md row:
 One file per layout, `<name>.html`, each declaring `[data-render-ready]`, in the canonical
 deck order: `cover`, `divider`, `content`, `stats`, `quote`, `closing`. Per layout, record
 here: which verified section it translates, its grid, and its slots.
+
+## Event screens (room screens, `screen-4k`)
+
+When the deck is shown in the room rather than presented, add three layouts beside the six:
+`opening` (the slogan, logo, imagery), `agenda` (two columns of entries, session headings as
+tracked small capitals), `speaker` (3:4 portrait on the ground side in a hairline frame, eyebrow
++ two-line name + role + institution beside it, imagery with its feature inside the frame). Built
+in pixels of the 4K frame, RGB, rendered as PNG + PDF, and as an editable PowerPoint from plates
+with embedded fonts when the client must edit: `ENGINE/references/event-screens.md`.

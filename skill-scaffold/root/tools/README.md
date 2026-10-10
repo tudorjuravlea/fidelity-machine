@@ -90,3 +90,57 @@ tool only when its phase arrives: the deck pipeline first, print last.
   net-new surfaces (slides/social/print) carry this lint + taste + render + human review.
 - Every detector cites the DECISIONS.md row it enforces; a rule without a DEC number is a
   preference and does not belong here.
+
+## Shipped helpers for print, large format and event screens
+
+Unlike the contracts above, these arrive in the skill as CODE (brand-free, scaffolded from the
+engine) because they encode measured lessons rather than brand rules. They borrow nothing from the
+engine at runtime: install their dependencies in the skill (`npm i pdf-lib @pdf-lib/fontkit
+pptxgenjs ttf2eot`); Ghostscript and, for the Swift tool, Xcode's command-line tools must be on
+the machine. Each has `--self-test` proving one refusal. Guidance: `ENGINE/references/print-collateral.md`,
+`large-format-textile.md`, `multi-page-print.md`, `print-guides.md`, `event-screens.md`,
+`measurement-discipline.md`.
+
+### lib/print-kit.mjs — Route B primitives
+
+`printPage` (trim + bleed/safety, mm helpers from the trim's top-left), `cropMarks`, `clipPolygon`
++ `growPolygon` (shaped panels: fill clipped to the shape grown by the bleed), `profilePng`
+(one-pixel gradient PNG for veils), `whiteArtboardPage` (recolour a single-colour vector
+artboard to white; refuses when the page has more than one colour operator), `cmykPass`
+(Ghostscript pdfwrite to DeviceCMYK, no downsampling), `preview`, `gates` (page sizes in mm,
+font names, ink per page, DeviceRGB presence), `dpiAtSize`.
+
+### measure-render.mjs — numbers from a render
+
+`bbox` of pixels matching a colour (reports when the box touches the window's own edge, the
+signature of a clipped feature), `runs` (histogram of run widths; the mode is a stroke's core
+width), `sample` (median colour of a window — the ground to use under a photograph). Refuses a
+missing file or command (2).
+
+### guide-sheet.mjs — the one-page print guide from a JSON spec
+
+Header band, the real print PDF embedded at a stated scale with the trim dashed, dimension
+lines, people/lectern silhouettes, four numbered sections, files, footer, optional stripe; warns
+when the text overflows the page. Refuses a spec whose artwork PDF is missing (2).
+
+### cutout.swift + prep-cutouts.mjs — portraits without a background, locally
+
+`cutout` (Vision foreground mask, macOS 14+; `swiftc -O -o tools/cutout tools/cutout.swift`)
+writes an RGBA PNG; `prep-cutouts` erodes the matte, removes blue or green spill at the edge
+(with a distance-gated strong pass for one image's hair region), and builds a quarter-size
+blurred shadow per figure. Refuses missing directories (2).
+
+### embed-fonts.mjs — fonts inside the .pptx
+
+Converts each TTF to Embedded OpenType, stores it under `ppt/fonts/`, adds the content type, the
+relationships and `<p:embeddedFontLst>` after `<p:notesSz>`. Refuses usage errors and a deck
+that already carries an embedded list (2); a missing font file is exit 1. Embed only faces whose
+licence allows it, and ship the free ones beside the deck for programs that ignore embedding.
+
+### pptx-from-plates.cjs — the editable deck
+
+Backgrounds and portraits as images, every line of type as a text box placed by its first
+baseline (0.8 × exact line spacing below the box top), frames as shapes, notes per slide. Refuses
+a missing plate (2). Gate the result with the package validator, a text dump, and a LibreOffice
+render compared with the PDF deck.
+
