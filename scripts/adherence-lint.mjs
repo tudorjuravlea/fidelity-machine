@@ -18,6 +18,7 @@
 // Usage:
 //   node scripts/adherence-lint.mjs --lock <path/to/design-lock.json> [--src <dir>]
 //   --src defaults to the lock's directory. Scanned extensions: .html .css .jsx .tsx .js
+//   Scope: the lock's own tree; a symlinked DIRECTORY is another tree and is not entered (a symlinked file is read).
 //
 // Exit codes (CONTRACT.md, uniform across all scripts):
 //   0 = pass (no ERROR findings; WARN/SKIP allowed)
@@ -61,7 +62,7 @@
 // the levels each section can emit, read from this file's own source; --self-test proves the
 // registry and the source agree and that both output forms of a golden run say the same thing.
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, lstatSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join, dirname, resolve, relative, basename, extname, sep, isAbsolute } from 'node:path';
@@ -306,8 +307,11 @@ function walkSourceFiles(dir) {
       // inlined multi-hundred-KB documents, which stalled full-directory runs for minutes.
       if (entry.endsWith('.preview.html')) continue;
       const p = join(d, entry);
+      // A symlinked directory is another tree (the engine runtime linked in as `kit`, a shared
+      // fonts folder, a sibling capture); the lint's scope is the lock's own tree, so it is not
+      // entered. A symlinked FILE is still read (statSync below), so a linked source keeps coverage.
       let st;
-      try { st = statSync(p); } catch { continue; }
+      try { if (lstatSync(p).isSymbolicLink() && statSync(p).isDirectory()) continue; st = statSync(p); } catch { continue; }
       if (st.isDirectory()) visit(p);
       else if (SRC_EXTS.has(extname(entry)) && !entry.endsWith('.min.js')) {
         out.push({ abs: p, ext: extname(entry), content: readFileSync(p, 'utf8') });
