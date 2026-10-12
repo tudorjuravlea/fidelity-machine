@@ -129,6 +129,11 @@ Two consequences that are not optional:
    capture time makes the pixel diff nondeterministic, and the failure looks like a flaky
    threshold rather than what it is.
 
+For time-driven pieces built on the motion layer (`references/motion-media.md`), the first
+consequence narrows without disappearing. Rest poses registered as screens with a reference are
+pixel-gated, sampled in-between frames are checked for reproducibility, and the remainder is
+reviewed by a person on contact sheets. The feel of motion is still a human verdict.
+
 ## Translating a native motion spec into a web prototype
 
 A prototype of a native app is usually HTML, while the design system it reproduces is
@@ -142,6 +147,9 @@ that does not correspond to the real one, and presenting an approximation as the
 | `ease-out` | `.easeOut(duration:)` | tween with a decelerate easing |
 | A bouncy spring | `.bouncy` | spring, low stiffness, medium-bouncy damping |
 | A smooth spring | `.smooth` | spring, medium stiffness, no bounce |
+
+A spring the lock wants expressed in CSS goes in as `linear(…)`, the standardised easing the motion
+layer's kit parses, not as a bezier approximation presented as the real curve.
 
 Three rules when the target is native:
 

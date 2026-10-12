@@ -101,7 +101,8 @@ one-page guide every print piece ships with → `ENGINE/references/print-guides.
 imagery, matching strokes, cap heights and client sketches → `ENGINE/references/measurement-discipline.md`;
 anything that animates → `ENGINE/references/motion-craft.md` (durations and curves come from
 `tokens.motion` by name, never invented; the pixel gate cannot see motion, so say what was
-reviewed); platform CSS features (scroll-driven animation, view transitions, `@starting-style`,
+reviewed); films and presenter-paced decks (the picture as a function of time) →
+`ENGINE/references/motion-media.md`; platform CSS features (scroll-driven animation, view transitions, `@starting-style`,
 anchor positioning, container queries) → `ENGINE/references/modern-css.md` (start visible then
 enhance; the pinned render browser proves nothing about the audience); color work beyond
 pasting lock values (deriving ramps or chart scales, contrast decisions, palette extraction
@@ -186,6 +187,7 @@ specific without a DEC number is a preference, not a rule.
 | Which asset for which occasion, caption skeleton | `references/playbook.md` |
 | Slide/social/print layouts + type scales | `captures/{{CAPTURE_NAME}}/templates/` |
 | Canvas/print sizes | `captures/{{CAPTURE_NAME}}/formats.json` |
+| Film / clicker-deck skeletons and the role map | `captures/{{CAPTURE_NAME}}/templates/motion/MOTION-LAYOUTS.md` |
 
 ## Hard rules
 

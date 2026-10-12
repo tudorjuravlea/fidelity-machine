@@ -85,4 +85,6 @@ the other mode's palette when the lock carries both modes).
    understandable by someone who missed the presentation, with its source cited, units
    and rounding consistent, sort order intentional, and outliers annotated.
 5. Export: render each slide screen to PNG at the deck canvas; assemble in the delivery
-   tool. The verified artifact is the HTML slide; the export is a projection of it.
+   tool. The verified artifact is the HTML slide; the export is a projection of it. A deck the
+   presenter paces live with motion (a press plays the next beat) takes its method and
+   gates from `motion-media.md`; there too the verified artifact is the HTML.
