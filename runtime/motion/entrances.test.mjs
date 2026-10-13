@@ -2,7 +2,7 @@
 // The DOM half (collect, run, audit) is exercised in a real browser by `motion.mjs check` and its fixtures.
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { FACTORS, FADE_SHARE, TYPES, timing, gapOf, groupStarts, stepEnds, rigOf, spatialCurve, unionBox, inkBox, groupLiteral, textReach } from './entrances.js';
+import { FACTORS, FADE_SHARE, TYPES, timing, gapOf, groupStarts, stepEnds, rigOf, spatialCurve, unionBox, inkBox, groupLiteral, textReach, layerHosts } from './entrances.js';
 import { resolveMotion, expo, spring, soft, easing } from './time.js';
 
 const near = (got, want, tol = 1e-9) => assert.ok(Math.abs(got - want) <= tol, `${got} is not ${want}`);
@@ -118,4 +118,12 @@ test('each line of text counts as one line-height band around its centre', () =>
   // several lines join; no text, no band
   assert.deepEqual(textReach([{ left: 0, top: 0, right: 300, bottom: 30 }, { left: 0, top: 40, right: 420, bottom: 70 }], 40), { left: 0, top: -5, right: 420, bottom: 75 });
   assert.equal(textReach([], 40), null);
+});
+
+test('a layer goes on the container of loose movers and on unmoved keeps — never on a mover', () => {
+  // body > bar > [mark (rise), tag (drop)] ; body > badge (data-keep, no entrance) ; body > logo (fade, directly in body)
+  const parent = { bar: 'body', mark: 'bar', tag: 'bar', badge: 'body', logo: 'body', inner: 'tag' };
+  const movers = new Set(['mark', 'tag', 'logo', 'inner']);   // inner moves inside tag, which also moves
+  const hosts = layerHosts(movers, ['badge', 'tag'], id => parent[id], id => id === 'body' || id === undefined);
+  assert.deepEqual([...hosts].sort(), ['badge', 'bar']);
 });

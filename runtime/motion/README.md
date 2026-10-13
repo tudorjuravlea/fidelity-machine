@@ -42,9 +42,11 @@ same. It lives once, here; a skill reaches it through the `kit` symlink `motion.
    row's text extent plus its padding, so a block heading fits without `.ln`; film and deck both take `setup({ W, H, fps, scenes })`; while it runs all listed scenes carry `data-on`, so `fit()` and
    other measurements see real boxes; the first draw then leaves only the scene on screen switched on. `deck()` is
    therefore async: `await mount(deck({…}))` (mount also accepts the promise).
-6. **Loose layers.** Entrance and `data-keep` elements outside every scene (an overlay bar) get
-   `will-change: transform` from the kit at collect time, so their text is rasterised on its own layer and does
-   not pick up antialiasing from what a push or wipe moved under it earlier.
+6. **Loose layers.** Outside every scene, the kit gives `will-change: transform` to the CONTAINER of loose entrance
+   elements and to `data-keep` elements it never moves — never to an element it translates or fades (a promoted mover
+   keeps its mid-move raster). The overlay then does not pick up antialiasing from what a push or wipe moved under it.
+   Live mode writes the pose into the hash with `history.replaceState` (no `hashchange`, so the kit's own update cannot
+   pull a fresh press back), and back pressed on a beat's first instant returns to the pose that beat left.
 7. **How tools launch.** Chromium needs `--allow-file-access-from-files` to load the kit's ES modules over
    `file://` (or serve the lock directory). For frames that are byte-identical in any drawing order, `motion.mjs`
    launches with BOTH `--disable-gpu-rasterization` and `--disable-partial-raster`: GPU rasterisation leaves rotated

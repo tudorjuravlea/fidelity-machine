@@ -165,3 +165,11 @@ test('a press without a usable time is dropped, and a log with a bad press is re
   try { run(poses, [{ w: 1, k: 'jump' }]); } catch (err) { unknown = err.message; }
   ok(unknown && unknown.includes('press 0'));
 });
+
+test('back on the very instant a beat starts returns to the pose the beat left, not one before it', () => {
+  const clock = createClock(poses, 1);   // resting on pose 1 (t = 2)
+  clock.press('next', 5);
+  clock.press('back', 5);
+  equal(clock.read(5.5).target, 1);
+  close(clock.read(5.5).t, 2);
+});

@@ -62,6 +62,20 @@ export function groupLiteral({ each, dur, text, scene = null }) {
   return { scene, fx: each, attr: 'data-dur', value: dur, text };
 }
 
+// Which elements outside the scenes get their own compositor layer: for every element the kit moves, its nearest
+// ancestor that the kit does not move (stopping before the page root), and every kept element the kit does not move.
+// Pure over a parent function, so the rule is testable without a page.
+export function layerHosts(movers, keeps, parentOf, isRoot) {
+  const hosts = new Set();
+  for (const mover of movers) {
+    let up = parentOf(mover);
+    while (!isRoot(up) && movers.has(up)) up = parentOf(up);
+    if (!isRoot(up)) hosts.add(up);
+  }
+  for (const kept of keeps) if (!movers.has(kept)) hosts.add(kept);
+  return hosts;
+}
+
 // A group (data-each): child i starts stagger·i after the group's own data-at.
 export const groupStarts = (at, stagger, n) => Array.from({ length: n }, (_, i) => at + i * stagger);
 export const STAGGER = 0.08;
@@ -318,11 +332,15 @@ export function entrances({ motion, fx = {} }) {
     }
     // Things drawn over the scenes (outside every scene) get a compositor layer of their own. Without one, Chromium
     // re-rasterises their text against whatever a push or a wipe moved under them in earlier frames, and the same
-    // instant comes out with different antialiasing depending on the drawing order. Set here, once, in
-    // JS: deterministic, and no stylesheet rule a lint would have to allow.
+    // instant comes out with different antialiasing depending on the drawing order. The layer goes on the CONTAINER
+    // of the loose entrances (and on a data-keep element the kit never moves) — never on an element the kit itself
+    // translates or fades: a promoted mover keeps the raster it had mid-move, which is the same fault from the other
+    // side. Set here, once, in JS: deterministic, and no stylesheet rule a lint would have to allow.
     if (loose) {
+      const movers = new Set(list.map(e => e.el));
       const keeps = [...scope.querySelectorAll('[data-keep]')].filter(mine);
-      for (const el of new Set([...list.map(e => e.el), ...keeps])) el.style.willChange = 'transform';
+      const top = el => el === document.body || el === document.documentElement || !el;
+      for (const el of layerHosts(movers, keeps, el => el.parentElement, top)) el.style.willChange = 'transform';
     }
     return list;
   }

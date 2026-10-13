@@ -144,8 +144,10 @@ function present(deck, api, show) {
     },
     arrive: ({ target }) => {
       // the hash names the pose, so a reload comes back to it (replace: no history entry per pose)
+      // replaceState, not location.replace: it changes the hash without firing hashchange, so the kit's own update
+      // can never come back as a jump that pulls a press made a moment later back to this pose
       const wanted = '#' + target;
-      if (location.hash !== wanted) location.replace(wanted);
+      if (location.hash !== wanted) history.replaceState(history.state, '', wanted);
       deck.prepare?.(target);
       report();
     },

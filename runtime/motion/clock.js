@@ -47,8 +47,12 @@ export function createClock(stops, start = 0, { fast = FAST, blank = false } = {
       if (ahead !== -1) travel(w, ahead, poseTime(ahead) - here);
     },
     back(w, here, leg) {
-      const retreating = inMotion(leg, w) && leg.to < leg.from;
-      const behind = retreating ? leg.target - 1 : stops.findLastIndex(p => p.t < here - SLACK);
+      const moving = inMotion(leg, w), retreating = moving && leg.to < leg.from;
+      // retreating: one pose further back; mid-beat: the pose the beat left (at or before `here`, which is that pose's
+      // own time when back lands on the beat's first instant); at rest: the pose strictly before this one
+      const behind = retreating ? leg.target - 1
+        : moving ? stops.findLastIndex(p => p.t <= here + SLACK)
+        : stops.findLastIndex(p => p.t < here - SLACK);
       if (behind >= 0) travel(w, behind, Math.min(here - poseTime(behind), fast));
     },
     goto(w, here, leg, i) {
