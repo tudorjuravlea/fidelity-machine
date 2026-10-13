@@ -105,7 +105,24 @@ are not a plain `pass`, and both are by design:
 ## Platform note
 
 CI runs the static gates on Linux and macOS. The lock's typography names a family a Linux runner does not
-have, so the goldens render in whatever fallback the machine picks there. Headlines are sized to the
-measure by measuring them (`fit`) and the rest has room inside the margin, and determinism compares one
-machine's frames with each other, never a stored image. That reasoning is the only evidence for Linux: the
-fixtures were run on macOS. The `.js` files are the pieces' own scripts, as `motion.mjs new` writes them.
+have, and the derived `tokens.css` carries that name with no generic family after it, so Chromium falls back
+to its own default, which on Linux is a serif (DejaVu Serif), not a sans. The goldens therefore render in
+whatever the machine picks, and the fixtures are written so that this cannot move a gate:
+
+- headlines are sized to the measure by measuring them (`fit`), and paragraphs wrap inside the margins;
+- nothing sits on the margin itself: the film's top bar starts one gap below it, so the reach of its text
+  (a face's ascent can poke past its line box) stays inside the margin whatever the face;
+- determinism compares one machine's frames with each other, never a stored image.
+
+The first Linux run failed on exactly that last point of the bar: the mark's text reached 1 px above the
+margin in the serif fallback. It was reproduced on a Debian container (Chromium 1228, DejaVu and Liberation
+fonts) and on macOS by pointing a copy of the lock at `Times New Roman`; the lock itself is unchanged.
+
+To check a new fixture against a face the machine does not have, copy `fixtures/motion` to a sibling
+directory (the pieces load the kit by a relative path, so the depth must match), change the family in the
+copy's `design-lock.json`, run `node scripts/capture-figma.mjs --derive --lock <copy>/design-lock.json`
+(never edit `assets/tokens.css` by hand: the provenance hash would fail), then
+`node scripts/motion.mjs --self-test --manifest <copy>/manifest.json`. All 17 pieces passed under Verdana,
+Impact, Arial Black, Courier New, Times New Roman and Georgia on macOS, and under the real fallback,
+`sans-serif` (DejaVu Sans), DejaVu Sans Mono, Liberation Mono and Liberation Serif on Linux. The `.js` files
+are the pieces' own scripts, as `motion.mjs new` writes them.

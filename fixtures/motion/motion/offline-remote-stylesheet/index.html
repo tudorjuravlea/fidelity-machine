@@ -41,8 +41,9 @@
   }
   p, h2 { line-height: 1.12; text-wrap: balance; }
 
-  /* the bar that stays up across scenes; nothing in it is turned, so every box sits inside the margin */
-  #bar { position: absolute; z-index: 5; inset: var(--piece-edge) var(--piece-edge) auto; display: flex; justify-content: space-between; align-items: center; gap: var(--piece-gap-m); }
+  /* the bar that stays up across scenes; nothing in it is turned, and it starts one small gap below the margin, so the
+     reach of its text stays inside the margin whatever face the machine falls back to */
+  #bar { position: absolute; z-index: 5; inset: calc(var(--piece-edge) + var(--piece-gap-m)) var(--piece-edge) auto; display: flex; justify-content: space-between; align-items: center; gap: var(--piece-gap-m); }
   #mark { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-body); }
   #tag { padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); font-weight: var(--piece-weight-strong); font-size: var(--piece-size-caption); white-space: nowrap; }
 
