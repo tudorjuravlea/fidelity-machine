@@ -164,6 +164,11 @@ function findScreen(lock, id) {
   return screen;
 }
 
+// The url with its first "?" or "#" and everything after removed: the file path render.mjs resolves.
+function screenPathPart(url) {
+  return String(url).replace(/[?#][\s\S]*$/, '');
+}
+
 function checkPreconditions(screen, lockDir) {
   if (screen.netNew === true) {
     fail2(`screen '${screen.id}' is netNew, it has no referenceImage/passThreshold/tileCeiling to probe blind spots against`);
@@ -184,9 +189,14 @@ function checkPreconditions(screen, lockDir) {
     fail2(`screen '${screen.id}' url '${screen.url}' is not a local html file relative to the lock dir`,
       'the probe only supports a lock-relative local file (skipping http(s)/file:// screens)');
   }
-  const htmlAbs = path.resolve(lockDir, screen.url);
+  // render.mjs keeps a `?query`/`#hash` on the navigation and resolves only the part before it,
+  // so the file to copy is that path part (the copied lock keeps the full url for render.mjs).
+  const htmlAbs = path.resolve(lockDir, screenPathPart(screen.url));
   if (!fs.existsSync(htmlAbs)) {
     fail2(`screen '${screen.id}' url resolves to ${htmlAbs}, which does not exist`);
+  }
+  if (!fs.statSync(htmlAbs).isFile()) {
+    fail2(`screen '${screen.id}' url resolves to ${htmlAbs}, which is not a file`);
   }
   return htmlAbs;
 }

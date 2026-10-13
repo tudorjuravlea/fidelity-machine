@@ -42,6 +42,31 @@
  *                                                      heading, subheading, body, body-sm, caption,
  *                                                      label) warn but are still emitted.
  *     elevation|shadow|shadows      → tokens.elevation slot → verbatim box-shadow string.
+ *     duration|durations            → tokens.motion.durationsMs
+ *                                                      slot = remaining segments kebab-joined,
+ *                                                      value = ms (150, "150ms"; "0.15s" → 150;
+ *                                                      a bare number is ms ONLY under an explicit
+ *                                                      duration segment). Anything else warned +
+ *                                                      skipped.
+ *     easing|easings|curve          → tokens.motion.easings
+ *                                                      slot = remaining segments kebab-joined,
+ *                                                      value = verbatim CSS easing, shape-checked:
+ *                                                      cubic-bezier(x1, y1, x2, y2) with x1/x2 in
+ *                                                      [0,1]; linear(stops: one number + up to two
+ *                                                      percentages each); steps(n[, position]);
+ *                                                      or ease, ease-in, ease-out, ease-in-out,
+ *                                                      linear, step-start, step-end. One line, no
+ *                                                      nested "(" — anything else warned + skipped.
+ *     motion                        → one of the two above: a duration/easing segment anywhere
+ *                                                      after it picks the kind and is dropped
+ *                                                      ("Motion/Easing/Standard" → easings
+ *                                                      ["standard"]). Without one, the value
+ *                                                      decides: a time WITH its unit ("2s",
+ *                                                      "150ms") → duration, an easing → easing; a
+ *                                                      unitless number ("motion/scale/press:
+ *                                                      0.98") is warned + skipped, never ms.
+ *   A duration slot "ease-x" next to an easing slot "x" would both be --motion-ease-x in
+ *   tokens.css: the duration is warned + skipped.
  *   Fallback: an unprefixed name whose VALUE looks like a color routes to colors (full path as
  *   slot). Everything else is reported as unmapped and skipped — nothing silently disappears.
  *
@@ -69,7 +94,46 @@ const FAMILY_OF = new Map(Object.entries({
   radius: 'radius', radii: 'radius', corner: 'radius', corners: 'radius',
   typography: 'typography', type: 'typography', font: 'typography', fonts: 'typography', text: 'typography',
   elevation: 'elevation', shadow: 'elevation', shadows: 'elevation',
+  motion: 'motion',
+  duration: 'duration', durations: 'duration',
+  easing: 'easing', easings: 'easing', curve: 'easing',
 }));
+const EASING_KEYWORDS = new Set(['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'step-start', 'step-end']);
+const STEP_POSITIONS = new Set(['jump-start', 'jump-end', 'jump-none', 'jump-both', 'start', 'end']);
+const CSS_NUM_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+const CSS_PCT_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)%$/;
+
+// A CSS easing of a shape the browser parses, checked argument by argument: a keyword;
+// cubic-bezier(x1, y1, x2, y2) with x1/x2 in [0,1]; steps(<n>[, <position>]) with n >= 1 (>= 2
+// for jump-none); linear() whose every comma-separated stop is one number plus up to two
+// percentages. One line, no nested "(". The value is written verbatim into tokens.css, so a
+// looser test lets "cubic-bezier(0,0,1,1); } body { … }" close :root and inject a rule into
+// every page; and a malformed easing is a --motion-ease-* the browser silently ignores.
+// adherence-lint's raw-motion EASE_RE only DETECTS easings in source (fn([^)]*) or a keyword);
+// every value accepted here also matches it, so raw-motion can name the token for it.
+function isCssEasing(raw) {
+  const v = String(raw).trim();
+  if (EASING_KEYWORDS.has(v.toLowerCase())) return true;
+  const fn = /^(cubic-bezier|linear|steps)\(([^()\r\n;{}]*)\)$/i.exec(v);
+  if (!fn) return false;
+  const args = fn[2].split(',').map((a) => a.trim());
+  const kind = fn[1].toLowerCase();
+  if (kind === 'cubic-bezier') {
+    return args.length === 4 && args.every((a) => CSS_NUM_RE.test(a)) &&
+      [args[0], args[2]].every((x) => Number(x) >= 0 && Number(x) <= 1);
+  }
+  if (kind === 'steps') {
+    if (args.length > 2 || !/^\d+$/.test(args[0])) return false;
+    const pos = (args[1] ?? 'end').toLowerCase();
+    return STEP_POSITIONS.has(pos) && Number(args[0]) >= (pos === 'jump-none' ? 2 : 1);
+  }
+  return args.every((stop) => {
+    const parts = stop.split(/[ \t]+/);
+    const nums = parts.filter((p) => CSS_NUM_RE.test(p)).length;
+    const pcts = parts.filter((p) => CSS_PCT_RE.test(p)).length;
+    return nums === 1 && pcts <= 2 && nums + pcts === parts.length;
+  });
+}
 
 const WEIGHT_NAMES = new Map(Object.entries({
   thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300,
@@ -122,7 +186,9 @@ Expected capture.json shape (only "variableDefs" is required):
     "typography/heading/size": "26px",
     "typography/heading/weight": "bold",
     "typography/heading/line-height": "1.2",
-    "elevation/raised": "0 0 0 1px rgba(0,0,0,0.06)"
+    "elevation/raised": "0 0 0 1px rgba(0,0,0,0.06)",
+    "motion/duration/fast": 150,
+    "motion/easing/standard": "cubic-bezier(0.2, 0, 0, 1)"
   },
   "metadata": [                            // Figma get_metadata: ground-truth node rects
     { "figmaNodeId": "1:100", "name": "Header",
@@ -161,16 +227,47 @@ Token-name mapping heuristics (variableDefs name -> lock tokens):
                                                      7-name scale (display heading subheading
                                                      body body-sm caption label) warn but emit.
     elevation|shadow(s)         -> tokens.elevation  slot -> verbatim box-shadow string.
+    duration(s)                 -> tokens.motion.durationsMs
+                                                     slot = remaining segments kebab-joined,
+                                                     value = ms (150, "150ms"; "0.15s" -> 150;
+                                                     a bare number is ms ONLY under an explicit
+                                                     duration segment); anything else warned +
+                                                     skipped.
+    easing(s)|curve             -> tokens.motion.easings
+                                                     slot = remaining segments kebab-joined,
+                                                     value = verbatim CSS easing, shape-checked:
+                                                     cubic-bezier(x1, y1, x2, y2) with x1/x2 in
+                                                     [0,1]; linear(stops: one number + up to two
+                                                     percentages each); steps(n[, position]);
+                                                     or ease, ease-in, ease-out, ease-in-out,
+                                                     linear, step-start, step-end. One line, no
+                                                     nested "(" - anything else warned + skipped.
+    motion                      -> one of the two above: a duration/easing segment after it picks
+                                                     the kind and is dropped ("Motion/Easing/
+                                                     Standard" -> easings["standard"]). Without
+                                                     one, the value decides: a time WITH its
+                                                     unit ("2s", "150ms") -> duration, an easing
+                                                     -> easing; a unitless number ("motion/scale/
+                                                     press: 0.98") is warned + skipped, never ms.
+  A duration slot "ease-x" next to an easing slot "x" would both be --motion-ease-x in
+  tokens.css: the duration is warned + skipped.
   Fallback: any other name whose VALUE looks like a color routes to colors (full path as slot);
   everything else is reported as unmapped and skipped — nothing is silently dropped.
 
 Derived outputs (hand-editing banned — re-run this script instead):
   assets/tokens.css           :root { --<colorSlot>, --space-<px/4> (or --space-<px>px when not
                               on the 4pt grid), --radius-<slot>, --font-<role>-{family,size,
-                              weight,line-height,letter-spacing}, --shadow-<slot> } plus a
-                              [data-theme="dark"] block overriding the color slots.
+                              weight,line-height,letter-spacing}, --shadow-<slot>,
+                              --motion-<slot>: <ms>ms, --motion-ease-<slot>: <easing> } plus a
+                              [data-theme="dark"] block overriding the color slots. The motion
+                              names are the ones adherence-lint's raw-motion section suggests;
+                              an entry that is not one safe CSS declaration (key outside
+                              [A-Za-z0-9_-], negative duration, malformed easing) is left out;
+                              a lock with no (usable) tokens.motion gets a one-line comment.
   assets/tailwind.tokens.cjs  module.exports = { colors, spacing, borderRadius, fontFamily },
-                              every value referencing the CSS vars above.
+                              every value referencing the CSS vars above; plus, when the lock
+                              has tokens.motion, transitionDuration { <slot>: 'var(--motion-<slot>)' }
+                              and transitionTimingFunction { <slot>: 'var(--motion-ease-<slot>)' }.
   Both are written into "assets/" NEXT TO the emitted lock (per-project artifacts live next to
   the project's design-lock.json — CONTRACT.md). With --out at the skill root this is exactly
   the skill's assets/tokens.css.
@@ -201,6 +298,19 @@ function kebab(s) {
 function parsePx(v) {
   const n = parseFloat(String(v).replace(/px\s*$/i, '').trim());
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A duration in ms: 150, "150ms" or "0.15s" (seconds converted). Anything else → null.
+ * requireUnit: a bare number is refused — used where nothing but the value says "this is a time"
+ * (a unitless 300 under "motion/" is as likely a spring stiffness, a scale or an opacity).
+ */
+function parseMs(v, requireUnit = false) {
+  const m = /^(\d*\.?\d+)\s*(ms|s)?$/i.exec(String(v).trim());
+  if (!m || (requireUnit && !m[2])) return null;
+  const n = parseFloat(m[1]);
+  // Round the seconds conversion to 3 places so "0.15s" is 150, not 150.00000000000003.
+  return m[2]?.toLowerCase() === 's' ? Math.round(n * 1000 * 1000) / 1000 : n;
 }
 
 function looksLikeColor(v) {
@@ -354,6 +464,7 @@ function deriveTokens(variableDefs, warn) {
   const radii = {};
   const typoRoles = {}; // role -> partial spec
   const elevation = {};
+  const durationsMs = {}; const easings = {};
   let unmapped = 0;
   let referenceRamps = 0;
 
@@ -434,6 +545,37 @@ function deriveTokens(variableDefs, warn) {
       elevation[slot] = value.startsWith('Effect(')
         ? (parseEffectComposite(name, value, variableDefs, warn) ?? value)
         : value;
+    } else if (family === 'motion' || family === 'duration' || family === 'easing') {
+      // Under a bare "motion" prefix the kind comes from a duration/easing segment (dropped from
+      // the slot), else from the value; "duration/…" and "easing/…" name it themselves.
+      let kind = family === 'motion' ? null : family;
+      const slotSegs = [];
+      for (const s of rest) {
+        const k = FAMILY_OF.get(s.toLowerCase());
+        if (family === 'motion' && kind === null && (k === 'duration' || k === 'easing')) kind = k;
+        else slotSegs.push(s);
+      }
+      // When only the value can say what it is, a duration must carry its unit (see parseMs).
+      if (kind === null) kind = parseMs(value, true) !== null ? 'duration' : (isCssEasing(value) ? 'easing' : null);
+      const slot = kebab(slotSegs.join('-'));
+      if (kind === null && parseMs(value) !== null) {
+        warn(`"${name}": unitless number "${value}" under a bare "motion" prefix — not taken as a duration (it may be a stiffness, a scale or an opacity); write "${value}ms" / "${value}s" or name it motion/duration/… — skipped`);
+        unmapped++;
+      } else if (kind === null) { warn(`"${name}": motion value ${JSON.stringify(value)} is neither a duration with a unit nor a CSS easing — unmapped`); unmapped++; }
+      else if (!slot) { warn(`"${name}": no slot name left after the motion family segments — skipped`); unmapped++; }
+      else if (kind === 'duration') {
+        const ms = parseMs(value);
+        if (ms === null) { warn(`"${name}": duration "${value}" is not a time (150, "150ms" or "0.15s") — skipped`); unmapped++; }
+        else {
+          if (slot in durationsMs && durationsMs[slot] !== ms) warn(`"${name}": durationsMs.${slot} redefined (was ${durationsMs[slot]}, now ${ms}) — last one wins`);
+          durationsMs[slot] = ms;
+        }
+      } else if (!isCssEasing(value)) {
+        warn(`"${name}": easing ${JSON.stringify(value)} is not a well-formed CSS easing (cubic-bezier(x1, y1, x2, y2) with x1/x2 in [0,1], linear(<stops>), steps(<n>[, <position>]) or a keyword, on one line) — skipped`); unmapped++;
+      } else {
+        if (slot in easings && easings[slot] !== value) warn(`"${name}": easings.${slot} redefined (was ${easings[slot]}, now ${value}) — last one wins`);
+        easings[slot] = value;
+      }
     } else if (isReferenceRamp(name)) {
       referenceRamps++; // illustration/ramp data (e.g. "light-theme/yellow/base/tone 03") — summarized once below
     } else if (value.startsWith('Font(')) {
@@ -516,6 +658,21 @@ function deriveTokens(variableDefs, warn) {
   if (Object.keys(radii).length > 0) tokens.radii = radii;
   if (Object.keys(typography).length > 0) tokens.typography = typography;
   if (Object.keys(elevation).length > 0) tokens.elevation = elevation;
+  // tokens.css names a duration --motion-<slot> and an easing --motion-ease-<slot>, so a duration
+  // slot "ease-x" and an easing slot "x" would declare the same property and the later one would
+  // silently win. Refuse the duration and say so: the author renames one of the two.
+  for (const slot of Object.keys(durationsMs)) {
+    if (slot.startsWith('ease-') && slot.slice(5) in easings) {
+      warn(`durationsMs.${slot} and easings.${slot.slice(5)} would both be --motion-ease-${slot.slice(5)} in tokens.css — the duration is skipped; rename one of them`);
+      delete durationsMs[slot];
+      unmapped++;
+    }
+  }
+  if (Object.keys(durationsMs).length > 0 || Object.keys(easings).length > 0) {
+    tokens.motion = {};
+    if (Object.keys(durationsMs).length > 0) tokens.motion.durationsMs = durationsMs;
+    if (Object.keys(easings).length > 0) tokens.motion.easings = easings;
+  }
   return { tokens, unmapped };
 }
 
@@ -554,6 +711,23 @@ function enrichScreens(screens, metadata, warn) {
 function spacingVarName(px) { return px % 4 === 0 ? `--space-${px / 4}` : `--space-${px}px`; }
 function spacingTwKey(px) { return px % 4 === 0 ? String(px / 4) : `${px}px`; }
 function quoteFamily(f) { return /^["']/.test(f) ? f : (/[^\w-]/.test(f) ? `"${f}"` : f); }
+// adherence-lint's raw-motion filter (finite numbers, non-empty strings) with the lock key used
+// as-is, so every --motion-<name> / --motion-ease-<name> emitted here is a name that section can
+// suggest. Stricter than the lint in one way: an entry that cannot be written as one safe CSS
+// declaration (a key outside [A-Za-z0-9_-], a negative duration, a malformed easing) is left out,
+// because --derive emits from a lock that may have been hand-edited, and a verbatim value
+// carrying "; }" would close :root in every page that loads tokens.css. capture never writes
+// such an entry (it validates and warns); a lock that holds one is invalid input to fix there.
+function motionEntries(tokens) {
+  const m = tokens.motion;
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const safeName = ([k]) => /^[A-Za-z0-9_-]+$/.test(k);
+  return {
+    declared: isObj(m),
+    durations: isObj(m?.durationsMs) ? Object.entries(m.durationsMs).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v >= 0).filter(safeName) : [],
+    easings: isObj(m?.easings) ? Object.entries(m.easings).filter(([, v]) => typeof v === 'string' && v.trim() !== '' && isCssEasing(v)).filter(safeName) : [],
+  };
+}
 
 function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
   const out = [];
@@ -588,6 +762,16 @@ function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
     out.push('  /* elevation */');
     for (const [slot, v] of Object.entries(tokens.elevation)) out.push(`  --shadow-${slot}: ${v};`);
   }
+  const { declared, durations, easings } = motionEntries(tokens);
+  if (durations.length > 0 || easings.length > 0) {
+    out.push('  /* motion */');
+    for (const [name, ms] of durations) out.push(`  --motion-${name}: ${ms}ms;`);
+    for (const [name, v] of easings) out.push(`  --motion-ease-${name}: ${v};`);
+  } else if (declared) {
+    out.push('  /* no usable tokens.motion entries in the lock — --motion-* variables omitted; raw-motion lint does not enforce until motion tokens exist */');
+  } else {
+    out.push('  /* no tokens.motion in the lock — --motion-* variables omitted; raw-motion lint does not enforce until motion tokens exist */');
+  }
   out.push('}');
   const dark = tokens.colors?.dark ?? {};
   if (Object.keys(dark).length > 0) {
@@ -612,6 +796,12 @@ function emitTailwindTokens(tokens, lockName, capturedAt, lockRef) {
     borderRadius: Object.fromEntries(Object.keys(tokens.radii ?? {}).map((k) => [k, `var(--radius-${k})`])),
     fontFamily: Object.fromEntries(Object.keys(tokens.typography ?? {}).map((r) => [r, [`var(--font-${r}-family)`]])),
   };
+  // Only when present, so a lock without tokens.motion emits the same file as before. Like every
+  // other key here the value reads the CSS variable tokens.css declares, so a Tailwind utility and
+  // a hand-written var(--motion-<name>) cannot drift from one another.
+  const { durations, easings } = motionEntries(tokens);
+  if (durations.length > 0) tw.transitionDuration = Object.fromEntries(durations.map(([n]) => [n, `var(--motion-${n})`]));
+  if (easings.length > 0) tw.transitionTimingFunction = Object.fromEntries(easings.map(([n]) => [n, `var(--motion-ease-${n})`]));
   return [
     `/* tailwind.tokens.cjs — DERIVED from ${lockRef} ("${lockName}", captured ${capturedAt})`,
     ' * by scripts/capture-figma.mjs. HAND-EDITING BANNED (CONTRACT.md): edit the lock',

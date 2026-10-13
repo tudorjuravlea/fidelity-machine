@@ -347,6 +347,18 @@ function walkSourceFiles(dir) {
 // source: every file is a derived asset, so imagery-provenance has nothing to judge and
 // signatures takes its existing "no generated screen source under --src yet" SKIP — which is
 // then the truth, not a dodge.
+// A declared screens[].url may carry a `?query` or `#hash` (render.mjs keeps it on the navigation and
+// ignores it for path checks). Every check here that resolves a url as a FILE must drop that tail
+// first, or the file reads as unresolved and the check goes quiet or reports the wrong location.
+function screenPathPart(url) {
+  return String(url).replace(/[?#][\s\S]*$/, '');
+}
+// A screen source is read only when its path is a regular file. An empty path part ("?a") resolves
+// to the lock's DIRECTORY, which existsSync accepts and readFileSync then throws on (EISDIR) — so a
+// directory, like a missing file, takes the branch each check already has for an unresolved url.
+function isFile(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}
 function derivedAssetTest(lock, lockDir) {
   const declared = new Set();
   for (const s of Array.isArray(lock.screens) ? lock.screens : []) {
@@ -355,7 +367,7 @@ function derivedAssetTest(lock, lockDir) {
     if (/^file:\/\//i.test(u)) { try { declared.add(fileURLToPath(u)); } catch { /* not a local path */ } }
     else if (!/^https?:\/\//i.test(u)) {
       declared.add(resolve(lockDir, u));
-      declared.add(resolve(lockDir, u.replace(/[?#][\s\S]*$/, '')));
+      declared.add(resolve(lockDir, screenPathPart(u)));
     }
   }
   const anchor = resolve(lockDir, 'assets');
@@ -1631,8 +1643,8 @@ const plainText = (html) => decodeEntities(html.replace(/<[^>]+>/g, ' ')).replac
 // replaces every occurrence in the declaration it shows and names the occurrences elsewhere. The suggestion names the lock's nearest
 // duration token by absolute ms difference (both on a tie) or the easing token with the same
 // value, and writes it out: the custom property to declare in :root and the declaration rewritten
-// to read it (capture-figma derives no motion variables into tokens.css, so the name is
-// --motion-<token> / --motion-ease-<token> by this section's convention).
+// to read it (capture-figma emits --motion-<name> / --motion-ease-<name> into tokens.css for
+// every tokens.motion entry, so the suggested custom property is the one that file declares).
 //
 // Cannot see: JS style objects and CSS-in-JS (the transition-all section reads those for `all`
 // only), Tailwind duration-/ease- utilities, vendor-prefixed properties, and a rule whose
@@ -2025,8 +2037,9 @@ function checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel) {
     let p = null;
     if (/^file:\/\//i.test(u)) { try { p = fileURLToPath(u); } catch { p = null; } }
     else if (u && !/^https?:\/\//i.test(u)) {
-      p = resolve(lockDir, u);
-      if (!existsSync(p)) { const alt = resolve(srcDir, u); p = existsSync(alt) ? alt : p; }
+      const urlPath = screenPathPart(u);
+      p = resolve(lockDir, urlPath);
+      if (!isFile(p)) { const alt = resolve(srcDir, urlPath); p = isFile(alt) ? alt : p; }
     }
     const f = p ? byFile.get(p) : null;
     if (!f || done.has(`${f.abs}|${scheme}`)) continue;
@@ -2179,8 +2192,8 @@ function checkDisclosures(lock, lockDir, htmlFiles, rel) {
     const u = String(screen.url || '');
     let p = null;
     if (/^file:\/\//i.test(u)) { try { p = fileURLToPath(u); } catch { p = null; } }
-    else if (!/^https?:\/\//i.test(u)) p = resolve(lockDir, u);
-    if (p && existsSync(p)) {
+    else if (!/^https?:\/\//i.test(u)) p = resolve(lockDir, screenPathPart(u));
+    if (p && isFile(p)) {
       vis = visibleHtmlText(readFileSync(p, 'utf8'));
       where = p;
     } else if (htmlFiles.length > 0) { // remote/unresolvable url: search every scanned page
@@ -2300,10 +2313,11 @@ function checkContentLock(lock, lockDir, srcDir, rel) {
     let p = null;
     if (/^file:\/\//i.test(u)) { try { p = fileURLToPath(u); } catch { p = null; } }
     else if (!/^https?:\/\//i.test(u)) {
-      p = resolve(lockDir, u);
-      if (!existsSync(p)) { const alt = resolve(srcDir, u); p = existsSync(alt) ? alt : p; }
+      const urlPath = screenPathPart(u);
+      p = resolve(lockDir, urlPath);
+      if (!isFile(p)) { const alt = resolve(srcDir, urlPath); p = isFile(alt) ? alt : p; }
     }
-    if (!p || !existsSync(p)) {
+    if (!p || !isFile(p)) {
       add('SKIP', 'content-lock', `screen "${screen.id}"`,
         `screen source (url "${u}") not found under --src — lockedStrings unverifiable for this screen`);
       continue;
@@ -2366,8 +2380,8 @@ function checkFigIdCoverage(lock, lockDir, lockLabel, rel) {
   for (const s of screens) {
     const figIds = Array.isArray(s.figIds) ? s.figIds : [];
     if (!figIds.length) continue;
-    const srcPath = s.url ? resolve(lockDir, s.url) : null;
-    const html = srcPath && existsSync(srcPath) ? readFileSync(srcPath, 'utf8') : null;
+    const srcPath = s.url ? resolve(lockDir, screenPathPart(s.url)) : null;
+    const html = srcPath && isFile(srcPath) ? readFileSync(srcPath, 'utf8') : null;
     for (const f of figIds) {
       declared++;
       if (!f.domId) {

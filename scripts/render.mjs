@@ -3,6 +3,8 @@
 // Contract: ../CONTRACT.md — §Invocation contract, §Determinism invariants (1–7), §Exit codes.
 //   node render.mjs --lock <path/to/design-lock.json> --screen <id>
 //   → writes .render/<id>.png + .render/<id>.geometry.json next to the lock.
+//   A screen's relative url resolves against the lock's directory; a `?query` or `#hash` on `url`
+//   is kept on the navigation and ignored for path checks.
 //
 // Exit codes: 0 pass · 2 setup/usage · 4 FONT_PARITY · 5 render failure/timeout
 //   (incl. an off-tree request refused under lock.render.network = "offline").
@@ -23,6 +25,13 @@
 //     in different letter case (same directory on a case-insensitive disk) counts as outside.
 //   - Requests issued after the final offline check (after the screenshot and the geometry
 //     reads) cannot affect the captured frame and are not observed.
+//   - Chromium launches with --allow-file-access-from-files: without it a file:// document (origin
+//     null) cannot import an ES module, so a lock screen that loads the motion runtime never gets
+//     ready. The flag widens what a file:// page may READ; those reads are requests like any other
+//     under lock.render.network (observed, and refused under "offline" outside the lock's tree).
+//   - A relative url's first "?" or "#" always starts the query/hash, so a file whose NAME
+//     contains "?" or "#" cannot be named by a relative url; reference it as a file:// url with
+//     the character encoded (%3F / %23).
 
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -183,9 +192,21 @@ const stripHash = (u) => String(u).split('#')[0];
 
 // CONTRACT §Path resolution: a url that is not http(s):// or file:// is a path
 // resolved relative to the LOCK file's directory, converted to file://.
+// Only the part before the first "?" or "#" is that path: pathToFileURL would encode a "?" into
+// the file name ("page.html%3Ft=1", not found). The query/hash is re-appended verbatim so the
+// page still receives it (e.g. a rest pose picked by "?tool&t=12.5").
 function resolveScreenUrl(rawUrl, lockDir) {
   if (/^(https?|file):\/\//i.test(rawUrl)) return rawUrl;
-  return pathToFileURL(path.resolve(lockDir, rawUrl)).href;
+  const cut = rawUrl.search(/[?#]/);
+  const pathPart = cut === -1 ? rawUrl : rawUrl.slice(0, cut);
+  const suffix = cut === -1 ? '' : rawUrl.slice(cut);
+  // An empty path would resolve to the lock's directory itself: Chromium shows a directory
+  // listing that never sets [data-render-ready], and the run times out as a "render failure"
+  // 15 s later. It is a lock authoring error, so it is named as one.
+  if (pathPart === '') {
+    fail(EXIT.SETUP, `exit 2 (setup/usage error): screen url ${JSON.stringify(rawUrl)} has no file path (nothing before its first "?" or "#") — a relative url names a file under the lock's directory, e.g. "screen.html?tool&t=1" (see design-lock.schema.json).`);
+  }
+  return pathToFileURL(path.resolve(lockDir, pathPart)).href + suffix;
 }
 
 // ------------------------------------------------------- chromium build pin (invariant 1)
@@ -272,7 +293,10 @@ async function main() {
   let browser = null;
   try {
     try {
-      browser = await chromium.launch({ headless: true, channel: CHROMIUM_CHANNEL });
+      // WHY the flag: Chromium refuses an ES module import from a file:// document (origin null), and
+      // a lock screen that loads the motion runtime is such a document. It has no rendering effect;
+      // the reads it permits still pass the request observer below like any other request.
+      browser = await chromium.launch({ headless: true, channel: CHROMIUM_CHANNEL, args: ['--allow-file-access-from-files'] });
     } catch (err) {
       fail(EXIT.RENDER, `exit 5 (render failure/environment): could not launch pinned Chromium (channel "${CHROMIUM_CHANNEL}"): ${err.message}. Run scripts/setup-check.mjs.`);
     }
