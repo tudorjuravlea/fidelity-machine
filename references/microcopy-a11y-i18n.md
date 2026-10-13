@@ -1,6 +1,6 @@
 ---
 reference: microcopy-a11y-i18n
-vendored-from: Tudor's ux-writing KB — kb-craft/03-accessibility/{accessible-writing,internationalization}.md (frozen 2026-07-21)
+vendored-from: the maintainer's ux-writing KB — kb-craft/03-accessibility/{accessible-writing,internationalization}.md (frozen 2026-07-21)
 role: Part 5 constraints layer — accessible writing + i18n rules that shape the layout, not just the words
 ---
 

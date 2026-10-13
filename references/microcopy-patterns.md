@@ -1,6 +1,6 @@
 ---
 reference: microcopy-patterns
-vendored-from: Tudor's ux-writing KB — kb-craft/01-patterns/*, kb-banking/05-banking-layer/high-stakes-patterns.md, kb-behavioural/* (frozen 2026-07-21)
+vendored-from: the maintainer's ux-writing KB — kb-craft/01-patterns/*, kb-banking/05-banking-layer/high-stakes-patterns.md, kb-behavioural/* (frozen 2026-07-21)
 role: Part 5 content pass — per-element patterns, banking high-stakes overlays, behavioral guardrails
 ---
 

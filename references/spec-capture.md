@@ -23,7 +23,7 @@ banned everywhere: edit the lock, re-derive.
 
 ## Figma auth prerequisite
 
-- The Figma MCP needs an authenticated session. On auth errors: have Tudor run `/mcp`,
+- The Figma MCP needs an authenticated session. On auth errors: have the user run `/mcp`,
   complete the Figma OAuth there, then retry. A non-interactive session cannot self-auth.
 - Demand node-specific design links: `figma.com/design/<fileKey>/<name>?node-id=<n>-<n>`.
   Each link yields `fileKey` + node id — the only inputs the MCP tools consume.
@@ -79,7 +79,7 @@ Hard rules while capturing:
   fontChecks}`. `fontChecks` are literal `document.fonts.check()` strings (e.g.
   `700 26px "Helvetica Neue"`) render.mjs asserts before shooting — false → exit 4
   FONT_PARITY, never a screenshot of a fallback. If the brand font cannot be bundled,
-  name the fallback in the lock and tell Tudor fidelity is capped by it.
+  name the fallback in the lock and tell the user fidelity is capped by it.
 - Per screen also record: `mode`, `colorScheme`, `stateContract` (the exact state the
   frame shows — logged-in? populated? — prevents state-mismatch false diffs),
   `maskedRegions[]` only for genuinely dynamic content (every rect carries a `reason`;
@@ -182,7 +182,7 @@ When Figma MCP access is impossible (no auth path, exported mocks, live-product 
    shadow strings, letter-spacing) before writing the lock. Under 30 → keep measuring
    crops; a thin lock produces confident drift, not fidelity.
 4. Declare the rung (ladder below). Every captured value states its source rung; rung-6
-   values are flagged to Tudor as fallback, never presented as brand truth.
+   values are flagged to the user as fallback, never presented as brand truth.
 
 Authentic assets (B2 only; adapted from screenshot-to-code, MIT,
 github.com/abi/screenshot-to-code):
@@ -265,7 +265,7 @@ trusts it.
 | 3 | Live product | screenshot the URL at a known viewport |
 | 4 | Brand assets / marketing | extract palette, type, mood |
 | 5 | Competitor reference | demand URL or screenshot — never fuzzy training-data impressions |
-| 6 | Known-systems fallback | declared to Tudor as a starting point, never final |
+| 6 | Known-systems fallback | declared to the user as a starting point, never final |
 
 Each rung beats everything below it. The rung travels with the value into the
 `<spec_adherence>` pre-flight (`./mode-b.md`) so every number in generated code traces

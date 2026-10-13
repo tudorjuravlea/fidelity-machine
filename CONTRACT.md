@@ -191,7 +191,7 @@ reported blind spot, not a script defect to explain away.
 
 ## Threshold caps (lint-enforced on the lock itself)
 
-Defaults (Tudor may tighten, never loosen past): `caps.maxPassThreshold = { A: 0.002, B1: 0.005, B2: 0.005 }`,
+Defaults (the maintainer may tighten, never loosen past): `caps.maxPassThreshold = { A: 0.002, B1: 0.005, B2: 0.005 }`,
 `caps.maxTileCeiling = 0.4`, `caps.maxMaskedAreaPct = 0.15`. A lock whose screen thresholds exceed
 its caps FAILS lint (exit 1) — a stubborn screen is fixed, not waved through. All thresholds are
 fractions (0–1), not percentages.

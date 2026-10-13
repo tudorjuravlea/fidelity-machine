@@ -1,6 +1,6 @@
 ---
 reference: microcopy-voice
-vendored-from: Tudor's ux-writing KB — kb-craft/02-voice-and-tone/*, kb-banking/05-banking-layer/{banking-voice-and-jargon,ro-localisation}.md, kb-orchestrator/{four-quality-standards,content-usability-checklist}.md (frozen 2026-07-21)
+vendored-from: the maintainer's ux-writing KB — kb-craft/02-voice-and-tone/*, kb-banking/05-banking-layer/{banking-voice-and-jargon,ro-localisation}.md, kb-orchestrator/{four-quality-standards,content-usability-checklist}.md (frozen 2026-07-21)
 role: Part 5 voice layer — voice-chart mechanism, emotion→tone, quality-gate scoring, banned jargon EN+RO, RO localisation
 ---
 

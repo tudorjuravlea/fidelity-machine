@@ -1,6 +1,6 @@
 # Taste & composition — craft inside the system's vocabulary
 
-Vendored FROZEN 2026-07-21 (distilled from Tudor's design KB; no live links — edits happen
+Vendored FROZEN 2026-07-21 (distilled from the maintainer's design KB; no live links — edits happen
 here or nowhere). Scope: the judgment layer of the three-gate ship stack. Governs freehand and
 net-new regions in Modes B1/B2 and composition-level choices in Mode A — the regions where the
 pixel diff has nothing to diff against. Where a reference image exists, the pixel gate is the

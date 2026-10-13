@@ -24,14 +24,14 @@ violation is an observed failure mode:
   excerpt the BIG files to their render sections (1000+ line shell → its `<header>` JSX;
   huge CSS → the `:root` token block + used rules) and retry the SAME faithful call.
   Files under 1000 lines go in whole; never trim visual code to fit. If the real
-  reference still cannot fit: STOP and tell Tudor — a reproduction from thinned context
+  reference still cannot fit: STOP and tell the user — a reproduction from thinned context
   is invention wearing reproduction's clothes.
 - Tear-down sheets before code (format in `./spec-capture.md`): observed components get
   Source/Observed/Conclusion with exact values; absent ones get a Derived Design with
   `Justified by:` naming observed principles. Hold 30+ concrete values before writing
   code; fewer → capture more, don't guess.
 - Declare the rung. Every value names its context-ladder rung (`./spec-capture.md`);
-  rung-6 fallbacks are disclosed to Tudor, never passed off as brand truth.
+  rung-6 fallbacks are disclosed to the user, never passed off as brand truth.
 - Identity lock, one sentence, data not adjectives: dominant surface + accent by hex,
   actual font names loaded, layout topology, surface treatment (corners/borders/
   shadows), voice read off the copy. "Editorial-leaning" is a conclusion, not data.
@@ -93,7 +93,7 @@ verified, which means it cannot ship:
 | Geometry gate | yes, before pixels; tolerance ≤2px | none |
 | Pixel gate | ≤0.005 global + tileCeiling | same caps |
 | Diff classification | geometry classifies each region (box right + pixels wrong = color/type; box wrong = layout) | unclassified — read the triplet crops yourself before fixing |
-| Extra duty | — | MANDATORY human worst-region review: show Tudor the top-5 ref/render/diff triplets; a green gate without his eyes does not ship |
+| Extra duty | — | MANDATORY human worst-region review: show the user the top-5 ref/render/diff triplets; a green gate without his eyes does not ship |
 
 B2 discipline: without rects the loop is blinder — measure the reference crops in pixels,
 fix toward the REFERENCE, never toward the diff image. State uncertainty ("hover unknown
