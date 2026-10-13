@@ -10,6 +10,12 @@ Durations and easings enter the lock as `tokens.motion` entries by NAME; templat
 consume the token, never the literal. The pixel gate cannot see motion: every report says what
 motion was reviewed and how.
 
+Films and clicker decks (`templates/motion/MOTION-LAYOUTS.md`) read these entries at run time: the kit takes
+`--motion-<name>` (a duration) and `--motion-ease-<name>` (a CSS easing) from `assets/tokens.css`, and a
+piece names ROLES (`enter exit cut`, `ease.enter ease.exit ease.move`) that point at those names. An
+entry recorded only here and never carried into `tokens.motion` is invisible to the kit, so a motion
+entry is finished when it is in the lock and `tokens.css` has been re-derived.
+
 ## Entries
 
 Per entry: element/interaction · duration · easing · source · notes (what triggers it, and

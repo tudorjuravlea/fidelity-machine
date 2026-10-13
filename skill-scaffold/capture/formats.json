@@ -8,6 +8,7 @@
     "event-banner":    { "w": 1600, "h": 900,  "use": "LinkedIn event cover, webinar/meetup banner" },
     "screen-4k":       { "w": 3840, "h": 2160, "use": "event screens (opening, agenda, speaker slides) on a 4K wall; build in px of this frame, RGB" }
   },
+  "motion": { "fps": 30, "$comment": "Films and clicker decks take their frame from the screen presets above (slide, social-portrait, story, event-banner, screen-4k); fps is the only motion-specific preset. A beat grid is per piece and lives in its piece.js." },
   "print": {
     "a4-onepager": { "trimMm": [210, 297], "bleedMm": 0, "dpi": 300, "pxAtDpi": [2480, 3508], "use": "one-pager, handout; zero bleed is only valid while the template design avoids full-bleed art" },
     "a5-flyer":    { "trimMm": [148, 210], "bleedMm": 3, "dpi": 300, "pxAtDpi": [1748, 2480], "use": "event flyer" },

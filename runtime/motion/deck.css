@@ -1,0 +1,22 @@
+/* Deck frame: a fixed-size stage (1920×1080 unless the deck says otherwise) scaled to fit the screen it is shown
+   on. Only geometry lives here; colours come from the piece's <style> and the lock's tokens.css, and the plates
+   read variables the piece sets — this sheet names no colour at all. */
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--motion-blank-color); }
+html:fullscreen { cursor: none; }
+#stage { overflow: hidden; position: absolute; top: 50%; left: 50%; transform-origin: 50% 50%; }
+[data-scene], .sc { position: absolute; inset: 0; }
+/* Only the scene the kit has switched on (data-on) is shown, with whatever display the piece gives it. */
+[data-scene]:not([data-on]), .sc:not([data-on]) { display: none !important; }
+
+/* Parts the entrances create or look for (as in film.css). */
+.w { white-space: pre; display: inline-block; }
+.ln { width: max-content; white-space: nowrap; display: block; }
+.mask { overflow: hidden; display: block; margin-bottom: -.12em; padding-bottom: .12em; }
+.mv { display: block; }
+.blkw { display: inline-block; position: relative; }
+.blk { inset: .06em -4px; position: absolute; scale: 0 1; background: var(--motion-block-color, var(--motion-wipe-color)); }
+
+/* Wipe exit: the plate grows over the outgoing scene, then shrinks off the incoming one. */
+#motion-wipe { position: absolute; inset: 0; z-index: 30; scale: 0 1; background: var(--motion-wipe-color); }
+/* The blank screen the clicker's blank button shows, above the stage and its letterbox. */
+#motion-blank { display: none; position: fixed; inset: 0; z-index: 900; background: var(--motion-blank-color); }

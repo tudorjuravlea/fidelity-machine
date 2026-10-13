@@ -1,0 +1,21 @@
+/* Film frame. Only geometry lives here: the piece's own <style> (after the lock's tokens.css) gives every colour,
+   face and space, and this sheet names no colour at all — the plates read variables the piece sets. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+html { -webkit-font-smoothing: antialiased; }
+body { position: relative; overflow: hidden; width: var(--W); height: var(--H); }
+[data-scene] { overflow: hidden; position: absolute; inset: 0; }
+/* The kit shows a scene by giving it data-on and never writes its display, so the piece's own rule (flex, grid)
+   is what lays it out. A scene the kit has not switched on — or is not listed at all — stays hidden. */
+[data-scene]:not([data-on]) { display: none !important; }
+
+/* Parts the entrances create or look for. */
+.w { white-space: pre; display: inline-block; }                    /* one word, from the word splitter */
+.ln { width: max-content; white-space: nowrap; display: block; }   /* one unbreakable line, sized by fit() */
+.mask { overflow: hidden; display: block; margin-bottom: -.12em; padding-bottom: .12em; }   /* the edge a masked rise comes up behind */
+.mv { display: block; }   /* deliberately no will-change: a promoted layer can come to rest a sub-pixel off */
+.blkw { display: inline-block; position: relative; }
+.blk { inset: .06em -4px; position: absolute; scale: 0 1; background: var(--motion-block-color, var(--motion-wipe-color)); }
+
+/* The wipe plate: a tilted slab, wider and taller than the frame, that crosses it while scenes change underneath.
+   Its colour is --motion-wipe-color; the piece may round its corners or reshape #motion-wipe in its own CSS. */
+#motion-wipe { display: none; position: absolute; z-index: 90; top: -15%; left: -30%; width: 160%; height: 130%; rotate: -7deg; background: var(--motion-wipe-color); }

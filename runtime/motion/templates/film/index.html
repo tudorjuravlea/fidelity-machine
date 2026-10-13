@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<link rel="stylesheet" href="../../kit/film.css">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  /* ROLE MAP. This block is the one place the piece meets the lock, and the work of filling it is yours.
+     Every role is named --piece-<role> so it can never share a name with a lock slot; set each one to
+     a variable that exists in assets/tokens.css (a colour slot, a font-<role>-family, -size or -weight
+     variable, a space step, a radius slot). A REPLACE left behind is an undefined variable, and the css-vars
+     lint reports it by name, so an unfilled map cannot pass. Below this block the sheet reads the roles
+     and nothing else: no colour, face, size, space or radius is written out. */
+  :root {
+    --piece-ground:     var(--REPLACE-ground-slot);       /* the picture's background */
+    --piece-ink:        var(--REPLACE-ink-slot);          /* text on the background */
+    --piece-rule:       var(--REPLACE-rule-slot);         /* hairlines */
+    --piece-accent:     var(--REPLACE-accent-slot);       /* the one colour that stands out */
+    --piece-accent-ink: var(--REPLACE-accent-ink-slot);   /* text laid on the accent */
+    --piece-display:    var(--REPLACE-display-family);    /* a font-<role>-family variable */
+    --piece-body:       var(--REPLACE-body-family);
+    --piece-weight-display: var(--REPLACE-display-weight);
+    --piece-weight-strong:  var(--REPLACE-strong-weight);
+    /* A film is read at arm's length, so each size is a lock size times a plain number. That
+       multiplication is the only arithmetic allowed; the numbers belong in a DECISIONS.md row. */
+    --piece-size-hero:    calc(var(--REPLACE-display-size) * 10);
+    --piece-size-title:   calc(var(--REPLACE-display-size) * 2.6);
+    --piece-size-lead:    calc(var(--REPLACE-display-size) * 1.7);
+    --piece-size-body:    calc(var(--REPLACE-body-size) * 1.3);
+    --piece-size-caption: var(--REPLACE-body-size);
+    --piece-edge:   var(--REPLACE-edge-space);   /* the frame margin: a lock step, or a multiple of one */
+    --piece-gap-s:  var(--REPLACE-small-space);
+    --piece-gap-m:  var(--REPLACE-medium-space);
+    --piece-gap-l:  var(--REPLACE-large-space);
+    --piece-radius: var(--REPLACE-radius-slot);
+    --motion-wipe-color: var(--piece-accent);    /* the plate a wipe cut drags across */
+  }
+
+  body { background: var(--piece-ground); color: var(--piece-ink); font-family: var(--piece-body); font-size: var(--piece-size-body); }
+  [data-scene] {
+    display: grid; align-content: center; gap: var(--piece-gap-m);
+    padding: calc(var(--piece-edge) * 2.75) var(--piece-edge) calc(var(--piece-edge) * 2);
+  }
+  p, h2 { line-height: 1.12; text-wrap: balance; }
+
+  /* the bar that stays up across scenes; nothing in it is turned, so every box sits inside the margin */
+  #bar { position: absolute; z-index: 5; inset: var(--piece-edge) var(--piece-edge) auto; display: flex; justify-content: space-between; align-items: center; gap: var(--piece-gap-m); }
+  #mark { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-body); }
+  #tag { padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); font-weight: var(--piece-weight-strong); font-size: var(--piece-size-caption); white-space: nowrap; }
+
+  .kicker, .source { font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); letter-spacing: .08em; text-transform: uppercase; }
+  .source { opacity: .7; }
+  .figure { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-hero); line-height: .85; letter-spacing: -.05em; font-variant-numeric: tabular-nums; color: var(--piece-accent); }
+  .unit { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+
+  .stack { display: grid; justify-items: start; gap: var(--piece-gap-s); }
+  .stack .ln { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: .95; letter-spacing: -.035em; }
+  .stack .answer { padding: 0 .22em .06em; border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); }
+
+  .three { display: grid; margin-top: var(--piece-gap-m); }
+  .item { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: var(--piece-gap-m); padding: var(--piece-gap-m) 0; border-top: 2px solid var(--piece-rule); }
+  .item .no { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); color: var(--piece-accent); }
+  .item .what { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+  .item .why { grid-column: 2; font-size: var(--piece-size-caption); opacity: .7; }
+
+  .request { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: .95; letter-spacing: -.035em; }
+  .when { justify-self: start; padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+  .foot { display: flex; justify-content: space-between; gap: var(--piece-gap-m); padding-top: var(--piece-gap-m); border-top: 2px solid var(--piece-rule); font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); }
+</style>
+</head>
+<body>
+<!-- COPY. Each text to be replaced sits in a data-slot element and opens with the marker word that the
+     placeholders lint reports (see MOTION-LAYOUTS.md); swap the whole line, marker included.
+     When things happen is the piece's own: data-at, data-stagger and the order of the scenes may all
+     change. How long things take is not: that comes from the motion roles in piece.js, so there is no
+     data-dur here except on the counted figure, whose length depends on the quantity. -->
+
+<div id="bar">
+  <span id="mark" data-slot="mark" data-fx="fade" data-at="0.2">TODO who is speaking</span>
+  <span id="tag" data-slot="tag" data-fx="rise" data-at="0.5" data-during="open list end">TODO what this film is</span>
+</div>
+
+<section data-scene="open">
+  <p class="kicker" data-slot="kicker" data-fx="fade" data-at="0.3">TODO what was measured</p>
+  <!-- set data-to to the quantity and put the same number in the text, so a still before the count reads true -->
+  <p class="figure" data-slot="figure" data-fx="count" data-at="0.7" data-to="0" data-from="0" data-pad="2" data-dur="1.6">TODO</p>
+  <p class="unit" data-slot="unit" data-fx="rise" data-at="2.1">TODO the unit, in a few words.</p>
+  <p class="source" data-slot="source" data-fx="fade" data-at="2.6">TODO where it comes from, and when.</p>
+</section>
+
+<section data-scene="ask">
+  <!-- the lines are sized to the measure by setup() in piece.js (data-fit is the share of the measure) -->
+  <h2 class="stack" data-over>
+    <span class="ln" data-slot="question" data-fit="0.8" data-fx="drop" data-at="0.15">TODO the question</span>
+    <span class="ln" data-slot="question" data-fit="0.95" data-fx="slam" data-side="right" data-at="0.45">TODO the audience asks</span>
+    <span class="ln answer" data-slot="question" data-fit="0.6" data-fx="pop" data-at="0.9">TODO before you?</span>
+  </h2>
+</section>
+
+<section data-scene="list">
+  <p class="kicker" data-slot="kicker" data-fx="fade" data-at="0.1">TODO three reasons</p>
+  <div class="three" data-each="rise" data-at="0.4" data-stagger="0.35">
+    <div class="item"><span class="no" data-slot="number">TODO 1</span><span class="what" data-slot="reason">TODO the first reason.</span><span class="why" data-slot="proof">TODO what backs it up.</span></div>
+    <div class="item"><span class="no" data-slot="number">TODO 2</span><span class="what" data-slot="reason">TODO the second reason.</span><span class="why" data-slot="proof">TODO what backs it up.</span></div>
+    <div class="item"><span class="no" data-slot="number">TODO 3</span><span class="what" data-slot="reason">TODO the third reason.</span><span class="why" data-slot="proof">TODO what backs it up.</span></div>
+  </div>
+</section>
+
+<section data-scene="end">
+  <h2 class="request" id="request" data-slot="ask" data-fit="0.95" data-fit-line=".ln" data-fx="words" data-at="0.3"><span class="ln">TODO the one thing</span> <span class="ln">TODO to do next.</span></h2>
+  <p class="when" data-slot="deadline" data-fx="pop" data-at="1.5">TODO by this date.</p>
+  <div class="foot" data-fx="fade" data-at="2.2"><span data-slot="line">TODO the line to remember.</span><span data-slot="link">TODO where to go</span></div>
+</section>
+
+<script type="module" src="piece.js"></script>
+</body>
+</html>

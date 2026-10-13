@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<link rel="stylesheet" href="../../kit/deck.css">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  /* ROLE MAP. The one place the deck meets the lock. Each role is named --piece-<role>, so it can never
+     take the name of a lock slot; set it to a variable that exists in assets/tokens.css (a colour slot, a
+     font-<role>-family, -size or -weight variable, a space step). A REPLACE left in place is an undefined
+     variable that the css-vars lint names, so a half-filled map fails. Below the map the sheet reads roles
+     only: no colour, face, size or space is written out. */
+  :root {
+    --piece-ground:     var(--REPLACE-ground-slot);       /* the stage background */
+    --piece-ink:        var(--REPLACE-ink-slot);          /* text on the stage */
+    --piece-muted:      var(--REPLACE-muted-ink-slot);    /* secondary text */
+    --piece-rule:       var(--REPLACE-rule-slot);         /* hairlines between points */
+    --piece-accent:     var(--REPLACE-accent-slot);       /* the colour that stands out */
+    --piece-accent-ink: var(--REPLACE-accent-ink-slot);   /* text laid on the accent */
+    --piece-display:    var(--REPLACE-display-family);    /* a font-<role>-family variable */
+    --piece-body:       var(--REPLACE-body-family);
+    --piece-weight-display: var(--REPLACE-display-weight);
+    --piece-weight-strong:  var(--REPLACE-strong-weight);
+    /* Seen across a room, so each size is a lock size times a plain number; that multiplication is the only
+       arithmetic allowed here, and the numbers belong in a DECISIONS.md row. */
+    --piece-size-stat:    calc(var(--REPLACE-display-size) * 9);
+    --piece-size-claim:   calc(var(--REPLACE-display-size) * 5);
+    --piece-size-title:   calc(var(--REPLACE-display-size) * 2.5);
+    --piece-size-lead:    calc(var(--REPLACE-display-size) * 1.6);
+    --piece-size-body:    calc(var(--REPLACE-body-size) * 1.8);
+    --piece-size-caption: calc(var(--REPLACE-body-size) * 1.1);
+    --piece-edge:  var(--REPLACE-edge-space);   /* the stage margin: a lock step, or a multiple of one */
+    --piece-gap-m: var(--REPLACE-medium-space);
+    --piece-gap-l: var(--REPLACE-large-space);
+    --motion-wipe-color:  var(--piece-accent);   /* the plate a wipe exit draws */
+    --motion-blank-color: var(--piece-ground);   /* the blank screen, and the letterbox round a stage that is not the screen's shape */
+  }
+
+  #stage { background: var(--piece-ground); color: var(--piece-ink); font-family: var(--piece-body); font-size: var(--piece-size-body); line-height: 1.3; -webkit-font-smoothing: antialiased; }
+  :where(#stage *) { box-sizing: border-box; margin: 0; }
+  /* every scene is a column that starts at the margin and sits in the middle of the height */
+  [data-scene] { display: grid; align-content: center; justify-items: start; gap: var(--piece-gap-m); padding: var(--piece-edge); }
+  h1, h2, p { text-wrap: balance; }
+  .eyebrow { font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); letter-spacing: .12em; text-transform: uppercase; color: var(--piece-muted); }
+  .claim { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-claim); line-height: 1.12; letter-spacing: -.03em; }
+  .claim > span { display: block; }
+  .claim .lit { color: var(--piece-accent); }
+  .title { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: 1.05; letter-spacing: -.025em; }
+  .quiet { color: var(--piece-muted); }
+
+  .points { display: grid; width: 100%; margin-top: var(--piece-gap-m); }
+  .point { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: var(--piece-gap-l); padding: var(--piece-gap-m) 0; }
+  .point .tick { grid-column: 1 / -1; height: 2px; background: var(--piece-rule); transform-origin: 0 50%; }
+  .point .n { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); color: var(--piece-accent); }
+  .point .t { font-family: var(--piece-display); font-weight: var(--piece-weight-strong); font-size: var(--piece-size-lead); line-height: 1.1; }
+
+  .stat { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-stat); line-height: .95; letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: var(--piece-accent); }
+  .lead { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); line-height: 1.15; }
+  .bar { width: 22%; height: 2px; background: var(--piece-accent); transform-origin: 0 50%; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- COPY. Each text to be replaced sits in a data-slot element and opens with the marker word that the
+     placeholders lint reports (see MOTION-LAYOUTS.md); swap the whole line, marker included. The speaker
+     notes in piece.js carry the same marker.
+     Which press an element belongs to (data-step) and when it arrives after it (data-at) are the speaker's
+     to choose. How long an arrival takes is not: that comes from the motion roles in piece.js. -->
+
+<section data-scene="title">
+  <p class="eyebrow" data-slot="eyebrow">TODO the talk's name and the occasion</p>
+  <!-- the two lines are set tight and their words travel while they arrive, so they are marked data-over:
+     the overlap test would otherwise report the lines for touching on the way in -->
+  <h1 class="claim"><span data-slot="claim" data-fx="words" data-at="0.2" data-over>TODO the claim in one breath,</span><span class="lit" data-slot="claim" data-fx="block" data-at="0.9" data-over>TODO and the turn.</span></h1>
+  <p class="lead quiet" data-slot="speaker" data-fx="fade" data-at="1.6">TODO who is speaking, and for whom.</p>
+</section>
+
+<section data-scene="points">
+  <h2 class="title" data-slot="heading" data-fx="rise" data-at="0.3">TODO what to take from the next ten minutes.</h2>
+  <div class="points">
+    <div class="point" data-step="2" data-fx="fade" data-at="0.2"><span class="tick" data-step="2" data-fx="draw" data-at="0"></span><span class="n" data-slot="number">TODO 1</span><span class="t" data-slot="point">TODO the first point.</span></div>
+    <div class="point" data-step="3" data-fx="fade" data-at="0.2"><span class="tick" data-step="3" data-fx="draw" data-at="0"></span><span class="n" data-slot="number">TODO 2</span><span class="t" data-slot="point">TODO the second point.</span></div>
+    <div class="point" data-step="4" data-fx="fade" data-at="0.2"><span class="tick" data-step="4" data-fx="draw" data-at="0"></span><span class="n" data-slot="number">TODO 3</span><span class="t" data-slot="point">TODO the third point, the one to keep.</span></div>
+  </div>
+</section>
+
+<section data-scene="number">
+  <!-- set data-to to the quantity and data-suffix to its unit, and put the same figure in the text -->
+  <p class="stat" data-slot="figure" data-fx="count" data-at="0.4" data-to="0" data-suffix="" data-dur="1.1">TODO</p>
+  <p class="lead" data-slot="measure" data-fx="rise" data-at="1.4">TODO what the figure counts, and who counted.</p>
+  <p class="quiet" data-slot="source" data-step="2" data-fx="fade" data-at="0.1">TODO the source and the year.</p>
+</section>
+
+<section data-scene="close">
+  <h2 class="title" data-slot="close" data-fx="words" data-at="0.2">TODO the sentence to leave the room with.</h2>
+  <div class="bar" data-fx="draw" data-at="1.2"></div>
+  <p class="quiet" data-slot="contact" data-fx="fade" data-at="1.7">TODO where to find the speaker.</p>
+</section>
+
+</div>
+<script type="module" src="piece.js"></script>
+</body>
+</html>

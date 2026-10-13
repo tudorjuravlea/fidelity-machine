@@ -24,10 +24,12 @@ earlier one already verified:
    (`components/INDEX.md`), routed by intent (`components/SELECTION.md`).
 3. **References armed by a human** (`reference/APPROVALS.md`), then the pixel-gated screens:
    gate the reusable SECTIONS once, compose pages from them.
-4. **Media formats, staged** (`formats.json` + `templates/`): decks → social → print. These
-   are net-new surfaces with no capture reference, so they ship on lint + taste + render +
-   human review — never a fabricated diff number. Print is millimetre-first and exports only
-   through the print pipeline (`tools/README.md`).
+4. **Media formats, staged** (`formats.json` + `templates/`): decks → social → print → motion
+   (films and clicker decks last: they translate verified stills into time; the skeletons are
+   engine-side in `runtime/motion/templates/`, see `templates/motion/MOTION-LAYOUTS.md`). These
+   are net-new surfaces with no capture reference, so they ship on lint + taste + render + human
+   review — never a fabricated diff number. Print is millimetre-first and exports only through
+   the print pipeline (`tools/README.md`).
 5. **Standing quality board**: `gauntlet/LANES.md` implemented as a read-only gauntlet script;
    `evals/evals.json` grows a case per decided rule; `evals/tasks.json` + `evals/HARNESS.md`
    carry the before/after correction-experiment suite (temptation/neutral tasks + the harness

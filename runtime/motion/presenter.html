@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Speaker view</title>
+<style>
+/* The speaker's window, opened from the deck with W. One column: the running clock in a slim bar at the top, what
+   is on screen now as the large card, and the next pose as a strip along the bottom. Outside every lock on
+   purpose — no gate reads it and the audience never sees it — so its few neutral colours are its own. */
+:root { color-scheme: dark; --paper: #1a1b1e; --card: #232529; --line: #3a3d42; --soft: #a3a6ad; --text: #f0f0ee; --live: #ff7a6b; }
+html { height: 100%; }
+body { height: 100%; margin: 0; display: grid; grid-template-rows: auto 1fr auto; background: var(--paper); color: var(--text); font: 17px/1.45 system-ui, sans-serif; }
+.clockbar { display: flex; align-items: center; gap: 18px; padding: 10px 22px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.clockbar .run { font-size: 30px; font-weight: 650; letter-spacing: .02em; }
+.clockbar .where, .clockbar .wall { color: var(--soft); }
+.clockbar .mode { margin-left: auto; font-size: 14px; color: var(--soft); }
+.clockbar .mode.recording { color: var(--live); }
+.now { margin: 22px; padding: 26px 30px; border-radius: 12px; background: var(--card); overflow: auto; }
+.now .tag, .upcoming .tag { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+.now .name { margin: 6px 0 14px; font-size: 24px; font-weight: 650; }
+.now .say { margin: 0; font-size: 32px; line-height: 1.32; white-space: pre-wrap; }
+.upcoming { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; padding: 14px 22px 18px; border-top: 1px solid var(--line); }
+.upcoming .shot { width: 240px; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--line); object-fit: contain; }
+.upcoming .name { margin: 4px 0; font-weight: 650; }
+.upcoming .say { margin: 0; color: var(--soft); white-space: pre-wrap; }
+.upcoming .hint { margin: 8px 0 0; font-size: 13px; color: #7d8086; }
+kbd { padding: 0 4px; font: inherit; border: 1px solid var(--line); border-radius: 3px; }
+</style>
+<script type="module">
+import { keyOf as actionOf } from './keys.js';
+
+// This window lives in <lockDir>/kit/ (served by `motion.mjs serve`); a deck's pose stills are
+// <lockDir>/.motion/<deck>/stills/NN.jpg, NN being the pose index in two digits.
+const deckId = new URLSearchParams(location.search).get('deck') ?? '';
+const channel = new BroadcastChannel(`motion:${deckId}`);
+const model = { meta: null, state: null, talkStartedAt: null };
+const ui = Object.fromEntries([...document.querySelectorAll('[data-ui]')].map(el => [el.dataset.ui, el]));
+const pad = n => String(n).padStart(2, '0');
+const minutes = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; };
+
+function paintNow(pose) {
+  ui.nowName.textContent = pose.label;
+  ui.nowSay.textContent = pose.notes ?? '';
+}
+function paintNext(pose, index) {
+  ui.nextName.textContent = pose ? pose.label : 'Nothing after this: it is the last pose.';
+  ui.nextSay.textContent = pose?.notes ?? '';
+  const src = pose ? new URL(`../.motion/${encodeURIComponent(deckId)}/stills/${pad(index)}.jpg`, location.href).href : '';
+  if (ui.shot.dataset.src === src) return;
+  ui.shot.dataset.src = src;
+  ui.shot.style.visibility = 'hidden';             // shown on load: a still not made yet leaves an empty frame
+  if (src) ui.shot.src = src; else ui.shot.removeAttribute('src');
+}
+function refresh() {
+  const { meta, state } = model;
+  if (!(meta && state)) return;   // nothing to show until the deck has answered
+  const index = state.target;
+  paintNow(meta.stops[index]);
+  paintNext(meta.stops[index + 1], index + 1);
+  ui.where.textContent = `${index} / ${meta.stops.length - 1}`;
+  ui.mode.textContent = state.taking ? 'take in progress' : state.blank ? 'audience screen blank' : meta.title;
+  ui.mode.classList.toggle('recording', !!state.taking);
+  model.talkStartedAt ??= index > meta.start ? Date.now() : null;   // the talk clock starts with the first press
+}
+ui.shot.addEventListener('load', () => { ui.shot.style.visibility = 'visible'; });
+
+channel.addEventListener('message', ({ data }) => {
+  if (data?.type === 'meta') {
+    model.meta = data.meta;
+    document.title = `${data.meta.title} — speaker view`;
+  } else if (data?.type === 'state') {
+    model.state = data;
+  }
+  refresh();
+});
+
+function tick() {
+  const now = new Date();
+  ui.wall.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  ui.run.textContent = model.talkStartedAt === null ? '0:00' : minutes(Date.now() - model.talkStartedAt);
+  if (!model.meta) channel.postMessage({ type: 'hello' });   // keep asking until the deck window answers
+}
+tick();
+setInterval(tick, 500);
+
+window.addEventListener('keydown', e => {
+  if (e.key === 't' || e.key === 'T') {   // restart the talk clock: from now if the talk is under way
+    model.talkStartedAt = null;
+    refresh();
+    return;
+  }
+  const action = actionOf(e);
+  if (!action || action === 'presenter') return;
+  e.preventDefault();
+  if (!e.repeat) channel.postMessage({ type: 'key', k: action });   // the clicker works from this window too
+});
+</script>
+</head>
+<body>
+<header class="clockbar">
+  <span class="run" data-ui="run">0:00</span>
+  <span class="where" data-ui="where">–</span>
+  <span class="wall" data-ui="wall"></span>
+  <span class="mode" data-ui="mode">Waiting for the deck window to open…</span>
+</header>
+<section class="now">
+  <div class="tag">On screen</div>
+  <div class="name" data-ui="nowName"></div>
+  <p class="say" data-ui="nowSay"></p>
+</section>
+<footer class="upcoming">
+  <img class="shot" data-ui="shot" alt="">
+  <div>
+    <div class="tag">Coming up</div>
+    <div class="name" data-ui="nextName"></div>
+    <p class="say" data-ui="nextSay"></p>
+    <p class="hint">Clicker presses here reach the deck. <kbd>T</kbd> restarts the talk clock. The next pose's picture appears once <code>motion.mjs stills</code> has made it.</p>
+  </div>
+</footer>
+</body>
+</html>
