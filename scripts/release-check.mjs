@@ -198,7 +198,9 @@ section('1. Brand leakage');
   const PATTERN_CLASSES = [
     { label: 'credential-shape', re: /ghp_[A-Za-z0-9]{20,}|github_pat_|xox[baprs]-|\bsk-[A-Za-z0-9]{16,}/ },
     { label: 'local-user-path', re: /\/Users\/[^/\s]+|\/home\/[^/\s]+|C:\\Users\\/ },
-    { label: 'private-host', re: /localhost|127\.0\.0\.1|\b[\w.-]+\.(?:internal|corp|local)\b/i },
+    // scripts/motion.mjs binds its local presentation server to the loopback address on purpose (nothing
+    // off this machine may reach the take upload); that literal is a bind default, not a leaked host.
+    { label: 'private-host', re: /localhost|127\.0\.0\.1|\b[\w.-]+\.(?:internal|corp|local)\b/i, exempt: ['scripts/motion.mjs'] },
     { label: 'private-memory-reference', scope: ['.md'], fix: "cite the repo's own doc or test instead of an agent's private notes",
       re: /\bfeedback_[a-z0-9_]+\b|\bMEMORY\.md\b|\bper (?:my|the|our|your) memory\b|\bmemory (?:file|note|drawer)s?\b/i },
     { label: 'scrub-scar', scope: ['.md'], fix: 'a name scrub left a doubled word — reread the sentence and rewrite it',
@@ -212,7 +214,7 @@ section('1. Brand leakage');
   for (const rel of textFiles) {
     const lines = readFileSync(path.join(ENGINE, rel), 'utf8').split(/\r?\n/);
     const ext = path.extname(rel).toLowerCase();
-    const classesHere = rel === PATTERN_CARVE_OUT ? [] : PATTERN_CLASSES.filter((c) => !c.scope || c.scope.includes(ext));
+    const classesHere = rel === PATTERN_CARVE_OUT ? [] : PATTERN_CLASSES.filter((c) => (!c.scope || c.scope.includes(ext)) && !(c.exempt ?? []).includes(rel));
     lines.forEach((line, i) => {
       const matched = matchers.filter((m) => m.re.test(line)).map((m) => m.term);
       for (const c of classesHere) if (c.re.test(line)) matched.push(`class:${c.label}`);
@@ -251,6 +253,10 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   // extensionless basename, or the one reviewed binary carve-out below. Anything else fails
   // BY NAME — new file types enter the release surface only by a conscious allowlist edit.
   const SHIP_SUFFIXES = new Set(['.mjs', '.md', '.json', '.cjs', '.css', '.html', '.yml', '.swift']); // .swift: the scaffold's local foreground cut-out tool (source only, compiled in the skill)
+  // Browser runtime files are .js (a file:// page loads them as modules without a MIME map; engine
+  // scripts stay .mjs). Admitted PATH-SCOPED, not as a global suffix: the motion kit and its skeletons
+  // under runtime/, and the motion fixtures' pieces under fixtures/motion/.
+  const SHIP_JS_PREFIXES = ['runtime/', 'fixtures/motion/'];
   const SHIP_BASENAMES = new Set(['LICENSE', 'NOTICE', '.gitignore', '.npmignore']);
   // Reviewed binary carve-outs: the golden fixture's reference screenshots, and the README
   // demo GIF(s) under docs/ — each only when the magic bytes match and the size is sane.
@@ -300,6 +306,7 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
       continue;
     }
     if (ext ? SHIP_SUFFIXES.has(ext) : SHIP_BASENAMES.has(path.basename(rel))) continue;
+    if (ext === '.js' && SHIP_JS_PREFIXES.some((pre) => rel.startsWith(pre))) continue;
     denied.push(rel);
   }
   if (denied.length) {

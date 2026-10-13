@@ -196,6 +196,9 @@ Read the report. Green shows the measurements. Red shows the defect, the region,
 | Check the tree before a release | `node scripts/release-check.mjs` |
 | Prove every lint section can fail | `node scripts/lint-negatives.mjs` |
 | Lint findings as NDJSON (for tools) | `node scripts/adherence-lint.mjs --lock <path> --json` |
+| Start a film or a clicker deck in a capture | `node scripts/motion.mjs new --lock <path> --kind film\|deck --id <id>` |
+| Gate a motion piece | `node scripts/motion.mjs check --lock <path> --id <id>` |
+| Prove every motion gate can fail | `node scripts/motion.mjs --self-test` |
 
 All scripts use the same exit codes: `0` = pass, `1` = a real finding, `2` = a setup or usage error. The full contract is in `CONTRACT.md`.
 

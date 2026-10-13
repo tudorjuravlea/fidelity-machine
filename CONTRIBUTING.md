@@ -25,6 +25,11 @@ cannot produce, or when a fixture trips a section outside its own. Adding a sect
 its fixture in the same change; `adherence-lint.mjs --self-test` separately proves the registry
 and its call sites agree.
 
+For `scripts/motion.mjs` the same discipline holds: every gate has a negative under `fixtures/motion/` (a
+minimal piece with one planted fault and a row in `fixtures/motion/manifest.json` naming the gate and the
+result), run by `node scripts/motion.mjs --self-test`; adding a gate means adding its negative in the same
+change. The runtime kit's own promises are unit tests: `node --test "runtime/motion/*.test.mjs"`.
+
 ## 3. The engine stays brand-neutral
 
 No client names, no brand tokens, no user-specific paths, no licensed fonts in this repository —

@@ -19,6 +19,8 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally)
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
+├── fixtures/motion/                 # the motion verb's self-test: a lock with motion tokens, a golden film, a golden deck, one negative per gate (manifest.json)
+├── runtime/motion/                  # the browser kit for films and clicker decks (the picture as a function of time) + the engine skeletons; linked into a capture as <lockDir>/kit by motion.mjs new, never copied
 ├── scripts/
 │   ├── new-system.mjs               # scaffold ~/.claude/skills/<name>/ from skill-template.md + skill-scaffold/
 │   ├── setup-check.mjs              # readiness gate — verify deps; NEVER installs
@@ -31,6 +33,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 │   ├── eval-correction.mjs          # correction-experiment runner: A/B/C conditions, outcome labels, intent-preservation judge (evals/HARNESS.md)
 │   ├── colour-census.mjs            # colour-drift gate: catches uniform shifts below diff.mjs's YIQ cutoff
 │   ├── adherence-lint.mjs           # static gate: tokens, fonts, microcopy, jargon, disclosures, caps
+│   ├── motion.mjs                   # films and clicker decks: new · check · stills · export · serve · --self-test (runtime/motion/README.md)
 │   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff→census, loop control
 │   ├── contract-guard.mjs           # meta-gate: enforces THIS document's invariants mechanically
 │   └── release-check.mjs            # publish readiness: brand-leakage sweep, fresh-install sim, budgets
@@ -49,6 +52,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── gauntlet/LANES.md                # standing-board lane contracts (the skill implements them as its own gauntlet script)
 ├── references/playbook.md           # occasion → asset → channel routing for the media layer
 ├── tools/README.md                  # contract-first specs for skill-side pipelines (deck/print/brand-lint)
+├── motion/<id>/ · .motion/<id>/     # time-driven pieces (index.html + piece.js; from motion.mjs new) and their regenerable stills, sheets, MP4s, takes
 └── captures/<capture-name>/         # the system's world
     ├── design-lock.json             # the frozen SSOT for THIS system
     ├── capture.json                 # raw Figma capture bundle (re-derivable input)
@@ -117,10 +121,19 @@ All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--scree
 - `eval-correction.mjs --tasks T --lock L [--src-context <dir>] --model <id> [--control] [--only <id>] [--suite temptation|neutral|all] [--judge-model <id>] [--judge-passes <n>] [--rounds <n>] [--out <dir>] [--mock <script>]` → the correction-experiment runner (`evals/HARNESS.md`); A/B/C conditions per task, scored on findings from the task's own output file only (path-normalized, no baseline masking, pre-existing task.file is refused as errored), the correction rate itself gated on the pressure actually firing; labeled within-lock/lock-extended/gate-dodge/non-convergent/errored, judged for intent preservation via screenshot pair + majority vote only when there is a correction to judge (pressure fired, the task's `capture` state — `static` | `hover` | `motion` — is one a static render can show, and C's output differs from A's in trimmed content or in rendered pixels; a skipped judge and an unscored judge are two counters, never one, and neither is silently a pass); every row carries a coverage table (Reviewed / Not verified / Not applicable per area) and a rewrite ratio (share of lines not preserved A→C, diagnostic only); a lint result whose `RESULT` line is absent, disagrees with the exit code, or whose counts disagree with the finding lines parsed is a crash that errors the task — on the preflight baseline it stops the run before any model call (exit 1, every task recorded errored); the context copy excludes the eval's own answer key (`evals/`, `gauntlet/`); `--model` required for a real run (one auth preflight before the task loop starts), `--mock <script>` substitutes the `claude` CLI end to end for a free dry run; every `task.file` is validated and its sandbox containment enforced, not merely assumed; writes `<out>/run-<ISO>/results.json` (default `<lockDir>/.eval-correction`) with cost/token/wall-time totals, never the caller's tree otherwise
 - `verify.mjs --lock L [--screen S] [--calibrate]` → full pipeline; `--calibrate` measures the noise floor on the control screen and writes `meta.noiseFloorPct`
 - `setup-check.mjs` (no lock needed) → readiness report; prints the exact `npm i` command if missing
+- `motion.mjs new --lock L --kind film|deck --id <id> [--title] [--format <screen preset>] [--fps]` → copies the skill's filled template (`<lockDir>/templates/motion/<kind>/`) or the engine skeleton (`runtime/motion/templates/<kind>/`) to `<lockDir>/motion/<id>/`, fills `__TITLE__ __W__ __H__ __FPS__` from `formats.json`, maps the `--piece-*` colour and type roles where the lock makes it unambiguous and leaves `--REPLACE-…` otherwise (the css-vars lint fails until the author decides), creates the `<lockDir>/kit` symlink to `runtime/motion/`; exit 0 · 2
+- `motion.mjs check --lock L --id <id> [--json] [--every <s>] [--budget-ms <n>]` → the gates in fixed order — loads · offline (a hard gate: inside the lock tree, the engine root, `data:`/`blob:`, or `render.allowHosts`; observed until the page settles, then the piece's own source scanned for absolute URLs; websockets refused and recorded) · fonts (`fontChecks` + the metric probe; exit 4) · pictures · tokens (every motion role resolved by name and compared to `tokens.motion`; literal `data-dur` is a finding; SKIP when the lock declares no motion tokens) · lint (`adherence-lint --json` over the piece; a crashed or self-disagreeing lint is exit 2, never a pass; `disclosure-presence` is not evaluated for a piece and says so) · self-time (WARN: the piece's own source reads the clock or a timer) · determinism (byte-equal frames in three orders at every scene's start+0.4 s, midpoint and rest, every pose of a deck, `--every` for a dense probe) · layout (nothing that arrived outside the margin at rest, text included; overlaps WARN) · presses and clicker (deck, live) · frame-time (WARN; this machine's number); one line per gate, `RESULT:` line, NDJSON under `--json` (`gate`, pass-through `finding`, `summary`); exit 0 · 1 · 2 · 4 · 5
+- `motion.mjs stills --lock L --id <id> [--at …] [--every … --from … --to …] [--only …] [--idle …] [--force]` → rest and mid-entrance frames, strips, contact sheets and a deck handout PDF under `<lockDir>/.motion/<id>/`; refuses on a fonts failure unless `--force` (exit 4)
+- `motion.mjs export --lock L --id <id> [--from … --to …] [--audio <file>] [--take latest|<stamp>] [--crf <n>] [--pack] [--out <file>] [--force]` → the MP4 through FFmpeg (silent, with a track, or replaying a recorded take with its voice; bt709 tagged) and, for a deck, `--pack` a portable folder; exit 2 when FFmpeg is absent, 5 when the encoder fails
+- `motion.mjs serve --lock L [--port <n>] [--open]` → a loopback-only server for live presentation (presenter window, takes); `motion.mjs --self-test [--manifest <path>] [--json]` → runs `check --json` over `fixtures/motion/manifest.json`; exit 0 all hold · 1 any piece failed · 2 setup or any BLOCKED (2 wins over 1). `MOTION_LINT=<script>` swaps the lint child (a test seam, named on the gate line when set)
 - `release-check.mjs [--ban <term>] [--ban-file <path>] [--skip-fresh]` (no lock needed) → publish-readiness sweep; `--ban` (repeatable) and `--ban-file` (one extra banned term per line) extend the brand-leakage list with names the built-in sweep cannot know; lane 1's pattern classes also catch, in Markdown only, prose that cites an agent's private memory or feedback notes as authority and the doubled-article scars a name scrub leaves behind
 
 Path resolution: a screen `url` that is not `http(s)://` or `file://` is a path resolved **relative
-to the lock file's directory** (render.mjs converts it to `file://`). `referenceImage` and font
+to the lock file's directory** (render.mjs converts it to `file://`). A `?query` or `#hash` on such a url
+is kept on the navigation and ignored by every path check (render, lint, probe-blind-spots, geometry):
+`motion/<id>/index.html?tool&t=12.5` registers a film's rest pose as an ordinary screen. A url with no
+path before its `?`/`#` is a setup error (exit 2); a file whose NAME contains `?` or `#` is referenced
+as a `file://` url with the character encoded. `referenceImage` and font
 `files[]` paths resolve relative to the lock the same way. Output dirs `.render/` and `.report/`
 are created next to the lock.
 
@@ -134,6 +147,18 @@ are created next to the lock.
 6. Wait for `[data-render-ready]` selector (generated pages MUST set it) — never `networkidle`.
 7. `await document.fonts.ready`, then assert every `fonts[].fontChecks[]` — fail exit 4 if any is false.
 8. Every request that leaves the lock's tree is recorded. Internal = the main document (found through the navigation request and its redirects), `data:`/`blob:`/`about:`, and `file://` paths inside the lock's directory; everything else is external and lands in the geometry's `externalRequests[]` with a stderr `render note:` when non-empty — observation never changes the render. With lock `render.network: "offline"`, an external request to a host not in `render.allowHosts` (bare hostnames) is aborted and the run exits 5 naming the URLs, checked after readiness and again after the screenshot (captured to a buffer, written only when clean), and covering WebSockets and credentialed URLs the route hook never sees. Nothing in a request listener may throw.
+
+9. **Time-driven pieces (`runtime/motion`).** The picture is a function of `t`; the kit sets
+   `[data-render-ready]` only in tool mode, after fonts.ready, image decode, `setup` and the requested frame
+   have settled two animation frames. Under the harness `Date` is frozen and `Math.random` seeded (3), so a
+   piece that reads them reproduces in every tool and export yet may differ live — `motion.mjs check`
+   reports it (`self-time`, WARN). Chromium is launched with `--allow-file-access-from-files` by `render.mjs`
+   and `motion.mjs`, because a module import from a `file://` document is otherwise refused; the flag has no
+   rendering effect and every file read stays a request under the `render` policy (8). `motion.mjs` also
+   launches with `--disable-gpu-rasterization --disable-partial-raster` (measured: GPU and partial raster
+   move anti-aliased edges between drawing orders) and `reducedMotion: 'no-preference'` (a film is a video;
+   the viewer's player owns reduced motion). `render.mjs` keeps 4 unchanged: its stored references were
+   captured on its current raster path, and changing that path is a reference-invalidating change.
 
 ## Diff invariants (diff.mjs owns these)
 
@@ -289,3 +314,6 @@ rounds improve by < 10% relative, STOP and report — never thin-retry into inve
   "data-chart"`) key off it, so chart rules bind exactly to screens that contain charts.
 - All colors/spacing/type via CSS vars from `assets/tokens.css` (derived from the lock). Raw hex
   outside `:root` fails lint. Components come from the lock's `componentMap` when the node is mapped.
+- A motion piece's `piece.js` imports only from `../../kit/`; entrance durations and curves come by ROLE →
+  token NAME (`--motion-<name>`, `--motion-ease-<name>`), never a literal (`data-dur` is a finding when the
+  lock has `tokens.motion`); WHEN things happen (`data-at`, scene lengths, beats, cuts) is the piece's own.

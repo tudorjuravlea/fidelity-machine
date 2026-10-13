@@ -42,6 +42,8 @@ jobs:
       - run: node scripts/contract-guard.mjs
       - run: node scripts/release-check.mjs
       - run: node scripts/lint-negatives.mjs
+      - run: node --test "runtime/motion/*.test.mjs"
+      - run: node scripts/motion.mjs --self-test
 
   pixel-self-test:
     name: pixel self-test (macOS, reference platform)

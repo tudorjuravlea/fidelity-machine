@@ -7,6 +7,47 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **A motion-media layer: films and clicker-paced decks as functions of time, gated like screens**
+  (class: minor — a new verb, a new runtime directory, fixtures and scaffold documents; the additive
+  behaviours in existing scripts are under Changed; no existing verdict, exit code or human-readable line
+  changes). A piece under `<lockDir>/motion/<id>/` is one page whose whole picture is drawn from the time
+  `t` — no CSS transition or animation, no timer, no unseeded random — so any frame can be drawn alone, in
+  any order, and comes out the same. `runtime/motion/` holds the kit (served into a capture through a `kit`
+  symlink that `motion.mjs new` creates): `time.js` (eases, a CSS easing parser for `cubic-bezier()`,
+  `linear()`, `steps()` and the keywords, a reader for `--motion-<name>` / `--motion-ease-<name>`),
+  `entrances.js` (one attribute grammar for both kinds — `data-fx data-at data-step data-until data-out
+  data-dur data-each data-stagger …` — and a layout audit that measures element, descendants and text),
+  `film.js`, `clock.js` + `deck.js` + `stage.js` (a press plays the next beat, the picture rests while the
+  presenter talks; a take records presses and voice), `clip.js` (recordings as numbered frames),
+  `presenter.html`, forty-five unit tests, and the skeletons `templates/{film,deck}/`. **The lock is the
+  only source of look; tempo is free, tokens are not:** colours, families, sizes, spaces and radii come
+  through `assets/tokens.css`; entrance durations and curves come from `tokens.motion` by NAME — a piece maps
+  roles (enter, exit, cut, and their eases) to token names, the kit resolves them from `:root` and records
+  what it could not resolve and every literal `data-dur`; when things happen, how scenes cut and the beat
+  grid stay the piece's own. `scripts/motion.mjs new | check | stills | export | serve | --self-test`:
+  `check` runs loads · offline (a hard gate, observed until the page settles and the piece's own source
+  scanned for absolute URLs; websockets refused) · fonts (the metric probe too, exit 4) · pictures · tokens
+  (roles compared to the lock by name; SKIP when the lock declares no motion tokens, raw-motion's policy)
+  · lint (`adherence-lint --json` over the piece; a crashed or self-disagreeing lint is exit 2, never a pass;
+  `disclosure-presence` is not evaluated for a piece and says so) · self-time (WARN) · determinism (byte-equal
+  frames in three orders at every scene's start+0.4 s, midpoint and rest, every pose for a deck, `--every`
+  for a dense probe) · layout · presses and clicker (deck, live, two keys) · frame-time (WARN); `--json`
+  NDJSON; exit codes per CONTRACT. `stills` writes rest and mid-entrance frames, strips, contact sheets and a
+  deck handout PDF; `export` writes the MP4 through FFmpeg (silent, with a track, or replaying a recorded take
+  with its voice) and a portable folder; `serve` runs a live presentation on the loopback address. A rest
+  pose is an ordinary lock screen (`url: "motion/<id>/index.html?tool&t=12.5"`), so the pixel gate sees
+  every rest, the determinism gate proves the sampled in-betweens reproduce, and contact sheets put the rest
+  in front of a human — the feel of motion remains a human verdict and the reference says so.
+  `fixtures/motion/` carries a lock with motion tokens, a golden film, a golden deck and one negative per
+  gate, run by `--self-test` and CI. New reference `references/motion-media.md`; `motion-craft.md` names what
+  the pixel gate can now see; `slides-and-decks.md` and `skill-template.md` §3 route to it; the scaffold's
+  `templates/motion/MOTION-LAYOUTS.md` carries the role map (`--piece-*`, so a role can never collide with a
+  lock slot) and the skeleton placeholders. Measured on the way: headless Chromium rasterises on the GPU on
+  Apple silicon and partial raster reuses tile content, each moving anti-aliased edges between drawing
+  orders; a promoted compositor layer keeps the raster it got mid-move; a module import from a `file://`
+  document is refused without `--allow-file-access-from-files`. Each is a launch flag or a kit rule now,
+  with the number that found it in the runtime's README.
+
 - **Event collateral beyond the badge: five references, format presets, layout skeletons and
   seven shipped helpers** (class: minor — scaffold additions only; the lock schema, the lint and
   the gates are unchanged). `references/large-format-textile.md` (frame banners, photo walls,
@@ -181,6 +222,31 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   included; lint runs now set `exitCode` and return).
 
 ### Changed
+
+- **`capture-figma.mjs` maps motion families and emits motion tokens as variables** (class: patch — a lock
+  without `tokens.motion` produces byte-identical `tokens.css` plus one comment line; tailwind and dtcg
+  unchanged). `duration(s)`, `easing(s)|curve` and a bare `motion` prefix map into `tokens.motion`; a
+  value-decided kind requires an explicit `ms`/`s` unit (a bare number is a stiffness or an opacity as often
+  as a time), an easing must be a well-formed `cubic-bezier()`, `linear()`, `steps()` or keyword (anything
+  else is warned and skipped — a malformed value could otherwise close `:root` from inside tokens.css), and
+  a duration whose variable name would collide with an easing's is refused. `tokens.css` gains
+  `--motion-<name>: <ms>ms` and `--motion-ease-<name>: <value>` — the names raw-motion's suggestions had been
+  pointing at; `tailwind.tokens.cjs` gains `transitionDuration` / `transitionTimingFunction` pointing at those
+  variables like every other key.
+- **A screen `url` may carry a `?query` or `#hash`** (class: patch; golden render and lint byte-identical):
+  `render.mjs` keeps it on the navigation and resolves the path part; `adherence-lint.mjs` strips it at every
+  site that resolves a declared screen as a file (one helper, five sites) and no longer crashes on a url
+  that resolves to a directory; `probe-blind-spots.mjs` does the same. An empty path is a setup error.
+- **`render.mjs` launches Chromium with `--allow-file-access-from-files`** (class: patch; no rendering
+  effect, golden PNG byte-identical): a module import from a `file://` document is otherwise refused, and a
+  rest pose that loads the motion kit is such a document. The flag widens what a file:// page may READ; such
+  reads are requests like any other under the lock's `render` policy (observed, refused under offline).
+- **`adherence-lint.mjs` stays in the lock's own tree:** a symlinked directory is not entered (the engine
+  runtime linked in as `kit`, a shared fonts folder); a symlinked file is still read. Golden output
+  byte-identical.
+- **`release-check.mjs` admits `.js` under `runtime/` and `fixtures/motion/` only** (a conscious, path-scoped
+  allowlist edit: browser runtime files are `.js`; engine scripts stay `.mjs`) and exempts `scripts/motion.mjs`
+  from the private-host pattern class for its loopback bind default.
 
 - **`adherence-lint.mjs` registers `provenance`** (class: patch; human output gains one Section
   summary row). The section had fired at five call sites since the provenance work landed but
