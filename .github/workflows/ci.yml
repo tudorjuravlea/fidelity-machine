@@ -44,6 +44,7 @@ jobs:
       - run: node scripts/lint-negatives.mjs
       - run: node --test "runtime/motion/*.test.mjs"
       - run: node scripts/motion.mjs --self-test
+      - run: node scripts/motion.mjs --self-test --manifest fixtures/motion/fonts/manifest.json
 
   pixel-self-test:
     name: pixel self-test (macOS, reference platform)

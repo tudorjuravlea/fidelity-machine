@@ -1,0 +1,156 @@
+{
+  "$comment": "Run by `node scripts/motion.mjs --self-test`. One fixture per gate of `motion.mjs check`, each the golden film or deck plus exactly ONE planted fault; `planted` says what and where. Not covered here: fonts (needs a lock that declares a font, see fonts/manifest.json), frame-time (advisory and machine-dependent, so it cannot be planted without a flaky row). See README.md.",
+  "lock": "design-lock.json",
+  "pieces": [
+    {
+      "id": "golden-film",
+      "kind": "film",
+      "expect": "pass",
+      "planted": "nothing: the clean film"
+    },
+    {
+      "id": "golden-deck",
+      "kind": "deck",
+      "expect": "pass",
+      "planted": "nothing: the clean deck"
+    },
+    {
+      "id": "determinism-css-transition",
+      "kind": "film",
+      "expect": {
+        "gate": "determinism",
+        "result": "FAIL"
+      },
+      "planted": "index.html: #mark { transition: opacity 2s linear } \u2014 the same frame differs with the frame drawn before it",
+      "tolerate": [
+        "lint"
+      ]
+    },
+    {
+      "id": "determinism-timer",
+      "kind": "film",
+      "expect": {
+        "gate": "determinism",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: a setInterval (20 ms) that moves the mark's word-spacing; its value depends on how long each frame took to shoot"
+    },
+    {
+      "id": "determinism-wall-clock",
+      "kind": "film",
+      "expect": {
+        "gate": "determinism",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: the frame hook sets the mark's word-spacing from performance.now(), which the harness does not freeze"
+    },
+    {
+      "id": "offline-remote-stylesheet",
+      "kind": "film",
+      "expect": {
+        "gate": "offline",
+        "result": "FAIL"
+      },
+      "planted": "index.html: a <link rel=stylesheet> to https://assets.example.invalid/remote.css (a reserved name that never resolves)"
+    },
+    {
+      "id": "pictures-missing-image",
+      "kind": "film",
+      "expect": {
+        "gate": "pictures",
+        "result": "FAIL"
+      },
+      "planted": "index.html: an <img> whose src (assets/gate-diagram.svg) does not exist"
+    },
+    {
+      "id": "tokens-unresolved-role",
+      "kind": "film",
+      "expect": {
+        "gate": "tokens",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: motion.ease.enter names 'overshoot', an easing the lock does not declare"
+    },
+    {
+      "id": "tokens-literal-duration",
+      "kind": "film",
+      "expect": {
+        "gate": "tokens",
+        "result": "FAIL"
+      },
+      "planted": "index.html: data-dur=\"0.4\" on a rise"
+    },
+    {
+      "id": "lint-raw-hex",
+      "kind": "film",
+      "expect": {
+        "gate": "lint",
+        "result": "FAIL"
+      },
+      "planted": "index.html: .kicker { color: #112233 } outside :root"
+    },
+    {
+      "id": "lint-placeholder-copy",
+      "kind": "film",
+      "expect": {
+        "gate": "lint",
+        "result": "FAIL"
+      },
+      "planted": "index.html: the kicker is a data-slot line that still opens with the TODO marker"
+    },
+    {
+      "id": "layout-outside-margin",
+      "kind": "film",
+      "expect": {
+        "gate": "layout",
+        "result": "FAIL"
+      },
+      "planted": "index.html: .source pulled left of the frame margin with a negative margin"
+    },
+    {
+      "id": "layout-overlap",
+      "kind": "film",
+      "expect": {
+        "gate": "layout",
+        "result": "WARN"
+      },
+      "planted": "index.html: .unit pulled up over the counted figure with a negative margin"
+    },
+    {
+      "id": "self-time-clock-read",
+      "kind": "film",
+      "expect": {
+        "gate": "self-time",
+        "result": "WARN"
+      },
+      "planted": "piece.js: const startedAt = Date.now(), read and never used"
+    },
+    {
+      "id": "deck-step-past-last-press",
+      "kind": "deck",
+      "expect": {
+        "gate": "loads",
+        "result": "FAIL"
+      },
+      "planted": "index.html: an element on press 3 in the opening scene, which has press 1 only, so press 2 has nothing to play"
+    },
+    {
+      "id": "deck-identical-poses",
+      "kind": "deck",
+      "expect": {
+        "gate": "presses",
+        "result": "WARN"
+      },
+      "planted": "piece.js: steps: [0, 1] gives the opening scene a second press that plays no entrance"
+    },
+    {
+      "id": "deck-clicker-eats-next",
+      "kind": "deck",
+      "expect": {
+        "gate": "clicker",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: a capture-phase keydown listener that swallows every next key before the deck sees it"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$comment": "Run by `node scripts/motion.mjs --self-test --manifest fixtures/motion/fonts/manifest.json`. The fonts gate reads the lock, and the main fixture lock declares no fonts, so this negative has a lock of its own: the same tokens, one declared family that is neither installed nor bundled.",
+  "lock": "design-lock.json",
+  "pieces": [
+    {
+      "id": "fonts-absent-family",
+      "kind": "film",
+      "expect": {
+        "gate": "fonts",
+        "result": "FAIL",
+        "exit": 4
+      },
+      "planted": "design-lock.json declares fonts[].family 'Fixture Absent Sans' with fontChecks, and nothing installs or bundles it"
+    }
+  ]
+}

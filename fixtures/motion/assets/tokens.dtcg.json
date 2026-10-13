@@ -1,0 +1,136 @@
+{
+  "$description": "DERIVED from ../design-lock.json (\"motion-fixture\", captured 2026-10-13) by scripts/capture-figma.mjs. HAND-EDITING BANNED (CONTRACT.md §Provenance): edit the lock (or re-capture), then re-derive.",
+  "color": {
+    "$type": "color",
+    "light": {
+      "background": {
+        "$value": "#F7F6F3"
+      },
+      "surface1": {
+        "$value": "#FFFFFF"
+      },
+      "border": {
+        "$value": "#E4E1DA"
+      },
+      "text1": {
+        "$value": "#1C1B18"
+      },
+      "text2": {
+        "$value": "#6B675E"
+      },
+      "accent": {
+        "$value": "#0F5132"
+      },
+      "accent-subtle": {
+        "$value": "#E7F0EB"
+      },
+      "error": {
+        "$value": "#8A2A2A"
+      }
+    }
+  },
+  "spacing": {
+    "2": {
+      "$value": "8px"
+    },
+    "3": {
+      "$value": "12px"
+    },
+    "4": {
+      "$value": "16px"
+    },
+    "6": {
+      "$value": "24px"
+    },
+    "8": {
+      "$value": "32px"
+    },
+    "$type": "dimension"
+  },
+  "radius": {
+    "$type": "dimension",
+    "control": {
+      "$value": "8px"
+    },
+    "container": {
+      "$value": "16px"
+    }
+  },
+  "typography": {
+    "$type": "typography",
+    "heading": {
+      "$value": {
+        "fontFamily": "Helvetica Neue",
+        "fontSize": "26px",
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": "-0.01em"
+      }
+    },
+    "body": {
+      "$value": {
+        "fontFamily": "Helvetica Neue",
+        "fontSize": "15px",
+        "fontWeight": 400,
+        "lineHeight": 1.45
+      }
+    },
+    "label": {
+      "$value": {
+        "fontFamily": "Helvetica Neue",
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": 1.3
+      }
+    }
+  },
+  "elevation": {
+    "$description": "Raw CSS box-shadow strings (untyped: not losslessly expressible as DTCG shadow objects).",
+    "raised": {
+      "$value": "0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.06), 0 2px 4px 0 rgba(0,0,0,0.04)"
+    }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "fast": {
+        "$value": "150ms"
+      },
+      "standard": {
+        "$value": "300ms"
+      },
+      "emphasized": {
+        "$value": "500ms"
+      }
+    },
+    "easing": {
+      "standard": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0,
+          0.2,
+          1
+        ]
+      },
+      "decelerate": {
+        "$type": "cubicBezier",
+        "$value": [
+          0,
+          0,
+          0.2,
+          1
+        ]
+      },
+      "accelerate": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0,
+          1,
+          1
+        ]
+      }
+    }
+  }
+}

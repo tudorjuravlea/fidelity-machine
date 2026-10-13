@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What this fixture proves</title>
+<link rel="stylesheet" href="../../../../runtime/motion/film.css">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  /* ROLE MAP. The one place the piece meets the lock: every role is a --piece-* property set to a variable
+     from assets/tokens.css. Below this block the sheet reads roles only, so no colour, face, size, space or
+     radius is written out. */
+  :root {
+    --piece-ground:     var(--background);       /* the picture's background */
+    --piece-ink:        var(--text1);          /* text on the background */
+    --piece-rule:       var(--text2);         /* hairlines */
+    --piece-accent:     var(--accent);       /* the one colour that stands out */
+    --piece-accent-ink: var(--surface1);   /* text laid on the accent */
+    --piece-display:    var(--font-heading-family);    /* a font-<role>-family variable */
+    --piece-body:       var(--font-body-family);
+    --piece-weight-display: var(--font-heading-weight);
+    --piece-weight-strong:  var(--font-heading-weight);
+    /* a film is read across a phone, so each size is a lock size times a plain number */
+    --piece-size-hero:    calc(var(--font-heading-size) * 10);
+    --piece-size-title:   calc(var(--font-heading-size) * 2.6);
+    --piece-size-lead:    calc(var(--font-heading-size) * 1.7);
+    --piece-size-body:    calc(var(--font-body-size) * 2);
+    --piece-size-caption: calc(var(--font-body-size) * 1.6);
+    --piece-edge:   calc(var(--space-8) * 2);   /* the frame margin: a lock step, or a multiple of one */
+    --piece-gap-s:  var(--space-4);
+    --piece-gap-m:  var(--space-8);
+    --piece-gap-l:  calc(var(--space-8) * 2);
+    --piece-radius: var(--radius-control);
+    --motion-wipe-color: var(--piece-accent);    /* the plate a wipe cut drags across */
+  }
+
+  body { background: var(--piece-ground); color: var(--piece-ink); font-family: var(--piece-body); font-size: var(--piece-size-body); }
+  [data-scene] {
+    display: grid; align-content: center; gap: var(--piece-gap-m);
+    padding: calc(var(--piece-edge) * 2.75) var(--piece-edge) calc(var(--piece-edge) * 2);
+  }
+  p, h2 { line-height: 1.12; text-wrap: balance; }
+
+  /* the bar that stays up across scenes; nothing in it is turned, so every box sits inside the margin */
+  #bar { position: absolute; z-index: 5; inset: var(--piece-edge) var(--piece-edge) auto; display: flex; justify-content: space-between; align-items: center; gap: var(--piece-gap-m); }
+  #mark { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-body); }
+  #tag { padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); font-weight: var(--piece-weight-strong); font-size: var(--piece-size-caption); white-space: nowrap; }
+
+  .kicker { color: #112233; }
+  .kicker, .source { font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); letter-spacing: .08em; text-transform: uppercase; }
+  .source { opacity: .7; }
+  .figure { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-hero); line-height: .85; letter-spacing: -.05em; font-variant-numeric: tabular-nums; color: var(--piece-accent); }
+  .unit { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+
+  .stack { display: grid; justify-items: start; gap: var(--piece-gap-s); }
+  .stack .ln { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: .95; letter-spacing: -.035em; }
+  .stack .answer { padding: 0 .22em .06em; border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); }
+
+  .three { display: grid; margin-top: var(--piece-gap-m); }
+  .item { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: var(--piece-gap-m); padding: var(--piece-gap-m) 0; border-top: 2px solid var(--piece-rule); }
+  .item .no { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); color: var(--piece-accent); }
+  .item .what { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+  .item .why { grid-column: 2; font-size: var(--piece-size-caption); opacity: .7; }
+
+  .request { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: .95; letter-spacing: -.035em; }
+  .when { justify-self: start; padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-accent); color: var(--piece-accent-ink); font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+  .foot { display: flex; justify-content: space-between; gap: var(--piece-gap-m); padding-top: var(--piece-gap-m); border-top: 2px solid var(--piece-rule); font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); }
+
+  .stem { justify-self: start; width: 2px; height: calc(var(--piece-gap-l) * 2); background: var(--piece-accent); transform-origin: 50% 0; }
+  .plate { justify-self: start; padding: var(--piece-gap-s) var(--piece-gap-m); border-radius: var(--piece-radius); background: var(--piece-ink); color: var(--piece-ground); font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); }
+  .chant { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); line-height: 1.1; }
+  .verdict { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); justify-self: start; }
+  .bar { width: 100%; height: 2px; background: var(--piece-rule); transform-origin: 0 50%; }
+</style>
+</head>
+<body>
+<!-- motion-negative: a hand-typed hex on .kicker, outside :root -->
+<div id="bar">
+  <span id="mark" data-fx="fade" data-at="0.2">Motion fixture</span>
+  <span id="tag" data-fx="rise" data-at="0.5" data-during="open end">Golden film</span>
+</div>
+
+<section data-scene="open">
+  <p class="kicker" data-fx="fade" data-at="0.3">Gates run on every film</p>
+  <p class="figure" data-fx="count" data-at="0.7" data-to="10" data-from="0" data-pad="2" data-dur="1.6">10</p>
+  <div class="stem" data-fx="drawy" data-at="1.6"></div>
+  <p class="unit" data-fx="rise" data-at="2.1">gates, one line each in the check listing.</p>
+  <p class="source" data-fx="fade" data-at="2.6">Counted from the listing that motion.mjs prints.</p>
+</section>
+
+<section data-scene="ask">
+  <h2 class="stack" data-over>
+    <span class="ln" data-fit="0.8" data-fx="drop" data-at="0.15">Is every frame</span>
+    <span class="ln" data-fit="0.95" data-fx="slam" data-side="right" data-at="0.45">the same frame</span>
+    <span class="ln answer" data-fit="0.6" data-fx="pop" data-at="0.9">in any order?</span>
+  </h2>
+  <p class="plate" data-fx="throw" data-side="right" data-at="1.3">Three orders, the same bytes.</p>
+  <p class="chant" data-fx="punch" data-at="1.9">Forward, backward, shuffled.</p>
+</section>
+
+<section data-scene="end">
+  <h2 class="request" data-fit="0.95" data-fit-line=".ln" data-fx="words" data-at="0.3"><span class="ln">Every gate fails on</span> <span class="ln">one planted fault.</span></h2>
+  <div class="three" data-each="rise" data-at="0.8" data-stagger="0.35">
+    <div class="item"><span class="no">1</span><span class="what">A lock with motion tokens.</span><span class="why">Durations and curves are named, never typed.</span></div>
+    <div class="item"><span class="no">2</span><span class="what">A golden film and a golden deck.</span><span class="why">Both pass every gate.</span></div>
+    <div class="item"><span class="no">3</span><span class="what">One negative for each gate.</span><span class="why">Each one fails where it should.</span></div>
+  </div>
+  <p class="verdict" data-fx="block" data-at="2.3">Red first, then green.</p>
+  <div class="bar" data-fx="draw" data-at="3.2"></div>
+  <div class="foot" data-fx="fade" data-at="3.5"><span>fixtures/motion</span><span>motion.mjs --self-test</span></div>
+</section>
+
+<script type="module" src="piece.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What this fixture proves</title>
+<link rel="stylesheet" href="../../../../runtime/motion/deck.css">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  /* ROLE MAP. The one place the deck meets the lock: every role is a --piece-* property set to a variable from
+     assets/tokens.css. Below this block the sheet reads roles only, so no colour, face, size or space is
+     written out. */
+  :root {
+    --piece-ground:     var(--background);       /* the stage background */
+    --piece-ink:        var(--text1);          /* text on the stage */
+    --piece-muted:      var(--text2);    /* secondary text */
+    --piece-rule:       var(--text2);         /* hairlines between points */
+    --piece-accent:     var(--accent);       /* the colour that stands out */
+    --piece-accent-ink: var(--surface1);   /* text laid on the accent */
+    --piece-display:    var(--font-heading-family);    /* a font-<role>-family variable */
+    --piece-body:       var(--font-body-family);
+    --piece-weight-display: var(--font-heading-weight);
+    --piece-weight-strong:  var(--font-heading-weight);
+    /* seen across a room, so each size is a lock size times a plain number */
+    --piece-size-stat:    calc(var(--font-heading-size) * 9);
+    --piece-size-claim:   calc(var(--font-heading-size) * 5);
+    --piece-size-title:   calc(var(--font-heading-size) * 2.5);
+    --piece-size-lead:    calc(var(--font-heading-size) * 1.6);
+    --piece-size-body:    calc(var(--font-body-size) * 1.8);
+    --piece-size-caption: calc(var(--font-body-size) * 1.6);
+    --piece-edge:  calc(var(--space-8) * 3);   /* the stage margin: a lock step, or a multiple of one */
+    --piece-gap-m: var(--space-8);
+    --piece-gap-l: calc(var(--space-8) * 2);
+    --motion-wipe-color:  var(--piece-accent);   /* the plate a wipe exit draws */
+    --motion-blank-color: var(--piece-ground);   /* the blank screen, and the letterbox round a stage that is not the screen's shape */
+  }
+
+  #stage { background: var(--piece-ground); color: var(--piece-ink); font-family: var(--piece-body); font-size: var(--piece-size-body); line-height: 1.3; -webkit-font-smoothing: antialiased; }
+  :where(#stage *) { box-sizing: border-box; margin: 0; }
+  /* every scene is a column that starts at the margin and sits in the middle of the height */
+  [data-scene] { display: grid; align-content: center; justify-items: start; gap: var(--piece-gap-m); padding: var(--piece-edge); }
+  h1, h2, p { text-wrap: balance; }
+  .eyebrow { font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); letter-spacing: .12em; text-transform: uppercase; color: var(--piece-muted); }
+  .claim { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-claim); line-height: 1.12; letter-spacing: -.03em; }
+  .claim > span { display: block; }
+  .claim .lit { color: var(--piece-accent); }
+  .title { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: 1.05; letter-spacing: -.025em; }
+  .quiet { color: var(--piece-muted); }
+
+  .points { display: grid; width: 100%; margin-top: var(--piece-gap-m); }
+  .point { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: var(--piece-gap-l); padding: var(--piece-gap-m) 0; }
+  .point .tick { grid-column: 1 / -1; height: 2px; background: var(--piece-rule); transform-origin: 0 50%; }
+  .point .n { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-lead); color: var(--piece-accent); }
+  .point .t { font-family: var(--piece-display); font-weight: var(--piece-weight-strong); font-size: var(--piece-size-lead); line-height: 1.1; }
+
+  .stat { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-stat); line-height: .95; letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: var(--piece-accent); }
+  .lead { font-size: var(--piece-size-lead); font-weight: var(--piece-weight-strong); line-height: 1.15; }
+  .bar { width: 22%; height: 2px; background: var(--piece-accent); transform-origin: 0 50%; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+<section data-scene="title">
+  <p class="eyebrow">Motion fixture for the engine's gates</p>
+  <h1 class="claim"><span data-fx="words" data-at="0.2" data-over>Every press plays one beat,</span><span class="lit" data-fx="block" data-at="0.9" data-over>and the picture rests.</span></h1>
+  <p class="lead quiet" data-fx="fade" data-at="1.6">For anyone adding a gate to the motion verb.</p>
+</section>
+
+<section data-scene="number">
+  <p class="stat" data-fx="count" data-at="0.4" data-to="5" data-suffix="" data-dur="1.1">5</p>
+  <p class="lead" data-fx="rise" data-at="1.4">presses in this deck, and every one changes the picture.</p>
+  <p class="quiet" data-step="2" data-fx="fade" data-at="0.1">Counted by the presses gate of motion.mjs check.</p>
+</section>
+
+<section data-scene="close">
+  <h2 class="title" data-fx="words" data-at="0.2">A gate earns its place when a planted fault turns it red.</h2>
+  <div class="bar" data-fx="draw" data-at="1.2"></div>
+  <p class="quiet" data-step="2" data-fx="fade" data-at="0.1">The negatives live beside this deck, in fixtures/motion.</p>
+</section>
+
+</div>
+<script type="module" src="piece.js"></script>
+</body>
+</html>

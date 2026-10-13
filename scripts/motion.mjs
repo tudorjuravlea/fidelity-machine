@@ -735,7 +735,7 @@ async function cmdCheck(args) {
       });
     }
     gate('self-time', hits.length ? 'WARN' : 'pass',
-      hits.length ? `the piece reads the clock or a timer: ${hits.join(', ')} — the harness freezes these, so tool renders reproduce, but live playback may differ; draw from t (or the clock's idle seconds) instead`
+      hits.length ? `the piece reads the clock or a timer: ${hits.join(', ')} — the harness freezes Date and seeds Math.random (so those reproduce in tool renders while live playback may differ) but not timers or performance.now, which the determinism gate catches; draw from t (or the clock's idle seconds) instead`
         : 'no clock, timer or random read in the piece\'s own source', { hits });
   }
 
