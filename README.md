@@ -4,7 +4,8 @@
 ░▒▓█  F1DΞL17Y::MΔCH1NΞ  █▓▒░
 ```
 
-**AI can finally prototype in your design system, but only if something refuses the results that drift off it. This is that something.**
+**AI can finally prototype in your design system, but only if something refuses the results that drift off it. 
+This is that something.**
 
 fidelity-machine is two things that only work together: a **design generation discipline** and a **deterministic design-fidelity eval**. It locks your design system into a frozen, machine-readable mold. Then it lets an AI agent produce screens, social visuals, decks, and poster artwork *through* that mold, with a verification gate that measures every result and rejects anything off-system. Pixel by pixel. Word by word. The gate is deterministic by construction: same input, same reference, same verdict, an exit code instead of a judge's opinion. It measures fidelity, not taste: whether the result is *yours*, never whether it is good. The lock is the product. The evals are the proof.
 
