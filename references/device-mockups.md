@@ -26,9 +26,18 @@ and its bound, the camera stops); the analyser is `scripts/activity.mjs`; the wo
 | a tilt asked for inside a row, or a solo device the brief wants the other way | `.device--tilt-r`, `.device--tilt-l`, `.device--flat` on that device | the request wins over both rules |
 
 The tilt is the lock's `tokens.devices.tiltDeg` (10 by default). Positive `rotateY` sends the
-right edge back, so the face points right: that is "tilted to the right". It was checked on a
-render, not by reasoning: in the golden's first scene the phone's left edge measures 952 px tall
-and its right edge 912 px (section 7).
+right edge back, so the face points right: that is "tilted to the right". The same rule in edges,
+as the owner states it (2026-10-27), is the form a reader can check on a still: **a device on the
+left of the frame lowers its right edge** (the far edge, the one toward the rest of the frame,
+reads shorter than its left edge, never taller); **a device on the right lowers its left edge**.
+It was checked on a render, not by reasoning: in the golden's first scene the phone's left edge
+measures 952 px tall and its right edge 912 px, and an ink column at 70 % of its width is 918 px
+tall against 939 px at 30 % (section 8). A ten-degree tilt cannot be told by eye, and
+`getBoundingClientRect()` cannot tell it either (it returns the axis-aligned box): sample two
+columns. The direction is guarded by a test, not a sentence: `runtime/motion/devices.test.mjs`,
+"the rest pose faces the content", reads the signs out of `devices.css` and projects the slab
+under `perspective(1800px) rotateY(±tilt)` with the browser's own matrix, so a flipped rule fails
+the suite.
 
 The rest tilt is the `.device__body`'s own `transform`. The kit's entrances (`rise`, `fade`, `pop`)
 write `translate`, `scale` and `opacity` on `.device`, outside the body, so they can never flatten
@@ -65,6 +74,15 @@ default; a brand's own shape (a chamfer, a notch) is `tokens.devices.ground.path
 in a 0..1 box, and the right half is the same path mirrored. Two or more devices stand on the plain
 ground. The half is decoration (no entrance), so the audit does not measure it, and it may run to
 the frame's edge.
+
+### The device stays whole
+
+No cut-away or sliced device (the frame masked out between a top cap and a bottom cap, so that a
+part of the screen floats between two hairlines), by the owner's instruction of 2026-10-27: a
+walkthrough's device is whole and flat, and a close-up on one control is the static zoom
+(`armZoom` with one fixed segment, section 6), which keeps the device whole. The engine never
+carried such a layout (`runtime/motion/` has no `cut-top`, `sliced` or `mask-image`, checked the
+same day); a port of a walkthrough layout from elsewhere must not bring one in.
 
 ## 2. The lock block
 
@@ -254,6 +272,15 @@ Measured on 2026-10-26, the golden at 1920 × 1080, margin 64, with the pinned C
   the near edge; the left edge 952 px tall, the right edge 912 px: the right edge is the shorter
   one. On the still, the face turns toward the copy on its right and the slab sits on the half
   panel.
+- **The pose, in edges** (measured 2026-10-27, the same scene at its rest, 1.733 s): the phone's
+  ink column at 30 % of its width (x 390) runs from row 70 to 1008, 939 px tall; at 70 % (x 572)
+  from 79 to 996, 918 px: the right edge is the lowered one. The same phone re-posed as
+  `.device--right` (x 1213 to 1668) measures 922 px at 30 % and 936 px at 70 %: the left edge is
+  the lowered one. The guard in the suite is the test "the rest pose faces the content:
+  `.device--left` lowers its right edge, `.device--right` its left (projected under perspective)",
+  which projects the inset body (931.2 by 444.8 px, 10 degrees, 1800 px) from the signs read out of
+  `devices.css` to 951.6 px on the near edge and 911.6 px on the far one, and prints both heights
+  when it fails.
 - **Scene 2, the row:** three boxes at 298 to 1016 down (the band under a 234 px head), 343, 524
   and 343 px wide with 64 px between; flat, bottoms aligned.
 - **Scene 3, the zoom:** the device rests 513 px tall (the 718 px band over 1.4), 400.6 to 913.4,
@@ -274,6 +301,27 @@ ground that merges with the rim (the fixture's ground is a flat panel), the note
 landscape tablet on a render (the golden carries a phone, a tablet and a zooming phone; `lid` and
 `slide` are proved by the unit tests, not by a still), and a deck (the entrances are the same
 registry, but the golden is a film).
+
+## 9. If a device is ever drawn as native PowerPoint shapes
+
+The engine's deck export (`skill-scaffold/root/tools/pptx-from-plates.cjs`) places rendered plates
+and draws no device, so nothing in the engine carries a tilt into PowerPoint. A port that builds
+the device from native shapes re-derives the pose in that engine and proves it by measurement.
+The facts already paid for, recorded so no port repeats the error a sibling skill made on
+2026-10-27 (its recipe asserted "the same sign as CSS", its check render had been verified by eye,
+and every device in its decks faced away from the content until the owner caught it):
+
+- the tilt goes on the group's `p:grpSpPr` as `a:scene3d` with `a:camera prst="perspectiveFront"`
+  and `a:rot lat="0" lon="…" rev="0"`, plus `a:lightRig rig="flat" dir="t"` (a three-point rig
+  shades the screen; `orthographicFront` shows no tilt at ten degrees);
+- angles are `ST_PositiveFixedAngle`, 0 to 21600000 in 60,000ths of a degree; a negative value is
+  a repair dialog;
+- **the sign is the opposite of CSS `rotateY`.** CSS `rotateY(+10deg)` sends the right edge back;
+  `lon="600000"` (+10 degrees) brings it forward. A device on the left, face toward the content on
+  its right (CSS `+10deg`), takes `lon="21000000"` (360 minus 10 degrees); a device on the right
+  takes `lon="600000"`;
+- verify by the same two column heights, at 30 % and 70 % of the device's width, in the
+  application's own render, never by eye: for a device on the left the 70 % column is the shorter.
 
 ## Related
 

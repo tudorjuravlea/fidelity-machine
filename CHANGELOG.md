@@ -3,6 +3,45 @@
 All notable changes to fidelity-machine are documented here. Versioning follows semver;
 lock-impacting changes are classified per CONTRACT.md §Change classes.
 
+## 1.1.1 — 2026-10-27
+
+The device pose stated in edges and guarded by a measurement, one layout ruled out, the PowerPoint
+sign fact recorded for any export port, and two comments reworded for a leak scanner. Patch throughout:
+no sign in the CSS changes, no verdict, exit code or derived file moves.
+
+### Changed
+
+- **The pose rule, in edges** (class: patch — words and a test; `devices.css` keeps `rotateY(+tilt)` for
+  `.device--left` and `-tilt` for `.device--right`). The owner's formulation of 2026-10-27 now stands beside
+  the CSS one in `runtime/motion/devices.css` and `references/device-mockups.md` section 1: a device on the
+  left of the frame lowers its right edge (the far edge, toward the rest of the frame, reads shorter, never
+  taller); a device on the right lowers its left edge. It is the form a reader can check on a still, which a
+  ten-degree tilt otherwise does not allow.
+- **The direction is guarded by a measurement, not a sentence** (class: patch — a new test). `runtime/motion/
+  devices.test.mjs`, "the rest pose faces the content: `.device--left` lowers its right edge, `.device--right`
+  its left (projected under perspective)", reads the signs out of `devices.css` and projects the golden's
+  inset body (931.2 by 444.8 px, 10 degrees, 1800 px) with the browser's own matrix: 951.6 px on the near edge,
+  911.6 px on the far one, both printed when it fails. The render form was measured the same day on the golden's
+  first scene (ink columns at 30 % and 70 % of the phone's width: 939 and 918 px as `.device--left`, 922 and
+  936 px re-posed as `.device--right`) and recorded in section 8; it is not in the suite because no test under
+  `node --test` opens a browser (that is `motion.mjs check`'s half).
+- **If a device is ever drawn as native PowerPoint shapes** (class: patch — a new section 9 in
+  `references/device-mockups.md`). The engine's deck export places plates and draws no device, so nothing in it
+  changes; the section records where the tilt goes (`a:scene3d`, `perspectiveFront`, a flat light rig), the
+  angle type, that **the sign is the opposite of CSS `rotateY`** (`lon="21000000"` for a device on the left,
+  `lon="600000"` on the right), and that the direction is verified by the same two column heights in the
+  application's own render, never by eye. A sibling skill's decks had every device facing away from the
+  content until the owner caught it on 2026-10-27.
+- **No cut-away or sliced device** (class: patch — a ruling, section 1 of `references/device-mockups.md`), by
+  the owner's instruction of 2026-10-27: a walkthrough's device is whole and flat, a close-up is the static
+  zoom. The engine never carried such a layout; `runtime/motion/` has no `cut-top`, `sliced` or `mask-image`.
+- **Two comments reworded** in the kit so a sentence ending in "at rest." no longer sits directly above an
+  `export` line: a downstream leak scanner that collapses whitespace read "rest.export" as an obfuscated email
+  address (class: patch — comments only).
+- **`package-lock.json`'s own version fields follow the manifest** (they had stayed at 0.9.0 through two
+  releases). Two packages a sibling skill had installed into the working tree, referenced by no engine script,
+  stay undeclared: release-check's completeness lane refuses a declared package nothing imports.
+
 ## 1.1.0 — 2026-10-26
 
 The engine learns time and devices. Films and clicker decks as functions of time, gated like screens;

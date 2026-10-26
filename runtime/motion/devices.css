@@ -16,7 +16,12 @@
 
    THE POSE. A device alone on the LEFT half (.device--left) rests turned by the tilt about the vertical axis under
    a 1800px perspective, its face toward the content on its right: CSS rotateY(+tilt) sends the right edge back.
-   Alone on the RIGHT half (.device--right) it rests at -tilt. Two or more devices in a .device-row stand flat
+   The same rule in edges, which is how a still is checked: a device on the LEFT of the frame LOWERS ITS RIGHT EDGE
+   (the far edge, the one toward the rest of the frame, reads shorter than its left edge, never taller); a device on
+   the RIGHT lowers its left edge. Alone on the RIGHT half (.device--right) it rests at -tilt. devices.test.mjs
+   projects the slab from the signs written here and fails if either flips; an export that redraws the device in
+   another engine must measure the direction there, not carry the sign over (device-mockups.md, section 9).
+   Two or more devices in a .device-row stand flat
    unless one asks for a tilt (.device--tilt-r, .device--tilt-l); a device alone in the centre (.device--centre)
    is flat. The rest tilt is the .device__body's transform, so an entrance that writes translate, scale or opacity on
    .device never flattens it; the turn and lid entrances (devices.js) end ON it.

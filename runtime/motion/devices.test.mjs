@@ -3,6 +3,7 @@
 // exercised in a real browser by `motion.mjs check` on fixtures/motion's golden-devices and its negative.
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { zoomPose, fitOf, stopsOf, cameraAt, deviceFx, LEAD_IN, TAIL, PULLBACK_Z, TURN_DEG, LID_DEG, FIT_SHARE } from './devices.js';
 import { timing, rigOf, FACTORS } from './entrances.js';
 import { resolveMotion, inout } from './time.js';
@@ -109,6 +110,29 @@ test('turn starts TURN_DEG further round, signed with the tilt, and lands exactl
   assert.equal(run(0).start, `perspective(1800px) rotateY(${TURN_DEG}deg)`);   // a flat device turns in from the right
   assert.equal(run(0).end, 'perspective(1800px) rotateY(0deg)');
   assert.equal(run(10).first.opacity, 0);
+});
+
+test('the rest pose faces the content: .device--left lowers its right edge, .device--right its left (projected under perspective)', () => {
+  // The signs are read out of devices.css, so a flipped rule fails here, not in a reader's eye: a ten-degree tilt cannot
+  // be told by looking, and getBoundingClientRect() returns the axis-aligned box. The projection is the browser's
+  // (CSS Transforms 2, rotateY then perspective): x' = x cos a + z sin a, z' = -x sin a + z cos a, then 1 / (1 - z' / d).
+  const css = readFileSync(new URL('./devices.css', import.meta.url), 'utf8');
+  const signOf = cls => {
+    const m = css.match(new RegExp(`\\.device--${cls}\\s*\\{[^}]*--dv-ry:\\s*([^;]+);`));
+    assert.ok(m, `.device--${cls} sets --dv-ry`);
+    return /^0deg$/.test(m[1].trim()) ? 0 : /-1\s*\*/.test(m[1]) ? -1 : 1;   // 0deg | var(--piece-device-tilt) | calc(-1 * var(…))
+  };
+  const persp = Number(css.match(/--dv-persp:\s*(\d+)px/)[1]);
+  // the golden's solo phone: the body 931.2 px tall and 444.8 px wide once inset for the near edge's growth, tilt 10
+  const edges = (sign, tilt = 10, h = 931.2, w = 444.8) => {
+    const a = (sign * tilt * Math.PI) / 180, heightAt = x => h / (1 - (-x * Math.sin(a)) / persp);
+    return { left: heightAt(-w / 2), right: heightAt(w / 2) };
+  };
+  const L = edges(signOf('left')), R = edges(signOf('right')), C = edges(signOf('centre'));
+  assert.ok(L.right < L.left, `.device--left: the right edge projects ${L.right.toFixed(1)} px, the left ${L.left.toFixed(1)} px; the right edge must be the lowered one`);
+  assert.ok(R.left < R.right, `.device--right: the left edge projects ${R.left.toFixed(1)} px, the right ${R.right.toFixed(1)} px; the left edge must be the lowered one`);
+  near(L.left, 952, 1); near(L.right, 912, 1);   // the edges measured on the golden's render (references/device-mockups.md, section 8)
+  assert.equal(C.left, C.right, 'a centred device is flat');
 });
 
 test('slide comes from the device’s own side and ends at the origin; lid opens from LID_DEG to flat', () => {
