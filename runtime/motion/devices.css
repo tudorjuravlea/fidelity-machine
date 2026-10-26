@@ -1,0 +1,196 @@
+/* Devices: a phone, a tablet or a notebook that frames a screen, a mockup or a prototype on a film or a deck
+   (references/device-mockups.md). Generic slabs drawn from today's proportions, no maker's name or trade dress.
+   Like film.css this sheet names no colour: every colour is a --piece-device-* role the piece maps from the lock's
+   devices block (tokens.css derives it as --device-body/-rim/-glass, --device-ground/-ground-alt/-ground-path,
+   --device-tilt, --device-zoom-max):
+     --piece-device-body     the slab and its bezel
+     --piece-device-rim      the metal edge and every glint drawn from it
+     --piece-device-glass    the dark glass around the screen
+     --piece-device-screen   what an empty screen shows (optional)
+     --piece-device-ground / -ground-alt / -ground-path   the half-panel a solo device stands on
+     --piece-device-tilt     the rest tilt of a solo device (an angle)
+     --piece-device-zoom-max how far a zooming device may grow (a number)
+     --piece-device-gap      the space between the devices of a row (a lock spacing step)
+   Hairlines and shadows are fractions of the frame height (--H, set by the kit); the slab's own parts are
+   fractions of its width or height.
+
+   THE POSE. A device alone on the LEFT half (.device--left) rests turned by the tilt about the vertical axis under
+   a 1800px perspective, its face toward the content on its right: CSS rotateY(+tilt) sends the right edge back.
+   Alone on the RIGHT half (.device--right) it rests at -tilt. Two or more devices in a .device-row stand flat
+   unless one asks for a tilt (.device--tilt-r, .device--tilt-l); a device alone in the centre (.device--centre)
+   is flat. The rest tilt is the .device__body's transform, so an entrance that writes translate, scale or opacity on
+   .device never flattens it; the turn and lid entrances (devices.js) end ON it.
+
+   THE HEIGHT. A device is placed by its top (--dv-top) and takes the band from there to --dv-bottom as its height,
+   unless the width it may use (--dv-max-w) bounds it first: height = min(band, maxw / aspect). A notebook is the same
+   rule at its 1.748 aspect, so it is width-driven. The piece sets --dv-top, --dv-bottom (and --dv-max-w when the
+   device shares its width with copy) on the scene or the device, never a height. A tilted device's near edge grows
+   under the perspective, so the body is inset by that growth and the projected slab stays inside the layout box
+   (the box the layout audit measures): grow = aspect * height * |sin(tilt)| / 2 / perspective.
+
+   THE GROUND. A solo device prefers a coloured half (.device-ground, left; .device-ground--right mirrored):
+   an <svg viewBox="0 0 1 1" preserveAspectRatio="none"> whose <path> takes the lock's freeform as its d (the plain
+   half by default), filled with --piece-device-ground (or --piece-device-ground-alt with .device-ground--alt).
+
+   THE ZOOM. A device with data-zoom rests at the band divided by --piece-device-zoom-max, centred in the band, so the
+   zoom (devices.js armZoom, driven from the piece's draw hook) can grow it to the band's edges and no further.
+
+   Markup (a phone; a tablet adds .device--tablet, landscape .device--land; a notebook .device--notebook):
+     <div class="device device--left" data-fx="turn" data-at="0.3">
+       <div class="device__body"><div class="device__shell"><div class="device__screen">
+         <canvas class="device__media"></canvas>              (or an <img class="device__media">)
+       </div><i class="device__island"></i></div></div>
+     </div>
+     <div class="device device--notebook"><div class="device__body"><div class="device__hinge"><div class="device__shell">
+       <div class="device__screen">…</div><i class="device__island"></i></div></div><div class="device__deck"></div></div></div> */
+
+@property --dv-ry { syntax: '<angle>'; inherits: true; initial-value: 0deg; }   /* registered, so calc(-1 * tilt) computes to a plain angle the JS can read */
+
+/* The band knobs the piece sets, on the scene (inherited) or on the device: --dv-top (where the device starts;
+   the frame's top by default), --dv-foot (the air kept above the frame's bottom edge: the margin, a footer;
+   none by default) or --dv-bottom (where the band ends, outright), --dv-max-w (the width it may take; the frame's
+   width by default). They are read with fallbacks, never declared here, so a scene's value reaches every device
+   inside it, and a piece never has to name the frame height itself (--H is the kit's, set at run time). */
+.device {
+  --dv-ar: 0.4777;                      /* the slab's aspect, width / height: a 1752 by 3668 phone */
+  --dv-persp: 1800px;                   /* the perspective every tilt is seen under */
+  --dv-band: calc(var(--dv-bottom, calc(var(--H) - var(--dv-foot, 0px))) - var(--dv-top, 0px));
+  --dv-h: min(var(--dv-band), calc(var(--dv-max-w, var(--W)) / var(--dv-ar)));
+  --dv-grow: calc(var(--dv-ar) * var(--dv-h) * abs(sin(var(--dv-ry))) / 2 / var(--dv-persp));
+  --dv-rim: calc(var(--H) * 0.0032);    /* the metal edge */
+  position: absolute;
+  top: var(--dv-top, 0px);
+  height: var(--dv-h);
+  aspect-ratio: var(--dv-ar);
+}
+/* the pose rules */
+.device--left   { --dv-ry: var(--piece-device-tilt); left: calc(25% - var(--dv-h) * var(--dv-ar) / 2); }
+.device--right  { --dv-ry: calc(-1 * var(--piece-device-tilt)); left: calc(75% - var(--dv-h) * var(--dv-ar) / 2); }
+.device--centre { --dv-ry: 0deg; left: calc(50% - var(--dv-h) * var(--dv-ar) / 2); }
+.device-row {
+  position: absolute; top: var(--dv-top, 0px); left: 0; right: 0;
+  display: flex; align-items: flex-end; justify-content: center; gap: var(--piece-device-gap, 0px);
+}
+.device-row > .device { position: relative; top: auto; --dv-ry: 0deg; flex: none; }   /* the band comes from the row */
+.device.device--tilt-r, .device-row > .device.device--tilt-r { --dv-ry: var(--piece-device-tilt); }              /* a tilt asked for wins over both rules */
+.device.device--tilt-l, .device-row > .device.device--tilt-l { --dv-ry: calc(-1 * var(--piece-device-tilt)); }
+.device.device--flat,   .device-row > .device.device--flat   { --dv-ry: 0deg; }
+
+/* the body carries the tilt, inset by the near edge's growth; the zoom (translate, scale) and the plain entrances
+   act on .device, outside it, so the pose survives every one of them */
+.device__body {
+  position: absolute;
+  inset: calc(var(--dv-grow) * 50%);
+  transform-origin: 50% 50%;
+  transform: perspective(var(--dv-persp)) rotateY(var(--dv-ry));
+  /* a contact shadow and an ambient one, the body colour at low opacity */
+  filter:
+    drop-shadow(0 calc(var(--H) * 0.003) calc(var(--H) * 0.003) color-mix(in srgb, var(--piece-device-body) 26%, transparent))
+    drop-shadow(0 calc(var(--H) * 0.02) calc(var(--H) * 0.022) color-mix(in srgb, var(--piece-device-body) 18%, transparent));
+}
+
+/* the slab: the rim is the border box (a brushed gradient between the rim and the body), the bezel the padding box
+   in glass, the screen the content box. 3.48 % of the width all round, corners 18.1 % / 8.6 % */
+.device__shell {
+  position: absolute; inset: 0; box-sizing: border-box;
+  padding: calc(3.48% - var(--dv-rim));
+  border: var(--dv-rim) solid transparent;
+  border-radius: 18.1% / 8.6%;
+  box-shadow: inset 0 0 0 calc(var(--H) * 0.0012) color-mix(in srgb, var(--piece-device-rim) 40%, transparent);   /* the lit hairline where metal meets glass */
+  background:
+    linear-gradient(var(--piece-device-glass), var(--piece-device-glass)) padding-box,
+    linear-gradient(135deg, var(--piece-device-rim) 0%, var(--piece-device-body) 14%, color-mix(in srgb, var(--piece-device-rim) 45%, var(--piece-device-body)) 21%, var(--piece-device-body) 29%, var(--piece-device-body) 70%, var(--piece-device-body) 82%, color-mix(in srgb, var(--piece-device-rim) 45%, var(--piece-device-body)) 92%, var(--piece-device-rim) 100%) border-box;
+}
+/* the keys, thin strips outside the rim: an action key and two volume keys on the left (20.5-24 %, 28.6-35.5 %,
+   38-45 % of the height), the power key and a camera key on the right (31-42 %, 56-62 %) */
+.device__body::before, .device__body::after {
+  content: ''; position: absolute;
+  width: calc(var(--H) * 0.0034); border-radius: calc(var(--H) * 0.002);
+}
+.device__body::after  { left: calc(var(--H) * -0.0026);  top: 20.5%; height: 24.5%; background: linear-gradient(to bottom, var(--piece-device-body) 0 14.3%, transparent 14.3% 32.7%, var(--piece-device-body) 32.7% 61.2%, transparent 61.2% 71.4%, var(--piece-device-body) 71.4% 100%); }
+.device__body::before { right: calc(var(--H) * -0.0026); top: 31%;   height: 31%;   background: linear-gradient(to bottom, var(--piece-device-body) 0 35.5%, transparent 35.5% 80.6%, var(--piece-device-body) 80.6% 100%); }
+
+.device__screen {
+  position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden;
+  border-radius: 15.7% / 7.2%;
+  background: var(--piece-device-screen);
+}
+/* whatever is inside the screen is clipped to the glass; a picture or a clip covers it edge to edge, so crop a
+   recording to the screen's aspect first */
+.device__media { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+/* the front camera: an island near the top of the screen (0.2385 wide, 0.0431 tall, 0.0161 from the top), its
+   lens at 80.6 % across it; .device--plain hides it when the picture already shows the device's own top edge */
+.device__island {
+  position: absolute; z-index: 3; left: 50%; top: 1.61%; width: 23.85%; height: 4.31%; translate: -50% 0;
+  border-radius: calc(var(--H) * 0.1);
+  background-color: var(--piece-device-glass);
+  background-image: radial-gradient(circle closest-side at 80.6% 50%, var(--piece-device-body) 0 16%, var(--piece-device-glass) 26%, color-mix(in srgb, var(--piece-device-rim) 60%, var(--piece-device-glass)) 36% 42%, var(--piece-device-glass) 50% 100%);
+}
+.device--plain .device__island { display: none; }
+/* the glass: a faint top highlight and a diagonal reflection over the screen, under the island; .device--matte
+   removes it for a picture whose colour must stay exact */
+.device__screen::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit;
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--piece-device-rim) 12%, transparent) 0, transparent 16%),
+    linear-gradient(115deg, transparent 0 16%, color-mix(in srgb, var(--piece-device-rim) 8%, transparent) 24%, color-mix(in srgb, var(--piece-device-rim) 16%, transparent) 30%, color-mix(in srgb, var(--piece-device-rim) 6%, transparent) 36%, transparent 46%);
+}
+.device--matte .device__screen::after { content: none; }
+
+/* tablet: a 0.73 slab, an even 4.6 % bezel, corners 7.5 % / 5.5 %, a camera dot on the top bezel; .device--land
+   turns it landscape (the aspect and the corners swap) */
+.device--tablet { --dv-ar: 0.73; }
+.device--tablet .device__shell { padding: calc(4.6% - var(--dv-rim)); border-radius: 7.5% / 5.5%; }
+.device--tablet .device__screen { border-radius: 3.2% / 2.3%; }
+.device--tablet .device__body::before, .device--tablet .device__body::after { content: none; }
+.device--tablet .device__island {   /* centred in the top bezel: the bezel is 4.6 % of the width, so its middle is a share of the width, written as a share of the height times the aspect */
+  top: calc(1.45% * var(--dv-ar) - var(--dv-rim) / 2); width: 1.7%; height: auto; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle closest-side, color-mix(in srgb, var(--piece-device-rim) 60%, var(--piece-device-glass)) 0 30%, var(--piece-device-glass) 60% 100%);
+}
+.device--tablet.device--land { --dv-ar: 1.3699; }
+.device--tablet.device--land .device__shell { padding: calc(3.36% - var(--dv-rim)); border-radius: 5.5% / 7.5%; }
+.device--tablet.device--land .device__screen { border-radius: 2.3% / 3.2%; }
+.device--tablet.device--land .device__island { display: none; }
+
+/* notebook: the lid (the shell) on a thin deck with a tapered front lip; the lid's 9.3 % margins each side are the
+   deck's overhang. Width-driven: the band's height times 1.748, capped by the width available */
+.device--notebook { --dv-ar: 1.748; }
+.device--notebook .device__body { display: flex; flex-direction: column; transform-origin: 50% 70%; }
+.device--notebook .device__body::before, .device--notebook .device__body::after { content: none; }
+.device__hinge { position: relative; flex: 1 1 auto; min-height: 0; margin: 0 9.3%; perspective: calc(var(--dv-persp) * 1.333); }
+.device--notebook .device__shell {
+  position: relative; inset: auto; width: 100%; height: 100%;
+  padding: calc(2.2% - var(--dv-rim)) calc(1.6% - var(--dv-rim)) calc(1.6% - var(--dv-rim));
+  border-bottom-width: 0;
+  border-radius: 1.7% 1.7% 0 0 / 3.2% 3.2% 0 0;
+  transform-origin: 50% 100%;
+}
+.device--notebook .device__screen { border-radius: 0.8% / 1.5%; }
+.device--notebook .device__island {   /* the camera notch hangs from the top of the lid into the screen */
+  top: 0; width: 12%; height: 5.2%;
+  border-radius: 0 0 calc(var(--H) * 0.006) calc(var(--H) * 0.006);
+  background: var(--piece-device-glass);
+}
+.device__deck {
+  position: relative; flex: none; height: 4.7%;
+  border-radius: 0 0 6% 6% / 0 0 90% 90%;
+  background: linear-gradient(to bottom, var(--piece-device-rim) 0 10%, var(--piece-device-body) 26%, var(--piece-device-body) 100%);
+}
+.device__deck::after {   /* the groove the lid's thumb-notch leaves in the deck's front */
+  content: ''; position: absolute; top: 0; left: 50%; width: 16%; height: 40%; translate: -50% 0;
+  border-radius: 0 0 calc(var(--H) * 0.006) calc(var(--H) * 0.006);
+  background: color-mix(in srgb, var(--piece-device-rim) 30%, var(--piece-device-body));
+}
+
+/* the ground for a solo device: a half of the frame, the lock's freeform as the path (the plain half by default) */
+.device-ground { position: absolute; top: 0; left: 0; width: 50%; height: 100%; display: block; overflow: visible; }
+.device-ground--right { left: auto; right: 0; transform: scaleX(-1); }
+.device-ground path { d: var(--piece-device-ground-path); fill: var(--piece-device-ground); }
+.device-ground--alt path { fill: var(--piece-device-ground-alt); }
+
+/* a zooming device rests at the band divided by the zoom ceiling, centred in the band: the zoom grows it to the
+   band's own top and bottom and to the frame margins, never into a title above it or a footer below */
+.device[data-zoom] {
+  --dv-h: min(calc(var(--dv-band) / var(--piece-device-zoom-max)), calc(var(--dv-max-w, var(--W)) / var(--dv-ar)));
+  top: calc(var(--dv-top, 0px) + (var(--dv-band) - var(--dv-h)) / 2);
+}

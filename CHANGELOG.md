@@ -7,6 +7,43 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Devices: screens, mockups and prototypes presented on a phone, a tablet or a notebook, as an engine
+  module per-system skills consume through the lock** (class: minor — a new optional `tokens.devices` block,
+  new kit files, a new script, two new fixtures; no existing verdict, exit code or derived file changes for a
+  lock without the block). The lock's `tokens.devices` names the finish (body, rim, glass) and the ground
+  (panel, alt, an optional freeform path in a 0..1 box) as colour slots, the rest tilt (`tiltDeg`, 10), the
+  zoom ceiling (`zoomMax`, 1.4) and the kinds allowed; `capture-figma --derive` emits them as `--device-*`
+  into `assets/tokens.css` (and a `devices` group into the DTCG file), and a piece maps them to its
+  `--piece-device-*` roles. `runtime/motion/devices.css` draws generic slabs from today's proportions (no
+  maker's name or trade dress, no colour of its own) and encodes the rules: one device alone on the left
+  half rests turned +tilt toward the content (alone on the right, -tilt; centred, flat; a row of two or more,
+  flat unless a tilt is asked for per device), takes the band from its top to the frame's bottom margin as
+  its height unless the width bounds it first (a notebook is the same rule at 1.748), stands on a coloured
+  half-panel when alone, and, when it zooms, rests at its band over `zoomMax` centred in the band. The body
+  carrying the tilt is inset by the near edge's projected growth, so the layout box the audit measures holds
+  the projected slab. `runtime/motion/devices.js` adds the entrances that land ON the rest tilt (`turn`:
+  24 degrees further round, signed with the tilt; `slide`: from the device's own side; `lid`: a notebook
+  opens 80 degrees; each timed by the lock's `enter` role times a factor and curved by its entrance curve)
+  and the zoom to the action, on request only: `zoomPose` (a scale about the device's centre plus the one
+  translation that keeps the action point where it rested, so scale 1 is the identity; the fit scale,
+  0.99 × the room over the rest, is the ceiling and the translation is clamped inside the margins and the
+  band), `stopsOf` (dwells, a pull-back of 1.08 between segments more than 8 % apart, a lead-in of 8 % and
+  a tail of 12 %), `cameraAt` (inout between stops) and `armZoom`, which measures the rest from layout
+  offsets (never a client rect, which is mid-entrance on the first frame) and is driven from a draw hook, so
+  the zoom is a function of film time. The recording on the screen is the kit's clip (numbered frames
+  addressed by index), never a `<video>`, so the determinism gate holds. `scripts/activity.mjs` finds the
+  action in a clip or a folder of frames (ffmpeg: 96 px grey frames at 6 fps, an 8 × 16 grid on the long
+  axis, 1 s windows kept above 0.25 per cell per frame and 1.5 % of the peak, rejected when more than half
+  the cells are hot, centroid and spread to point and scale, adjacent windows merged) and prints the
+  segments for `data-zoom`; `--windows` prints every window's numbers. `fixtures/motion` gains a golden film
+  (`golden-devices`: a solo phone turning in on the half ground, a flat row of three rising in turn, a phone
+  zooming to the taps of a synthetic prototype clip delivered as 80 JPEG frames under `assets/prototype-clip/`,
+  written by `make-prototype-clip.mjs` in the lock's own colours) and a negative (`devices-zoom-outside-margin`:
+  the same zoom with the bound removed, which fails the layout gate and nothing else). Twelve unit tests
+  beside the kit's. `references/device-mockups.md` states the rules, what was taken from each source and what
+  was deliberately not (a 3D hero device; a device that travels with a tap), the markup grammar, the lock
+  block, the verification recipe and the numbers measured.
+
 - **A motion-media layer: films and clicker-paced decks as functions of time, gated like screens**
   (class: minor — a new verb, a new runtime directory, fixtures and scaffold documents; the additive
   behaviours in existing scripts are under Changed; no existing verdict, exit code or human-readable line

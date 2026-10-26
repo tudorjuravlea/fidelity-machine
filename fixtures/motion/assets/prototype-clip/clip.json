@@ -1,0 +1,7 @@
+{
+  "fps": 10,
+  "frames": 80,
+  "width": 390,
+  "height": 844,
+  "note": "synthetic prototype clip, written by fixtures/motion/make-prototype-clip.mjs"
+}

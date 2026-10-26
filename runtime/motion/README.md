@@ -14,6 +14,7 @@ same. It lives once, here; a skill reaches it through the `kit` symlink `motion.
 | `deck.js` · `stage.js` · `deck.css` | `deck(def)` builds the poses; `mount(deck)` runs them (tool or live) |
 | `clock.js` | presses → time (`createClock run auto rest`) |
 | `clip.js` · `keys.js` · `presenter.html` | a recording as numbered frames · the clicker key map · the presenter window |
+| `devices.css` · `devices.js` | a phone, a tablet or a notebook framing a screen (the pose, height and ground rules, the slab), the entrances that land on its tilt (`deviceFx`: `turn slide lid`), the zoom to a prototype's action (`armZoom`, `zoomPose`, `stopsOf`, `cameraAt`); `references/device-mockups.md` |
 | `*.test.mjs` | `node --test "runtime/motion/*.test.mjs"` (Node 24 refuses a bare directory argument) |
 
 ## Tool-mode contract (what every tool may rely on)
@@ -71,6 +72,7 @@ same. It lives once, here; a skill reaches it through the `kit` symlink `motion.
 | `data-side data-d data-r data-gap` | slam/throw side, travel px, resting turn deg, seconds between words |
 | `data-to data-from data-pad data-fix data-suffix` | count |
 | `data-during` · `data-over` · `data-bleed` · `data-keep` | film: show only in those scenes · exempt from the overlap test · exempt from BOTH audit tests (decoration that runs off the edge) · audit without an entrance |
+| `data-zoom` | a `.device` that zooms to its prototype's action: `[{ t0, t1, u, v, z }]` from `scripts/activity.mjs`; it rests at its band over the lock's `zoomMax`, and the piece drives it with `armZoom(...).at(seconds)` from a draw hook (devices.js) |
 
 `rise` on an element holding `<span class="mask"><span class="mv">…</span></span>` rises from behind its own edge.
 Scenes are `<section data-scene="id">`; a deck also accepts `<section class="sc" id="sc-id">` inside `#stage`.

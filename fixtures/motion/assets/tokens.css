@@ -43,6 +43,15 @@
   --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
   --motion-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  /* devices (tokens.devices): the finish and the ground as colour slots, the rest tilt, the zoom ceiling */
+  --device-body: var(--text1);
+  --device-rim: var(--border);
+  --device-glass: var(--text1);
+  --device-ground: var(--accent-subtle);
+  --device-ground-alt: var(--surface1);
+  --device-ground-path: path('M0 0H1V1H0Z');
+  --device-tilt: 10deg;
+  --device-zoom-max: 1.4;
 }
 
 /* no dark-scheme colors in the lock — [data-theme="dark"] block omitted */

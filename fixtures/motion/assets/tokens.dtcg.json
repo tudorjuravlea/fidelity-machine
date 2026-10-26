@@ -132,5 +132,43 @@
         ]
       }
     }
+  },
+  "devices": {
+    "$description": "How screens are presented on devices (runtime/motion/devices.css).",
+    "body": {
+      "$type": "color",
+      "$value": "{color.light.text1}"
+    },
+    "rim": {
+      "$type": "color",
+      "$value": "{color.light.border}"
+    },
+    "glass": {
+      "$type": "color",
+      "$value": "{color.light.text1}"
+    },
+    "ground": {
+      "$type": "color",
+      "$value": "{color.light.accent-subtle}"
+    },
+    "ground-alt": {
+      "$type": "color",
+      "$value": "{color.light.surface1}"
+    },
+    "tilt": {
+      "$value": 10,
+      "$description": "degrees about the vertical axis"
+    },
+    "zoomMax": {
+      "$type": "number",
+      "$value": 1.4
+    },
+    "kinds": {
+      "$value": [
+        "phone",
+        "tablet",
+        "notebook"
+      ]
+    }
   }
 }

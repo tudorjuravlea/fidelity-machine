@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screens on devices</title>
+<link rel="stylesheet" href="../../../../runtime/motion/film.css">
+<link rel="stylesheet" href="../../../../runtime/motion/devices.css">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  /* ROLE MAP. The one place the piece meets the lock: every role is a --piece-* property set to a variable
+     from assets/tokens.css. Below this block the sheet reads roles only, so no colour, face, size, space or
+     radius is written out. The --piece-device-* roles are what runtime/motion/devices.css draws the slabs
+     with; the lock's devices block reaches them through the --device-* variables tokens.css derives. */
+  :root {
+    --piece-ground:     var(--background);       /* the picture's background */
+    --piece-ink:        var(--text1);          /* text on the background */
+    --piece-muted:      var(--text2);    /* secondary text */
+    --piece-accent:     var(--accent);       /* the one colour that stands out */
+    --piece-display:    var(--font-heading-family);    /* a font-<role>-family variable */
+    --piece-body:       var(--font-body-family);
+    --piece-weight-display: var(--font-heading-weight);
+    --piece-weight-strong:  var(--font-heading-weight);
+    /* seen across a room, so each size is a lock size times a plain number */
+    --piece-size-title:   calc(var(--font-heading-size) * 2.5);
+    --piece-size-lead:    calc(var(--font-heading-size) * 1.5);
+    --piece-size-caption: calc(var(--font-body-size) * 1.5);
+    --piece-edge:   calc(var(--space-8) * 2);   /* the frame margin: a lock step, or a multiple of one */
+    --piece-gap-s:  var(--space-4);
+    --piece-gap-m:  var(--space-8);
+    --piece-head-h: calc(var(--piece-size-title) * 3.6);   /* the band a kicker, a one-line title and a two-line lede take */
+    /* the devices: the finish and the ground from the lock's devices block, the tilt and the zoom ceiling too */
+    --piece-device-body:        var(--device-body);
+    --piece-device-rim:         var(--device-rim);
+    --piece-device-glass:       var(--device-glass);
+    --piece-device-screen:      var(--surface1);
+    --piece-device-ground:      var(--device-ground);
+    --piece-device-ground-alt:  var(--device-ground-alt);
+    --piece-device-ground-path: var(--device-ground-path);
+    --piece-device-tilt:        var(--device-tilt);
+    --piece-device-zoom-max:    var(--device-zoom-max);
+    --piece-device-gap:         calc(var(--piece-gap-m) * 2);
+    --motion-wipe-color: var(--piece-accent);    /* the plate a wipe cut drags across */
+  }
+
+  body { background: var(--piece-ground); color: var(--piece-ink); font-family: var(--piece-body); font-size: var(--piece-size-lead); font-variant-numeric: tabular-nums; }
+  [data-scene] { display: block; }
+  p, h2 { line-height: 1.15; text-wrap: balance; }
+
+  .kicker { font-size: var(--piece-size-caption); font-weight: var(--piece-weight-strong); letter-spacing: .08em; text-transform: uppercase; color: var(--piece-accent); }
+  .title { font-family: var(--piece-display); font-weight: var(--piece-weight-display); font-size: var(--piece-size-title); line-height: 1.05; letter-spacing: -.02em; }
+  .lede { color: var(--piece-muted); }
+
+  /* the band a device takes: from --dv-top down to the frame's bottom less --dv-foot, set once per scene and inherited */
+  [data-scene] { --dv-top: var(--piece-edge); --dv-foot: var(--piece-edge); }
+  /* copy beside a solo device: the right half, centred on the height */
+  .beside { position: absolute; left: 50%; right: var(--piece-edge); top: var(--piece-edge); bottom: var(--piece-edge); display: grid; align-content: center; gap: var(--piece-gap-m); padding-left: var(--piece-gap-m); }
+  /* a head above a row or a zooming device: it keeps --piece-head-h, and the band starts under it */
+  .head { position: absolute; left: var(--piece-edge); right: var(--piece-edge); top: var(--piece-edge); height: var(--piece-head-h); display: grid; align-content: start; gap: var(--piece-gap-s); }
+  [data-scene="row"], [data-scene="proto"] { --dv-top: calc(var(--piece-edge) + var(--piece-head-h)); }
+  .device-row, .device--centre { bottom: auto; }
+</style>
+</head>
+<body>
+
+<!-- 1. one phone alone on the left half: on the lock's half-panel ground, turned toward the copy, the full band tall,
+        turning in -->
+<section data-scene="solo">
+  <svg class="device-ground" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path></path></svg>
+  <div class="device device--left" data-fx="turn" data-at="0.2">
+    <div class="device__body"><div class="device__shell"><div class="device__screen"><canvas class="device__media" data-still width="390" height="844"></canvas></div><i class="device__island"></i></div></div>
+  </div>
+  <div class="beside">
+    <p class="kicker" data-fx="fade" data-at="0.6">One device, left half</p>
+    <h2 class="title" data-fx="rise" data-at="0.8">Alone on the left, it turns to the right.</h2>
+    <p class="lede" data-fx="fade" data-at="1.2">Its face is toward the words beside it, it stands on the lock's half panel, and it takes the whole band from the top margin to the bottom one.</p>
+  </div>
+</section>
+
+<!-- 2. a row of three, a tablet between two phones: flat to the viewer, rising one after the other -->
+<section data-scene="row">
+  <div class="head">
+    <p class="kicker" data-fx="fade" data-at="0.2">Three devices</p>
+    <h2 class="title ln" data-fit="1" data-fx="rise" data-at="0.3">A row stands flat.</h2>
+    <p class="lede" data-fx="fade" data-at="0.6">Two or more devices face the viewer; every one inherits the row's band.</p>
+  </div>
+  <div class="device-row" data-each="rise" data-at="0.7" data-stagger="0.35" data-d="80">
+    <div class="device"><div class="device__body"><div class="device__shell"><div class="device__screen"><canvas class="device__media" data-still width="390" height="844"></canvas></div><i class="device__island"></i></div></div></div>
+    <div class="device device--tablet"><div class="device__body"><div class="device__shell"><div class="device__screen"><canvas class="device__media" data-still width="390" height="844"></canvas></div><i class="device__island"></i></div></div></div>
+    <div class="device"><div class="device__body"><div class="device__shell"><div class="device__screen"><canvas class="device__media" data-still width="390" height="844"></canvas></div><i class="device__island"></i></div></div></div>
+  </div>
+</section>
+
+<!-- 3. the prototype plays on a device that rests at the band divided by the zoom ceiling, and the zoom visits the
+        action: three stops from scripts/activity.mjs on the clip, the toggle's stop written by hand (it measures 0.12,
+        under the analyser's 0.25 bar) -->
+<section data-scene="proto">
+  <div class="head">
+    <p class="kicker" data-fx="fade" data-at="0.2">A prototype on the screen</p>
+    <h2 class="title ln" data-fit="1" data-fx="rise" data-at="0.3">The zoom visits the action, inside the band.</h2>
+    <p class="lede" data-fx="fade" data-at="0.6">The device grows around each tap and comes back, bounded by the margins and its band.</p>
+  </div>
+  <div id="proto" class="device device--centre" data-fx="fade" data-at="0.2"
+       data-zoom='[{"t0":1,"t1":2,"u":0.752,"v":0.816,"z":2},{"t0":3,"t1":4,"u":0.507,"v":0.969,"z":1.521},{"t0":4,"t1":5,"u":0.367,"v":0.741,"z":1.806},{"t0":5,"t1":6,"u":0.442,"v":0.608,"z":1.583},{"t0":6.5,"t1":7.3,"u":0.19,"v":0.09,"z":1.8}]'>
+    <div class="device__body"><div class="device__shell"><div class="device__screen"><canvas class="device__media" id="proto-screen" width="390" height="844"></canvas></div><i class="device__island"></i></div></div>
+  </div>
+</section>
+
+<script type="module" src="piece.js"></script>
+</body>
+</html>

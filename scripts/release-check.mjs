@@ -17,7 +17,8 @@
  *                      scrub-scar
  *   2. clean-tree      DEFAULT-DENY: only allowlisted suffixes ship (.mjs/.md/.json/
  *                      .cjs/.css/.html/.yml/.swift + reviewed fixtures/golden/reference/*.png
- *                      verified by magic bytes + size cap); symlinks fail; plus the
+ *                      and the motion fixtures' prototype-clip/*.jpg frames, verified by
+ *                      magic bytes + size cap); symlinks fail; plus the
  *                      named assertions (no .env*, *.log, .DS_Store, .render/ or
  *                      .report/ artifacts, no font binaries)
  *   3. completeness    every script/reference CONTRACT.md names exists; package.json
@@ -266,6 +267,12 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   const REVIEWED_GIF_DIR = 'docs';
   const GIF_MAGICS = [Buffer.from('GIF87a'), Buffer.from('GIF89a')];
   const MAX_REVIEWED_GIF_BYTES = 10 * 1024 * 1024;
+  // ...and the motion fixtures' synthetic prototype clip: numbered JPEG frames the devices golden plays
+  // (fixtures/motion/make-prototype-clip.mjs writes them from the fixture lock's own colours; no product,
+  // no brand). Each is small by construction, so the cap is tight.
+  const REVIEWED_JPEG_DIR = 'fixtures/motion/assets/prototype-clip';
+  const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
+  const MAX_REVIEWED_JPEG_BYTES = 64 * 1024;
 
   const symlinks = walkSymlinks();
   if (symlinks.length) {
@@ -277,8 +284,22 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
   const denied = [];
   let reviewedPngs = 0;
   let reviewedGifs = 0;
+  let reviewedJpegs = 0;
   for (const rel of FILES) {
     const ext = path.extname(rel).toLowerCase();
+    if (ext === '.jpg' && path.dirname(rel) === REVIEWED_JPEG_DIR) {
+      const data = readFileSync(path.join(ENGINE, rel));
+      if (!data.subarray(0, JPEG_MAGIC.length).equals(JPEG_MAGIC)) {
+        bad++;
+        fail(`reviewed JPEG ${rel} does not start with the JPEG signature`,
+          'a mislabeled binary is unreviewable — regenerate the clip (fixtures/motion/make-prototype-clip.mjs) or delete it');
+      } else if (data.length > MAX_REVIEWED_JPEG_BYTES) {
+        bad++;
+        fail(`reviewed JPEG ${rel} is ${(data.length / 1024).toFixed(0)} KB (cap ${MAX_REVIEWED_JPEG_BYTES / 1024} KB)`,
+          'the synthetic clip ships small — regenerate it at the fixture\'s size and quality');
+      } else reviewedJpegs++;
+      continue;
+    }
     if (ext === '.png' && path.dirname(rel) === REVIEWED_PNG_DIR) {
       const data = readFileSync(path.join(ENGINE, rel));
       if (!data.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) {
@@ -313,9 +334,9 @@ section('2. Clean tree (default-deny allowlist + negative content assertions)');
     bad += denied.length;
     fail(`file type not on the ship allowlist: ${denied.join(', ')}`,
       `the engine ships scripts + docs + one small fixture (${[...SHIP_SUFFIXES].join(' ')}, ` +
-      `${[...SHIP_BASENAMES].join('/')}, reviewed ${path.join(REVIEWED_PNG_DIR, '*.png')}) — delete the file, ` +
+      `${[...SHIP_BASENAMES].join('/')}, reviewed ${path.join(REVIEWED_PNG_DIR, '*.png')} and ${path.join(REVIEWED_JPEG_DIR, '*.jpg')}) — delete the file, ` +
       'or extend the allowlist in release-check.mjs as a conscious review decision');
-  } else pass(`every shipped file is allowlisted (default-deny; ${reviewedPngs} reviewed PNG(s) + ${reviewedGifs} reviewed GIF(s) magic-byte verified)`);
+  } else pass(`every shipped file is allowlisted (default-deny; ${reviewedPngs} reviewed PNG(s) + ${reviewedGifs} reviewed GIF(s) + ${reviewedJpegs} reviewed JPEG frame(s) magic-byte verified)`);
 
   const flag = (list, label, fix) => {
     if (list.length) { bad += list.length; fail(`${label}: ${list.join(', ')}`, fix); }

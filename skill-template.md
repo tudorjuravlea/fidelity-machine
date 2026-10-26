@@ -188,6 +188,7 @@ specific without a DEC number is a preference, not a rule.
 | Slide/social/print layouts + type scales | `captures/{{CAPTURE_NAME}}/templates/` |
 | Canvas/print sizes | `captures/{{CAPTURE_NAME}}/formats.json` |
 | Film / clicker-deck skeletons and the role map | `captures/{{CAPTURE_NAME}}/templates/motion/MOTION-LAYOUTS.md` |
+| A screen, mockup or prototype on a phone, tablet or notebook (pose, height, ground, the zoom to the action) | `ENGINE/references/device-mockups.md` + the lock's `tokens.devices` |
 
 ## Hard rules
 

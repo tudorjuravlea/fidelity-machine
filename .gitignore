@@ -10,3 +10,6 @@ HANDOVER.md
 
 # local session state, never pushed
 .omc/
+
+# regenerable stills, sheets, MP4s and takes of the motion fixtures (motion.mjs stills / export)
+.motion/

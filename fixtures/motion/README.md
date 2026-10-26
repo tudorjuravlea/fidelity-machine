@@ -1,14 +1,14 @@
-# fixtures/motion — a motion lock, two goldens, and a negative for every gate of `motion.mjs check`
+# fixtures/motion — a motion lock, three goldens, and a negative for every gate of `motion.mjs check`
 
 `fixtures/golden` proves the pixel gate on a screen; `fixtures/lint` proves every lint section can go
 red. This folder does the same for `scripts/motion.mjs check`, the verb that gates films and clicker
-decks: two clean pieces that must pass, and one piece per gate with exactly ONE planted fault that must
-fail on that gate.
+decks: three clean pieces that must pass, and one piece per gate with exactly ONE planted fault that must
+fail on that gate (the devices module adds a second layout negative, for its zoom bound).
 
 ## Run it
 
 ```sh
-node scripts/motion.mjs --self-test                                            # the manifest below, 17 pieces
+node scripts/motion.mjs --self-test                                            # the manifest below, 19 pieces
 node scripts/motion.mjs --self-test --manifest fixtures/motion/fonts/manifest.json   # the fonts negative
 node scripts/motion.mjs check --lock fixtures/motion/design-lock.json --id golden-film   # one piece
 ```
@@ -22,18 +22,25 @@ build), not ffmpeg. A full run takes a minute or two.
 
 - `design-lock.json`: a small lock derived from the golden fixture (same `meta.chromiumBuild`, same
   colours, spacing, radii and type roles), plus `tokens.motion` with `durationsMs { fast 150, standard 300,
-  emphasized 500 }` and `easings { standard, decelerate, accelerate }`. `fonts` is empty on purpose, so the
-  goldens do not depend on which font a machine has (the fonts gate prints SKIP for them), and `screens` is
-  empty because a film is not a screen. There is no `render.allowHosts`.
+  emphasized 500 }` and `easings { standard, decelerate, accelerate }`, and `tokens.devices` (the finish
+  `text1 / border / text1`, the ground `accent-subtle / surface1` with the engine's plain half, tilt 10,
+  zoomMax 1.4, all three kinds). `fonts` is empty on purpose, so the goldens do not depend on which font
+  a machine has (the fonts gate prints SKIP for them), and `screens` is empty because a film is not a
+  screen. There is no `render.allowHosts`.
 - `assets/`: `tokens.css`, `tailwind.tokens.cjs` and `tokens.dtcg.json`, written by
   `node scripts/capture-figma.mjs --derive --lock fixtures/motion/design-lock.json`. Never edit them by hand.
+  Also `prototype-clip/`: the 80 JPEG frames (10 fps, 390 × 844) and `clip.json` of the synthetic prototype
+  the devices golden plays, written by `node fixtures/motion/make-prototype-clip.mjs` in the lock's own
+  colours (placeholder rows, one accent bar, three bursts of localised action: a tap, a sheet, a toggle);
+  regenerate it there, never edit a frame.
 - `formats.json`: copied from the scaffold; `motion.mjs new` reads the frame sizes and fps from it.
 - `motion/<id>/`: one piece per folder (`index.html` + `piece.js`). `golden-film` and `golden-deck` started from what
   `motion.mjs new` produces for this lock (the engine skeleton, its ROLE MAP filled from the lock's slots, its
   motion roles set to `standard / fast / emphasized` and `decelerate / accelerate / standard`) and were then
   rewritten: scenes restructured, slots removed, copy that is true of this fixture. There is no
   `templates/motion/` here on purpose: `new` falls back to the engine skeletons, and the scaffold ships only
-  `MOTION-LAYOUTS.md`. Every other folder is one of those two with one fault.
+  `MOTION-LAYOUTS.md`. `golden-devices` is the third golden, written for `runtime/motion/devices.css`
+  (`references/device-mockups.md`). Every other folder is one of those three with one fault.
 - `fonts/`: a second, nested lock directory for the fonts negative (see the table).
 - `manifest.json`: the self-test's input. Each piece also carries a `planted` line, as in `fixtures/lint`.
 
@@ -47,6 +54,7 @@ symlink (release-check refuses them), and `check` does not need one.
 |---|---|---|---|---|
 | `golden-film` | film | all | pass | nothing. 1080x1350, 13.75 s, three scenes; every entrance type (`fade rise pop words punch slam throw drop count draw drawy block`), a `push` and a `wipe` cut, a `count`, a `data-each` group |
 | `golden-deck` | deck | all | pass | nothing. 1920x1080, three scenes, five presses with a note each, a `block`, a `draw`, a `count`, a `fade` exit and a `wipe` exit |
+| `golden-devices` | film | all | pass | nothing. 1920x1080, 18.75 s, three scenes: a phone alone on the left on the lock's half ground, turned +10 toward the copy, the full band tall, turning in (`turn`); a row of three, phone, tablet, phone, flat, rising in turn; a phone resting at its band over 1.4 that plays the synthetic clip (the kit's `clip.js` on a canvas) and zooms to its action, the rest pose taken mid-dwell so the audit measures it zoomed |
 | `determinism-css-transition` | film | determinism | FAIL | `index.html`: `#mark { transition: opacity 2s linear }`; the same frame differs with the frame drawn before it. Tolerates `lint`: `raw-motion` also fires, because the lock declares motion tokens |
 | `determinism-timer` | film | determinism | FAIL | `piece.js`: a `setInterval` that moves the mark's word-spacing. The `self-time` WARN it also raises is only a warning, so nothing is tolerated |
 | `determinism-wall-clock` | film | determinism | FAIL | `piece.js`: the `frame` hook reads `performance.now()`, which the harness does not freeze (it freezes `Date` and seeds `Math.random`, so an unseeded `Math.random` would not show). The `self-time` WARN it also raises is only a warning, so nothing is tolerated |
@@ -59,6 +67,7 @@ symlink (release-check refuses them), and `check` does not need one.
 | `self-time-clock-read` | film | self-time | WARN | `piece.js`: `const startedAt = Date.now()`, read and never used |
 | `layout-outside-margin` | film | layout | FAIL | `index.html`: `.source` pulled left of the frame margin by a negative margin |
 | `layout-overlap` | film | layout | WARN | `index.html`: `.unit` pulled up over the counted figure by a negative margin |
+| `devices-zoom-outside-margin` | film | layout | FAIL | `piece.js`: `armZoom` given bounds a million pixels wide, so the zoom's fit bound is off and the requested scale of 2 grows the device past the frame margins and its band at the proto rest (its box reaches 13 px above the frame). The overlap with the head it also causes is the same fault and only a WARN, so nothing is tolerated |
 | `deck-step-past-last-press` | deck | loads | FAIL | `index.html`: an element on press 3 in the opening scene, which has press 1 only, so press 2 has nothing to play and the deck refuses to load |
 | `deck-identical-poses` | deck | presses | WARN | `piece.js`: `steps: [0, 1]` gives the opening scene a second press that plays no entrance, so its pose equals the one before |
 | `deck-clicker-eats-next` | deck | clicker | FAIL | `piece.js`: a capture-phase `keydown` listener that swallows every next key before the deck sees it |
@@ -76,7 +85,7 @@ negative therefore has a lock of its own in `fonts/` (the same tokens, one decla
 **Tolerances.** Only `determinism-css-transition` tolerates a gate (`lint`), because a CSS transition is
 also a raw motion value and the lint is right to say so. The self-test counts only FAIL as a second fault.
 
-**Goldens: what is tolerated.** Both goldens end `RESULT: PASS` with 0 errors and 0 warnings. Two lines
+**Goldens: what is tolerated.** All three goldens end `RESULT: PASS` with 0 errors and 0 warnings. Two lines
 are not a plain `pass`, and both are by design:
 - `fonts` prints SKIP: the lock declares no `fontChecks`, so there is nothing to assert (the SKIP is counted
   in the summary, never read as clean).
@@ -122,7 +131,7 @@ To check a new fixture against a face the machine does not have, copy `fixtures/
 directory (the pieces load the kit by a relative path, so the depth must match), change the family in the
 copy's `design-lock.json`, run `node scripts/capture-figma.mjs --derive --lock <copy>/design-lock.json`
 (never edit `assets/tokens.css` by hand: the provenance hash would fail), then
-`node scripts/motion.mjs --self-test --manifest <copy>/manifest.json`. All 17 pieces passed under Verdana,
+`node scripts/motion.mjs --self-test --manifest <copy>/manifest.json`. The first 17 pieces passed under Verdana,
 Impact, Arial Black, Courier New, Times New Roman and Georgia on macOS, and under the real fallback,
 `sans-serif` (DejaVu Sans), DejaVu Sans Mono, Liberation Mono and Liberation Serif on Linux. The `.js` files
 are the pieces' own scripts, as `motion.mjs new` writes them.

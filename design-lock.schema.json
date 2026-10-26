@@ -196,6 +196,84 @@
               }
             }
           }
+        },
+        "devices": {
+          "type": "object",
+          "description": "How the system presents screens, mockups and prototypes on devices (runtime/motion/devices.css, references/device-mockups.md). The finish and the ground are NAMES of colour slots in tokens.colors (light), never values; tokens.css derives them as --device-body/-rim/-glass, --device-ground/-ground-alt/-ground-path, --device-tilt and --device-zoom-max. A piece maps those to its --piece-device-* roles.",
+          "required": [
+            "finish",
+            "ground"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "finish": {
+              "type": "object",
+              "description": "body: the slab and its bezel; rim: the metal edge and the glints drawn from it; glass: the dark glass around the screen. Each the name of a slot in tokens.colors.light.",
+              "required": [
+                "body",
+                "rim",
+                "glass"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "type": "string"
+                },
+                "rim": {
+                  "type": "string"
+                },
+                "glass": {
+                  "type": "string"
+                }
+              }
+            },
+            "tiltDeg": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 45,
+              "default": 10,
+              "description": "The rest tilt of a device shown alone beside content, degrees about the vertical axis under a 1800px perspective. A device alone on the left half turns +tilt (its face toward the right), alone on the right half -tilt; a row stands flat."
+            },
+            "ground": {
+              "type": "object",
+              "description": "The coloured half-panel a solo device stands on: panel and alt are names of surface slots in tokens.colors.light; path is an optional freeform for the half's own shape (a chamfer, a notch), as SVG path data in a 0..1 x 0..1 box, mirrored for a right half. Without it the engine ships a plain half.",
+              "required": [
+                "panel",
+                "alt"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "panel": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              }
+            },
+            "zoomMax": {
+              "type": "number",
+              "minimum": 1,
+              "default": 1.4,
+              "description": "How far a zooming device may grow: it rests at its band divided by this and the zoom fills the band at most."
+            },
+            "kinds": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "phone",
+                  "tablet",
+                  "notebook"
+                ]
+              },
+              "description": "The device kinds the system allows on its surfaces; absent means all three."
+            }
+          }
         }
       }
     },

@@ -264,6 +264,11 @@ Derived outputs (hand-editing banned — re-run this script instead):
                               an entry that is not one safe CSS declaration (key outside
                               [A-Za-z0-9_-], negative duration, malformed easing) is left out;
                               a lock with no (usable) tokens.motion gets a one-line comment.
+                              With tokens.devices: --device-body/-rim/-glass and
+                              --device-ground/-ground-alt as var(--<colorSlot>) references (a name
+                              that is not a slot in tokens.colors is warned and left out),
+                              --device-ground-path (path() of the lock's freeform in a 0..1 box, or the plain half),
+                              --device-tilt: <n>deg, --device-zoom-max: <n>.
   assets/tailwind.tokens.cjs  module.exports = { colors, spacing, borderRadius, fontFamily },
                               every value referencing the CSS vars above; plus, when the lock
                               has tokens.motion, transitionDuration { <slot>: 'var(--motion-<slot>)' }
@@ -729,6 +734,40 @@ function motionEntries(tokens) {
   };
 }
 
+// tokens.devices → the custom properties runtime/motion/devices.css reads through a piece's
+// --piece-device-* roles. Colour roles are NAMES of slots in tokens.colors (light or dark), emitted
+// as var(--<slot>) so the dark block re-colours them too; a name that is no slot is warned and left
+// out (the css-vars lint then names the missing variable in the piece). The ground path is SVG path
+// data in a 0..1 box (devices.css draws the half as an <svg viewBox="0 0 1 1"> whose <path> takes it as
+// its CSS `d`) and is emitted only when it holds nothing but path characters, so a lock cannot author
+// a CSS declaration through it; without one the plain half is emitted. Pure; the warnings come back for the caller to print.
+export function deviceEntries(tokens) {
+  const d = tokens?.devices;
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  if (!isObj(d)) return { declared: false, colours: [], values: [], warnings: [] };
+  const slots = new Set([...Object.keys(tokens.colors?.light ?? {}), ...Object.keys(tokens.colors?.dark ?? {})]);
+  const colours = [], warnings = [];
+  const role = (prop, name, where) => {
+    if (typeof name !== 'string' || !slots.has(name)) { warnings.push(`tokens.devices.${where} names \"${name}\" which is no slot in tokens.colors — --device-${prop} omitted`); return; }
+    colours.push([prop, name]);
+  };
+  role('body', d.finish?.body, 'finish.body');
+  role('rim', d.finish?.rim, 'finish.rim');
+  role('glass', d.finish?.glass, 'finish.glass');
+  role('ground', d.ground?.panel, 'ground.panel');
+  role('ground-alt', d.ground?.alt, 'ground.alt');
+  const values = [];
+  const path = d.ground?.path;
+  if (path !== undefined) {
+    if (typeof path === 'string' && /^[MmLlHhVvCcSsQqTtAaZz0-9 ,.eE+-]+$/.test(path.trim()) && path.trim() !== '') values.push(['ground-path', `path('${path.trim()}')`]);
+    else warnings.push('tokens.devices.ground.path is not SVG path data (letters, digits, spaces, commas, dots, signs) — --device-ground-path omitted');
+  } else values.push(['ground-path', "path('M0 0H1V1H0Z')"]);   // the engine's plain half: the whole 0..1 box
+  const tilt = d.tiltDeg ?? 10, zoom = d.zoomMax ?? 1.4;
+  if (typeof tilt === 'number' && Number.isFinite(tilt)) values.push(['tilt', `${tilt}deg`]); else warnings.push('tokens.devices.tiltDeg is not a number — --device-tilt omitted');
+  if (typeof zoom === 'number' && Number.isFinite(zoom) && zoom >= 1) values.push(['zoom-max', String(zoom)]); else warnings.push('tokens.devices.zoomMax is not a number of at least 1 — --device-zoom-max omitted');
+  return { declared: true, colours, values, warnings };
+}
+
 function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
   const out = [];
   out.push(`/* tokens.css — DERIVED from ${lockRef} ("${lockName}", captured ${capturedAt})`);
@@ -771,6 +810,12 @@ function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
     out.push('  /* no usable tokens.motion entries in the lock — --motion-* variables omitted; raw-motion lint does not enforce until motion tokens exist */');
   } else {
     out.push('  /* no tokens.motion in the lock — --motion-* variables omitted; raw-motion lint does not enforce until motion tokens exist */');
+  }
+  const devices = deviceEntries(tokens);
+  if (devices.declared) {
+    out.push('  /* devices (tokens.devices): the finish and the ground as colour slots, the rest tilt, the zoom ceiling */');
+    for (const [prop, slot] of devices.colours) out.push(`  --device-${prop}: var(--${slot});`);
+    for (const [prop, v] of devices.values) out.push(`  --device-${prop}: ${v};`);
   }
   out.push('}');
   const dark = tokens.colors?.dark ?? {};
@@ -883,6 +928,19 @@ function emitDtcg(tokens, lockName, capturedAt, lockRef) {
     }
   }
 
+  const devices = deviceEntries(tokens);
+  if (devices.declared) {
+    // colour roles as DTCG aliases to the light slots; the tilt is degrees, which DTCG's dimension
+    // type does not carry, so it stays an untyped number with its unit in the description
+    out.devices = { $description: 'How screens are presented on devices (runtime/motion/devices.css).' };
+    for (const [prop, slot] of devices.colours) out.devices[prop] = { $type: 'color', $value: `{color.light.${slot}}` };
+    for (const [prop, v] of devices.values) {
+      if (prop === 'tilt') out.devices.tilt = { $value: parseFloat(v), $description: 'degrees about the vertical axis' };
+      else if (prop === 'zoom-max') out.devices.zoomMax = { $type: 'number', $value: Number(v) };
+      else if (prop === 'ground-path' && typeof tokens.devices.ground?.path === 'string') out.devices.groundPath = { $value: tokens.devices.ground.path.trim(), $description: 'SVG path data in a 0..1 box' };
+    }
+    if (Array.isArray(tokens.devices.kinds)) out.devices.kinds = { $value: tokens.devices.kinds };
+  }
   return JSON.stringify(out, null, 2) + '\n';
 }
 
@@ -990,6 +1048,7 @@ if (args.derive) {
   for (const w of written) console.log(`  assets:  ${w}`);
   console.log(`  hashed:  ${hashedRefs} referenced asset(s) (fonts[].files, screens[].referenceImage) into meta.provenance.artifacts`);
   console.log(`  tokens hash: ${provenance.lockTokensHash}`);
+  for (const w of deviceEntries(dLock.tokens).warnings) console.warn(`  warning: ${w}`);
   process.exit(0);
 }
 
@@ -1115,6 +1174,7 @@ console.log(
 );
 derived.written.forEach((p, i) => console.log(`  ${i === 0 ? 'assets: ' : '        '} ${p}`));
 console.log(`  tokens hash: ${derived.provenance.lockTokensHash}`);
+for (const w of deviceEntries(lock.tokens).warnings) warn(w);
 if (unmapped > 0) console.log(`  unmapped variableDefs entries: ${unmapped} (see warnings)`);
 if (warnings.length > 0) {
   console.log(`  warnings: ${warnings.length}`);

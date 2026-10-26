@@ -5,12 +5,12 @@
     "chromiumBuild": "chromium-1228",
     "noiseFloorPct": 0,
     "provenance": {
-      "generatedAt": "2026-10-13T06:53:19.634Z",
-      "lockTokensHash": "sha256:dc2c52a18caaef94029cc5bdc1e6e524fd18eafdc863db9c4949a08fb39f88bd",
+      "generatedAt": "2026-10-26T20:32:23.621Z",
+      "lockTokensHash": "sha256:384072dfd44971ed0e532308534eee2dded36851d876b56a43075dd19d260c83",
       "artifacts": {
-        "assets/tokens.css": "sha256:a7eed3ce9a20fbff83e29db1e6002347fdb2e633018fc6990563caaddabd5d0a",
+        "assets/tokens.css": "sha256:ea6ade789fca24af510442e1d327fd758ebfc42833fba1ba5b385f2b7ebeffdd",
         "assets/tailwind.tokens.cjs": "sha256:c2bed1ff120b85ccb0dd268247d5d26ef19ca33d3c88867f72a26bfacc09134e",
-        "assets/tokens.dtcg.json": "sha256:db8028856fe95f7237088ddd5f63f452650210d7b37abfd64a9778add63e3389"
+        "assets/tokens.dtcg.json": "sha256:171ebe37305913a010c76e90f1573f5ddc29370ff16acf8582058239a37f76ac"
       }
     }
   },
@@ -73,6 +73,24 @@
         "decelerate": "cubic-bezier(0, 0, 0.2, 1)",
         "accelerate": "cubic-bezier(0.4, 0, 1, 1)"
       }
+    },
+    "devices": {
+      "finish": {
+        "body": "text1",
+        "rim": "border",
+        "glass": "text1"
+      },
+      "tiltDeg": 10,
+      "ground": {
+        "panel": "accent-subtle",
+        "alt": "surface1"
+      },
+      "zoomMax": 1.4,
+      "kinds": [
+        "phone",
+        "tablet",
+        "notebook"
+      ]
     }
   },
   "componentMap": {},

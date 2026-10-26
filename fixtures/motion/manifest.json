@@ -1,5 +1,5 @@
 {
-  "$comment": "Run by `node scripts/motion.mjs --self-test`. One fixture per gate of `motion.mjs check`, each the golden film or deck plus exactly ONE planted fault; `planted` says what and where. Not covered here: fonts (needs a lock that declares a font, see fonts/manifest.json), frame-time (advisory and machine-dependent, so it cannot be planted without a flaky row). See README.md.",
+  "$comment": "Run by `node scripts/motion.mjs --self-test`. Three goldens and one fixture per gate of `motion.mjs check`, each the golden film or deck plus exactly ONE planted fault; `planted` says what and where. Not covered here: fonts (needs a lock that declares a font, see fonts/manifest.json), frame-time (advisory and machine-dependent, so it cannot be planted without a flaky row). See README.md.",
   "lock": "design-lock.json",
   "pieces": [
     {
@@ -15,13 +15,19 @@
       "planted": "nothing: the clean deck"
     },
     {
+      "id": "golden-devices",
+      "kind": "film",
+      "expect": "pass",
+      "planted": "nothing: the clean devices film (a solo phone on a half ground, a flat row of three, a zooming prototype)"
+    },
+    {
       "id": "determinism-css-transition",
       "kind": "film",
       "expect": {
         "gate": "determinism",
         "result": "FAIL"
       },
-      "planted": "index.html: #mark { transition: opacity 2s linear } \u2014 the same frame differs with the frame drawn before it",
+      "planted": "index.html: #mark { transition: opacity 2s linear } — the same frame differs with the frame drawn before it",
       "tolerate": [
         "lint"
       ]
@@ -151,6 +157,15 @@
         "result": "FAIL"
       },
       "planted": "piece.js: a capture-phase keydown listener that swallows every next key before the deck sees it"
+    },
+    {
+      "id": "devices-zoom-outside-margin",
+      "kind": "film",
+      "expect": {
+        "gate": "layout",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: armZoom given bounds a million pixels wide, so the fit bound is off and the zoom to the first tap grows the device past the margins and its band at the proto rest"
     }
   ]
 }

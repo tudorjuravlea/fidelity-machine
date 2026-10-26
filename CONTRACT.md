@@ -19,7 +19,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally)
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
-├── fixtures/motion/                 # the motion verb's self-test: a lock with motion tokens, a golden film, a golden deck, one negative per gate (manifest.json)
+├── fixtures/motion/                 # the motion verb's self-test: a lock with motion and devices tokens, a golden film, a golden deck, a golden devices film, one negative per gate (manifest.json)
 ├── runtime/motion/                  # the browser kit for films and clicker decks (the picture as a function of time) + the engine skeletons; linked into a capture as <lockDir>/kit by motion.mjs new, never copied
 ├── scripts/
 │   ├── new-system.mjs               # scaffold ~/.claude/skills/<name>/ from skill-template.md + skill-scaffold/
@@ -34,6 +34,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 │   ├── colour-census.mjs            # colour-drift gate: catches uniform shifts below diff.mjs's YIQ cutoff
 │   ├── adherence-lint.mjs           # static gate: tokens, fonts, microcopy, jargon, disclosures, caps
 │   ├── motion.mjs                   # films and clicker decks: new · check · stills · export · serve · --self-test (runtime/motion/README.md)
+│   ├── activity.mjs                 # the on-screen action of a prototype clip, as segments for a device zoom (references/device-mockups.md)
 │   ├── verify.mjs                   # orchestrator: per-screen lint→render→geometry→diff→census, loop control
 │   ├── contract-guard.mjs           # meta-gate: enforces THIS document's invariants mechanically
 │   └── release-check.mjs            # publish readiness: brand-leakage sweep, fresh-install sim, budgets
@@ -126,6 +127,7 @@ All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--scree
 - `motion.mjs stills --lock L --id <id> [--at …] [--every … --from … --to …] [--only …] [--idle …] [--force]` → rest and mid-entrance frames, strips, contact sheets and a deck handout PDF under `<lockDir>/.motion/<id>/`; refuses on a fonts failure unless `--force` (exit 4)
 - `motion.mjs export --lock L --id <id> [--from … --to …] [--audio <file>] [--take latest|<stamp>] [--crf <n>] [--pack] [--out <file>] [--force]` → the MP4 through FFmpeg (silent, with a track, or replaying a recorded take with its voice; bt709 tagged) and, for a deck, `--pack` a portable folder; exit 2 when FFmpeg is absent, 5 when the encoder fails
 - `motion.mjs serve --lock L [--port <n>] [--open]` → a loopback-only server for live presentation (presenter window, takes); `motion.mjs --self-test [--manifest <path>] [--json]` → runs `check --json` over `fixtures/motion/manifest.json`; exit 0 all hold · 1 any piece failed · 2 setup or any BLOCKED (2 wins over 1). `MOTION_LINT=<script>` swaps the lint child (a test seam, named on the gate line when set)
+- `activity.mjs <clip | frames-dir> [--rate <fps>] [--windows] [--json]` (no lock needed: a recording is not a screen) → the on-screen action of a prototype clip as `[{ t0, t1, u, v, z }]` (seconds, 0..1 of the screen, the scale asked for) on stdout, for a device's `data-zoom`; a folder of numbered frames takes its rate from `clip.json` or `--rate`; `--windows` prints every window's energy, intensity, hot-cell share, centroid and spread; needs ffmpeg and ffprobe on PATH (or `FFMPEG` / `FFPROBE`); exit 0 (segments, or none with a stderr note) · 2 usage, no such input, ffmpeg absent, a frames folder with no rate · 5 ffmpeg failed
 - `release-check.mjs [--ban <term>] [--ban-file <path>] [--skip-fresh]` (no lock needed) → publish-readiness sweep; `--ban` (repeatable) and `--ban-file` (one extra banned term per line) extend the brand-leakage list with names the built-in sweep cannot know; lane 1's pattern classes also catch, in Markdown only, prose that cites an agent's private memory or feedback notes as authority and the doubled-article scars a name scrub leaves behind
 
 Path resolution: a screen `url` that is not `http(s)://` or `file://` is a path resolved **relative
@@ -317,3 +319,8 @@ rounds improve by < 10% relative, STOP and report — never thin-retry into inve
 - A motion piece's `piece.js` imports only from `../../kit/`; entrance durations and curves come by ROLE →
   token NAME (`--motion-<name>`, `--motion-ease-<name>`), never a literal (`data-dur` is a finding when the
   lock has `tokens.motion`); WHEN things happen (`data-at`, scene lengths, beats, cuts) is the piece's own.
+- A device on a piece (`runtime/motion/devices.css`) takes its finish, ground, rest tilt and zoom ceiling from
+  the lock's `tokens.devices`, derived into `assets/tokens.css` as `--device-*` and mapped by the piece to
+  `--piece-device-*` roles; the kit's device sheet names no colour of its own. A recording on a screen is the
+  kit's clip (numbered frames by index), never a `<video>`; a zoom is driven from a draw hook (a function of
+  film time) and rests measured from layout offsets, never a client rect (references/device-mockups.md).
