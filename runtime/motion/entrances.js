@@ -41,7 +41,7 @@ export const spatialCurve = (type, rig) => (rig.lockCurve ? rig.curve.enter : NA
 export const gapOf = (type, words, given) => (given !== undefined ? given : type === 'punch' ? 0.16 : Math.min(0.07, 0.9 / Math.max(1, words)));
 
 // Pure timing of one entrance. spec = { type, dur?, words?, gap? }; custom = the piece's own types.
-// → { len, per?, gap?, literal } — len is the seconds until it is fully at rest.
+// → { len, per?, gap?, literal } — len is the seconds until it is fully at rest, the end of its run.
 export function timing(spec, rig, custom = {}) {
   const { type } = spec;
   const factor = custom[type]?.factor ?? FACTORS[type] ?? 1;

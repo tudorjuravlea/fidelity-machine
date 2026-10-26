@@ -90,7 +90,7 @@ export function cameraAt(stops, p, curve = inout) {
 
 // ---- the zoom, in the page ----------------------------------------------------------------------------------------
 // An element's resting box in piece px from its layout offsets up to `root` (the scene): no transform touches them,
-// so a device measured mid-entrance or mid-zoom is still measured at rest.
+// so a device measured mid-entrance or mid-zoom is still measured at rest, never mid-move.
 export function restBox(el, root) {
   let x = 0, y = 0, n = el;
   while (n && n !== root) {
