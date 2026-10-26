@@ -3,7 +3,13 @@
 All notable changes to fidelity-machine are documented here. Versioning follows semver;
 lock-impacting changes are classified per CONTRACT.md §Change classes.
 
-## Unreleased
+## 1.1.0 — 2026-10-26
+
+The engine learns time and devices. Films and clicker decks as functions of time, gated like screens;
+screens, mockups and prototypes on a phone, a tablet or a notebook through the lock; event collateral
+beyond the badge; every lint section proven able to fail. Additive throughout: no lock written against
+1.0.0 changes meaning, no verdict or exit code moves (10 additions, 21 changes, 3 fixes, each classed
+minor or patch).
 
 ### Added
 
