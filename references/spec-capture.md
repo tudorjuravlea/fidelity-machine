@@ -106,8 +106,14 @@ assumption above:
 - **Composite values are real**: text styles arrive as `Font(family: …, size: Ref, weight: 500,
   lineHeight: 44, letterSpacing: -0.5)` and shadows as `Effect(type: DROP_SHADOW, …); Effect(…)`
   chains, with slash-path **references to other variables** — capture-figma resolves refs
-  (≤4 hops), converts px lineHeight→ratio and px letterSpacing→em, and emits CSS box-shadows.
+  (≤4 hops), converts px lineHeight→ratio and letterSpacing→em, and emits CSS box-shadows.
   Empty-string values (unset gradient utilities) are skipped.
+- **The composite drops the letter-spacing unit.** `letterSpacing: -0.5` may be −0.5 px or −0.5 %
+  of the font size; Figma stores either, and the two readings differ by a factor of size/100
+  (at 24px: −0.0208em versus −0.005em). MEASURED on a production banking system: every non-zero
+  text-style letter-spacing was PERCENT. Read one text style's unit in Figma (plugin API:
+  `style.letterSpacing.unit`, or the text panel) and set `"letterSpacingUnit"` in capture.json;
+  capture-figma refuses a non-zero bare value without it (exit 2).
 - **Illustration/ramp variables** (`light-theme/yellow/base/tone 03`) are reference data, not
   semantic tokens — filtered out, summarized in one warning.
 - **Figma export artifacts to NEVER reproduce**: micro skews (`skew-x-[0.17deg]` on labels),

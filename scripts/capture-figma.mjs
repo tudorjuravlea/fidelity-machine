@@ -177,6 +177,10 @@ Expected capture.json shape (only "variableDefs" is required):
   "figmaFiles": [{ "fileKey": "K", "nodeIds": ["1:2"], "role": "tokens" }],
   "capturedAt": "2026-07-21",              // -> meta.capturedAt    (default: today)
   "chromiumBuild": "chromium-1228",        // -> meta.chromiumBuild (default "${DEFAULT_CHROMIUM_BUILD}", noted)
+  "letterSpacingUnit": "percent",          // unit of BARE Font(...) letterSpacing values: "percent" | "px".
+                                           // Figma's MCP drops it; read one text style's unit in Figma.
+                                           // Required when any Font(...) composite has a non-zero bare
+                                           // letterSpacing (exit 2 otherwise); an inline "%"/"px" wins.
   "variableDefs": {                        // Figma get_variable_defs, flat name -> value
     "color/light/background": "#F7F6F3",
     "color/dark/background": "#171613",
@@ -386,8 +390,14 @@ function resolveRef(value, variableDefs, warn, name, depth = 0) {
   return v;
 }
 
-/** `Font(...)` composite -> a typography spec {family, sizePx, weight, lineHeight, letterSpacingEm} or null. */
-function parseFontComposite(name, value, variableDefs, warn) {
+/**
+ * `Font(...)` composite -> a typography spec {family, sizePx, weight, lineHeight, letterSpacingEm} or null.
+ * letterSpacing unit: an inline "%" or "px" suffix wins; otherwise `letterSpacingUnit` ("percent" | "px",
+ * from the capture bundle). Figma text styles may store letter-spacing in either unit and the MCP's
+ * composite string drops it, so a non-zero bare value with no declared unit is NOT converted: it is
+ * reported through `ambiguous` and the caller refuses the capture (CONTRACT.md §Invocation contract).
+ */
+function parseFontComposite(name, value, variableDefs, warn, letterSpacingUnit, ambiguous) {
   const m = /^Font\((.*)\)$/s.exec(value.trim());
   if (!m) return null;
   const f = parseCompositeFields(m[1]);
@@ -403,9 +413,14 @@ function parseFontComposite(name, value, variableDefs, warn) {
   // Figma lineHeight: values > 4 are px (convert to unitless ratio); <= 4 are already ratios.
   const lineHeight = lhRaw > 4 ? Math.round((lhRaw / sizePx) * 1000) / 1000 : lhRaw;
   const spec = { family, sizePx, weight, lineHeight };
-  const lsRaw = parseFloat(resolveRef(f.letterspacing, variableDefs, warn, name));
-  // Figma letterSpacing here is px; convert to em against the size.
-  if (Number.isFinite(lsRaw) && lsRaw !== 0) spec.letterSpacingEm = Math.round((lsRaw / sizePx) * 10000) / 10000;
+  const lsText = resolveRef(f.letterspacing, variableDefs, warn, name);
+  const lsRaw = parseFloat(lsText);
+  if (Number.isFinite(lsRaw) && lsRaw !== 0) {
+    const unit = /%\s*$/.test(lsText) ? 'percent' : /px\s*$/i.test(lsText) ? 'px' : letterSpacingUnit;
+    if (unit === 'percent') spec.letterSpacingEm = Math.round((lsRaw / 100) * 1e6) / 1e6;
+    else if (unit === 'px') spec.letterSpacingEm = Math.round((lsRaw / sizePx) * 10000) / 10000;
+    else ambiguous.push({ name, value: lsRaw, sizePx });
+  }
   return spec;
 }
 
@@ -463,7 +478,8 @@ function isReferenceRamp(name) {
 
 // --- token derivation ---------------------------------------------------
 
-function deriveTokens(variableDefs, warn) {
+function deriveTokens(variableDefs, warn, letterSpacingUnit) {
+  const ambiguousLetterSpacing = []; // Font(...) roles whose bare letterSpacing has no declared unit
   const light = {}; const dark = {};
   const spacing = new Set();
   const radii = {};
@@ -585,7 +601,7 @@ function deriveTokens(variableDefs, warn) {
       referenceRamps++; // illustration/ramp data (e.g. "light-theme/yellow/base/tone 03") — summarized once below
     } else if (value.startsWith('Font(')) {
       // Composite text style: the variable NAME is the role (e.g. "Headline 1", "Body 2/Default", "Button").
-      const spec = parseFontComposite(name, value, variableDefs, warn);
+      const spec = parseFontComposite(name, value, variableDefs, warn, letterSpacingUnit, ambiguousLetterSpacing);
       if (spec) {
         const role = kebab(name);
         if (typoRoles[role]) warn(`"${name}": typography role "${role}" redefined by Font(...) composite — composite wins`);
@@ -678,7 +694,7 @@ function deriveTokens(variableDefs, warn) {
     if (Object.keys(durationsMs).length > 0) tokens.motion.durationsMs = durationsMs;
     if (Object.keys(easings).length > 0) tokens.motion.easings = easings;
   }
-  return { tokens, unmapped };
+  return { tokens, unmapped, ambiguousLetterSpacing };
 }
 
 // --- screens enrichment -------------------------------------------------
@@ -1076,7 +1092,19 @@ for (const s of captureScreens) {
 }
 
 // derive tokens + enrich screens (deep-copied so the input stays untouched on disk semantics)
-const { tokens, unmapped } = deriveTokens(capture.variableDefs, warn);
+if (capture.letterSpacingUnit !== undefined && !['percent', 'px'].includes(capture.letterSpacingUnit)) {
+  fail(`"letterSpacingUnit" must be "percent" or "px" (got ${JSON.stringify(capture.letterSpacingUnit)})`);
+}
+const { tokens, unmapped, ambiguousLetterSpacing } = deriveTokens(capture.variableDefs, warn, capture.letterSpacingUnit);
+if (ambiguousLetterSpacing.length > 0) {
+  const rows = ambiguousLetterSpacing.map(({ name, value, sizePx }) =>
+    `  "${name}": letterSpacing ${value} at ${sizePx}px → ${Math.round((value / 100) * 1e6) / 1e6}em if percent, ` +
+    `${Math.round((value / sizePx) * 10000) / 10000}em if px`);
+  fail(`Font(...) letterSpacing has no unit for ${ambiguousLetterSpacing.length} role(s): Figma's MCP drops it, and the two ` +
+    `readings differ by a factor of size/100.\n${rows.join('\n')}\n` +
+    'Check one text style\'s letter-spacing unit in Figma, then set "letterSpacingUnit": "percent" or "px" in capture.json ' +
+    '(or write the unit inline, e.g. letterSpacing: -0.5%)');
+}
 // fonts: an explicit capture.fonts wins; otherwise derive from the typography roles
 // (families + weights + representative fontChecks — files[] left for the user to fill).
 const effectiveFonts = (Array.isArray(capture.fonts) && capture.fonts.length > 0)

@@ -19,6 +19,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally)
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
+├── fixtures/capture/                # capture-figma's unit tests (node --test): composite parsing, incl. the letter-spacing unit refusal
 ├── fixtures/motion/                 # the motion verb's self-test: a lock with motion and devices tokens, a golden film, a golden deck, a golden devices film, one negative per gate (manifest.json)
 ├── runtime/motion/                  # the browser kit for films and clicker decks (the picture as a function of time) + the engine skeletons; linked into a capture as <lockDir>/kit by motion.mjs new, never copied
 ├── scripts/
@@ -113,6 +114,7 @@ Per-project artifacts live next to the project's `design-lock.json`, not in the 
 
 All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--screen <id>] [flags]`.
 - `render.mjs --lock L --screen S` → writes `.render/S.png` + `.render/S.geometry.json`; the geometry carries `network {mode, allowHosts}`, `externalRequests[]` (every request that left the lock's tree — url with credentials stripped, host, resourceType, failed, blocked) and `externalRequestCount`; when the count is non-zero one stderr `render note:` line names the hosts (§Determinism invariant 8); with lock `render.network: "offline"` any external request to a host not in `render.allowHosts` is refused and the run exits 5 before writing output
+- `capture-figma.mjs --input C --out L [--merge]` · `capture-figma.mjs --derive --lock L` → writes the lock + derived token artifacts (§Provenance). A `Font(...)` composite's `letterSpacing` is converted to em by its unit: an inline `%` or `px` suffix wins, else the bundle's `letterSpacingUnit` (`"percent"` → value/100, `"px"` → value/size); a non-zero bare value with no declared unit is exit 2 naming every affected role and both readings, because Figma's MCP drops the unit and the two readings differ by a factor of size/100. Any other `letterSpacingUnit` value is exit 2
 - `geometry.mjs --lock L --screen S` → reads `.render/S.geometry.json`, writes `.report/S.geometry.json`
 - `diff.mjs --lock L --screen S` → reads reference + `.render/S.png`, writes diff png + report + triplets
 - `probe-blind-spots.mjs --lock L --screen S [--faults <list>] [--json] [--out <dir>]` → runs the real pipeline against a fresh temp copy of `S` once per fault, writes `<lockDir-or---out>/.report/S.blind-spots.json` (§Blind-spot probe)

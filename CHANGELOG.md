@@ -3,6 +3,24 @@
 All notable changes to fidelity-machine are documented here. Versioning follows semver;
 lock-impacting changes are classified per CONTRACT.md §Change classes.
 
+## Unreleased
+
+### Fixed
+
+- **`Font(...)` letter-spacing is no longer assumed to be px** (class: major for capture bundles —
+  a bundle with a non-zero bare composite letter-spacing and no declared unit now exits 2 instead
+  of writing a lock; existing locks are untouched until re-captured). Figma text styles store
+  letter-spacing in px or in percent of the font size, and the MCP's composite string drops the
+  unit. `capture-figma.mjs` divided every bare value by the font size, so a −0.5 % headline at
+  24px became −0.0208em instead of −0.005em: four times too tight, measured on a production
+  banking system where every non-zero text-style letter-spacing was PERCENT. The unit now comes
+  from an inline `%`/`px` suffix, else from the bundle's new `letterSpacingUnit` (`"percent"` |
+  `"px"`); without either, the capture refuses and prints every affected role with both
+  readings. The flat `typography/<role>/letter-spacing` path was already correct.
+- **Proof:** `fixtures/capture/letter-spacing.test.mjs` (7 cases, in CI). Run against the
+  previous `capture-figma.mjs`, 5 of the 7 fail; the two that pass are the px and zero cases
+  the old code already handled.
+
 ## 1.1.1 — 2026-10-27
 
 The device pose stated in edges and guarded by a measurement, one layout ruled out, the PowerPoint
