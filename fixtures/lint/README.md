@@ -15,7 +15,7 @@ One folder per section, `fixtures/lint/<section>/`:
   `<!-- lint-negative: <section> — <what was planted> -->`.
 - `tokens.dtcg.json`: a stand-in derived artifact whose hash the provenance receipt records.
 
-All 31 folders share one clean base, which lints to `No findings.`. Its copy is short on
+All 32 folders share one clean base, which lints to `No findings.`. Its copy is short on
 purpose: real sentence punctuation, the longest sentence 10 words, the button 2 words. A
 change to how a copy rule counts must not tip the base over a limit. Two folders add to the
 base what their section needs in order to run at all, not a fault: `scheme-mixing` carries a

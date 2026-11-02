@@ -5,6 +5,16 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ## Unreleased
 
+### Added
+
+- **`export-artifacts`** (source group, ERROR; registered last in that group, after
+  `scheme-mixing`: the source sections keep their order, and the microcopy and gate-integrity
+  sections each move one place later; 32 sections). Figma export leftovers in any screen source:
+  the `data-node-id` attribute and the expiring asset hosts (`figma.com/api/mcp/asset/`,
+  `figma-alpha-api.s3`, `s3-alpha-sig.figma.com`). Built in, fixed literals only, never a pattern read from a lock. The
+  engine's own instrumentation (`data-fig-id`, `data-fig-name`, `data-fig-key`) and links to a
+  Figma file are not leftovers. Negative fixture `fixtures/lint/export-artifacts/`.
+
 ### Fixed
 
 - **`Font(...)` letter-spacing is no longer assumed to be px** (class: major for capture bundles —
@@ -20,6 +30,48 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 - **Proof:** `fixtures/capture/letter-spacing.test.mjs` (7 cases, in CI). Run against the
   previous `capture-figma.mjs`, 5 of the 7 fail; the two that pass are the px and zero cases
   the old code already handled.
+- **Eight adherence-lint rule defects** (class: verdict-changing for source that writes colours as
+  `rgb()`/`hsl()` or sets `system-ui` on a heading; the rest correct counts, lines or misses; no
+  lock changes; the ninth defect is the `export-artifacts` section under Added):
+  - `raw-hex` reads `rgb()`, `rgba()`, `hsl()` and `hsla()` literals as the colours they are. Each
+    is converted to hex and judged like one: an ERROR, or the white/black WARN for an opaque
+    `rgb(255 255 255)` / `rgb(0 0 0)`. A var()/calc() channel and alpha 0 (`transparent`) are not
+    literal colours and are not counted. Source that wrote translucent overlays as `rgba()` now
+    fails where the same value as an 8-digit hex always did.
+  - `raw-hex` (hex and functional literals alike) reads only CSS contexts in `.html`: `<style>`
+    bodies, inline script, and the `style`, `class` (Tailwind arbitrary values), `fill`,
+    `stroke`, `stop-color`, `flood-color`, `lighting-color`, `color` and `bgcolor` attributes. A
+    hex in prose ("Order #12345678", a palette page quoting a value) or in another attribute is
+    copy. `.css` and script files are read whole, as before.
+  - `em-dash` counts the text attributes of body tags (`alt`, `title`, `placeholder`,
+    `aria-label` and the other aria text attributes), which a reader sees or hears.
+  - `banned-jargon` counts a hit that lies wholly inside a longer banned term's hit once: an
+    English word that contains a shorter term from another locale was two errors. Terms stay
+    literal substring greps, so an inflected form is still a hit, and the reported line is the
+    first hit that counted.
+  - `color-only-status` reads a status element whose only content is a glyph (a dot, a tick) as
+    having no text, like an empty one.
+  - `banned-fonts` reads `h2`-`h6` rules as well as `h1` and display selectors, and `system-ui`
+    joins the banned display faces (the platform face on a heading is no brand face chosen).
+  - A `<style>` written inside a script's text or an HTML comment is no longer linted as CSS
+    (every section that reads `<style>` blocks). The block reader is one forward pass, linear on
+    any input.
+  - A file with bare CR line endings reports each finding on its own line, not line 1.
+- **Proof:** `fixtures/lint/rule-defects.test.mjs` (20 cases, now in CI). Run against the
+  previous `adherence-lint.mjs`, 13 fail; the 7 that pass guard what must not change (a non-text
+  attribute, a class name that is not a heading, a glyph with a word, alpha 0, a hex in a style
+  or paint attribute or script, a Tailwind arbitrary value, the engine's `data-fig-*`).
+
+### Known, not fixed here
+
+- Two pre-existing quadratic spots, measured on hostile input (unchanged by this release):
+  `lineOf` counts lines from the start of the file for every finding, O(size × findings), so a
+  section that fires many times on one large file slows down (20 000 findings plus one non-ASCII
+  character, about 3 s); and `openTagsOf`, `stripNonVisible`/`blankNonContent` and
+  `checkButtonLength` rescan from every later `<` after an unclosed tag, comment or raw-text
+  opener (240 KB of `<style` without `>` runs past 120 s). The readers added in this release are
+  single forward passes and call none of them. A newline index built once per string, and a
+  tokenizer that stops at an unclosed region, would fix them.
 
 ## 1.1.1 — 2026-10-27
 

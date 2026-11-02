@@ -310,14 +310,17 @@ rounds improve by < 10% relative, STOP and report — never thin-retry into inve
 
 ## Model-facing rules the scripts assume
 
-- Generated elements mapped to Figma nodes carry `data-fig-id="<figmaNodeId>"`.
+- Generated elements mapped to Figma nodes carry `data-fig-id="<figmaNodeId>"`. Figma's own export
+  leftovers (`data-node-id`, expiring Figma asset URLs) fail lint (section `export-artifacts`).
 - Generated pages set `data-render-ready` on `<html>` (or any element) once fonts/data/layout are settled.
 - Text slots are typed (`data-slot="button|label|error|…"`) and flex: no fixed widths on text
   containers, ≥2 lines of vertical slack on labels/errors/empty states, `overflow-x-hidden` on `main`.
 - Chart regions carry `data-chart="line|bar|legend|…"` — conditional lock signatures (`when:
   "data-chart"`) key off it, so chart rules bind exactly to screens that contain charts.
 - All colors/spacing/type via CSS vars from `assets/tokens.css` (derived from the lock). Raw hex
-  outside `:root` fails lint. Components come from the lock's `componentMap` when the node is mapped.
+  outside `:root` fails lint, and so does the same colour written as `rgb()`/`rgba()`/`hsl()`/`hsla()`.
+  In `.html` the colour scan reads CSS contexts only (`<style>`, inline script, `style=""` and the
+  colour attributes such as `fill`/`stroke`/`stop-color`); a hex in prose is copy. Components come from the lock's `componentMap` when the node is mapped.
 - A motion piece's `piece.js` imports only from `../../kit/`; entrance durations and curves come by ROLE →
   token NAME (`--motion-<name>`, `--motion-ease-<name>`), never a literal (`data-dur` is a finding when the
   lock has `tokens.motion`); WHEN things happen (`data-at`, scene lengths, beats, cuts) is the piece's own.

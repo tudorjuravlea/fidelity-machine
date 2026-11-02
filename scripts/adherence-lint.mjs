@@ -6,7 +6,7 @@
 //   SOURCE ADHERENCE  raw-hex · css-vars · tokens-only-spacing · placeholders · em-dash ·
 //                     banned-fonts · contrast · transition-all · a11y ·
 //                     forbidden-substitutes · raw-motion · tabular-nums · text-wrap ·
-//                     radius-arithmetic · scheme-mixing                (on --src files)
+//                     radius-arithmetic · scheme-mixing · export-artifacts (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
 //                     sentence-length · color-only-status · content-lock (plan §5.7 mechanical subset)
 //   GATE INTEGRITY    signatures · imagery-provenance · figid-coverage · provenance ·
@@ -30,8 +30,23 @@
 //     WARN, not an ERROR. The golden fixture itself uses `color: #fff` for text-on-accent
 //     because the lock defines no on-accent token; a strict ERROR would fail the skill's own
 //     certified-good fixture. EVERY other raw hex outside :root/[data-theme] is an ERROR.
+//     An rgb()/rgba()/hsl()/hsla() literal is the same colour in another notation: it is
+//     converted to hex and judged the same way (rgb(255 255 255) WARNs like #fff, a translucent
+//     white is an 8-digit hex and an ERROR). Two exceptions, both not a literal colour: a
+//     channel read from var()/calc(), and alpha 0, which is the `transparent` keyword. In .html
+//     both scans read CSS contexts only (htmlColorContexts): a hex in prose or in a non-colour
+//     attribute is copy.
 //   * em-dash: "visible text" excludes <head> (title/meta are browser chrome, not page copy)
 //     in addition to <style>/<script>. Entities (&mdash; &#8212; &#x2014;) are decoded first.
+//     The text attributes of body tags count as copy too (alt, title, placeholder and the aria
+//     text attributes: TEXT_ATTRS), since a reader sees or hears them.
+//   * banned-jargon: each term is a literal substring grep, except that a hit lying wholly
+//     inside a longer banned term's hit is not counted again (one word, one finding).
+//   * color-only-status: "text" means a letter or a digit; a glyph alone (●, ✓) is the icon.
+//   * banned-fonts: the source half reads h1-h6 and display selectors, as the lock half reads
+//     the display and heading roles. system-ui is on the list (the platform face, no brand face).
+//   * A <style> is CSS only where an HTML parser would read one: not inside a script's text or
+//     a comment. A bare CR line ending is a line break (read as \n, offsets unchanged).
 //   * text-wrap: headings of one or two words are exempt. Wrapped, they break one word per line
 //     whatever text-wrap says, so the property cannot change them (the golden fixture's only
 //     heading is two words and sets none).
@@ -75,9 +90,10 @@ const SKILL_ROOT = dirname(SCRIPT_DIR);
 const SRC_EXTS = new Set(['.html', '.css', '.jsx', '.tsx', '.js']);
 const JSY_EXTS = new Set(['.jsx', '.tsx', '.js']);
 const ANCHOR_HEX = new Set(['fff', 'ffffff', '000', '000000']); // WARN-only carve-out (see header)
-const BANNED_DISPLAY_FONTS = [ // hue's AI-default display list, verbatim
+const BANNED_DISPLAY_FONTS = [ // hue's AI-default display list, plus system-ui (owner ruling):
+  // the platform UI face as a heading is the same "no brand face chosen" default
   'space grotesk', 'playfair display', 'fraunces', 'instrument serif',
-  'dm serif display', 'dm serif text', 'dm serif', 'inter',
+  'dm serif display', 'dm serif text', 'dm serif', 'inter', 'system-ui',
 ];
 const FONT_WARN_TEXT = 'AI-default font as display face — justified only if the actual brand uses it';
 const WILL_CHANGE_ALLOWED = new Set(['auto', 'transform', 'opacity', 'filter', 'clip-path',
@@ -93,7 +109,9 @@ const SECTION_GROUPS = {
   'source': ['raw-hex', 'css-vars', 'tokens-only-spacing', 'type-scale', 'placeholders', 'em-dash',
     'banned-fonts', 'contrast', 'transition-all', 'a11y', 'forbidden-substitutes',
     // Appended after forbidden-substitutes so every pre-existing section keeps its report position.
-    'raw-motion', 'tabular-nums', 'text-wrap', 'radius-arithmetic', 'scheme-mixing'],
+    'raw-motion', 'tabular-nums', 'text-wrap', 'radius-arithmetic', 'scheme-mixing',
+    // Appended last for the same reason: every earlier section keeps its report position.
+    'export-artifacts'],
   'microcopy': ['banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',
     'sentence-length', 'color-only-status', 'content-lock'],
   // provenance sat outside the registry for a while: its findings sorted last and never reached
@@ -270,11 +288,37 @@ const stripTokenScopes = (s) =>
 const stripJsComments = (s) =>
   stripCssComments(s).replace(/(^|[^\S\n])\/\/[^\n]*/g, spaceFill); // '//' after whitespace only, so 'https://' survives
 
-function styleBlocks(html) { // [{ css, offset }] — offset into the original file
+// [{ css, offset }] — offset into the original file. One forward pass, read the way an HTML parser
+// reads it: a comment runs to -->, a <script> is raw text up to </script and a <style> up to
+// </style>. So a "<style>" written inside a script string or a comment is text, not CSS (a
+// script that builds a style string used to be linted as a stylesheet). Every search starts
+// where the previous one ended, and a region that never closes runs to the end of the file and
+// ends the scan, so no character is read twice: linear on any input. `scripts`, when given,
+// collects the inline script bodies of the same pass ([{ js, offset }], a `src=` script skipped):
+// the same regions scriptBlocks reads, without its rescan of an unclosed <script.
+function styleBlocks(html, scripts = null) {
   const out = [];
-  const re = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  const open = /<!--|<(style|script)(?![\w-])/gi;
+  const close = { comment: /-->/g, style: /<\/style>/gi, script: /<\/script[\s/>]/gi };
   let m;
-  while ((m = re.exec(html))) out.push({ css: m[1], offset: m.index + m[0].indexOf('>') + 1 });
+  while ((m = open.exec(html))) {
+    const kind = m[1] ? m[1].toLowerCase() : 'comment';
+    let body = open.lastIndex;
+    let srcScript = false;
+    if (kind !== 'comment') {
+      const gt = html.indexOf('>', body);
+      if (gt === -1) break;
+      srcScript = kind === 'script' && /\bsrc\s*=/i.test(html.slice(body, gt));
+      body = gt + 1;
+    }
+    const re = close[kind];
+    re.lastIndex = body;
+    const c = re.exec(html);
+    if (!c) break;
+    if (kind === 'style') out.push({ css: html.slice(body, c.index), offset: body });
+    else if (kind === 'script' && scripts && !srcScript) scripts.push({ js: html.slice(body, c.index), offset: body });
+    open.lastIndex = c.index + c[0].length;
+  }
   return out;
 }
 
@@ -314,7 +358,10 @@ function walkSourceFiles(dir) {
       try { if (lstatSync(p).isSymbolicLink() && statSync(p).isDirectory()) continue; st = statSync(p); } catch { continue; }
       if (st.isDirectory()) visit(p);
       else if (SRC_EXTS.has(extname(entry)) && !entry.endsWith('.min.js')) {
-        out.push({ abs: p, ext: extname(entry), content: readFileSync(p, 'utf8') });
+        // A bare CR is a line break to HTML, CSS and JS alike, but every line count here splits
+        // on \n: a CR-only file read as one line and put every finding on line 1. Each lone \r
+        // becomes \n, one character for one, so every offset is unchanged and CRLF is untouched.
+        out.push({ abs: p, ext: extname(entry), content: readFileSync(p, 'utf8').replace(/\r(?!\n)/g, '\n') });
       }
     }
   };
@@ -574,6 +621,78 @@ function scanHexHits(buf) {
   return hits;
 }
 
+// rgb()/rgba()/hsl()/hsla() colour literals: the same raw colour as a hex, in another notation.
+// [{ index, raw, hex }], hex as 6 digits (8 when alpha < 1) so the hex bands and the white/black
+// carve-out apply unchanged. Alpha 0 (a gradient fading out) is `transparent` and not counted. Only all-literal arguments count: a var() or calc() channel holds a
+// '(' that [^()]* cannot cross, so a colour composed from tokens never matches, and an argument
+// list that does not parse as a colour is not one. Linear: [^()]* stops at the next parenthesis.
+function scanColorFunctionHits(buf) {
+  const hits = [];
+  const re = /\b(rgba?|hsla?)\(([^()]*)\)/gi;
+  let m;
+  while ((m = re.exec(buf))) {
+    const hex = colorFunctionHex(m[1].toLowerCase(), m[2]);
+    if (hex) hits.push({ index: m.index, raw: m[0].replace(/\s+/g, ' '), hex });
+  }
+  return hits;
+}
+// CSS Color 4 arguments: comma or space separated, optional `/ alpha`, numbers or percentages,
+// hue in deg (default), grad, rad or turn, `none` as 0. Number() reads each token, so no regex
+// here backtracks over a long argument. Out-of-range channels clamp, as CSS does.
+function colorFunctionHex(fn, args) {
+  const s = args.trim().toLowerCase();
+  let parts;
+  let alpha = null;
+  if (s.includes(',')) {
+    parts = s.split(',').map((p) => p.trim());
+    if (parts.length === 4) alpha = parts.pop();
+  } else {
+    const slash = s.split('/');
+    if (slash.length > 2) return null;
+    parts = slash[0].trim().split(/\s+/);
+    if (slash.length === 2) alpha = slash[1].trim();
+  }
+  if (parts.length !== 3) return null;
+  const num = (p, units = {}) => {
+    if (p === 'none') return { v: 0, pct: false };
+    let k = '';
+    for (const u of ['%', ...Object.keys(units)]) if (p.endsWith(u) && u.length > k.length) k = u;
+    const body = k ? p.slice(0, -k.length) : p;
+    if (!/^[+-]?[\d.]+(?:e[+-]?\d+)?$/.test(body)) return null;
+    const v = Number(body);
+    if (!Number.isFinite(v)) return null;
+    return k === '%' ? { v, pct: true } : { v: v * (units[k] ?? 1), pct: false };
+  };
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  let rgb;
+  if (fn.startsWith('rgb')) {
+    const ch = parts.map((p) => num(p));
+    if (ch.some((c) => !c)) return null;
+    rgb = ch.map((c) => clamp(c.pct ? c.v * 2.55 : c.v, 0, 255));
+  } else {
+    const h = num(parts[0], { deg: 1, grad: 0.9, rad: 180 / Math.PI, turn: 360 });
+    const [sat, lig] = [num(parts[1]), num(parts[2])];
+    if (!h || h.pct || !sat || !lig) return null;
+    const S = clamp(sat.v, 0, 100) / 100;
+    const L = clamp(lig.v, 0, 100) / 100;
+    const H = ((h.v % 360) + 360) % 360;
+    const f = (n) => {
+      const k = (n + H / 30) % 12;
+      return 255 * (L - S * Math.min(L, 1 - L) * Math.max(-1, Math.min(k - 3, 9 - k, 1)));
+    };
+    rgb = [f(0), f(8), f(4)];
+  }
+  let a = 1;
+  if (alpha != null) {
+    const av = num(alpha);
+    if (!av) return null;
+    a = clamp(av.pct ? av.v / 100 : av.v, 0, 1);
+  }
+  if (a === 0) return null; // fully transparent is the `transparent` keyword, no colour to tokenize
+  const hex2 = (v) => Math.round(v).toString(16).padStart(2, '0');
+  return rgb.map(hex2).join('') + (a < 1 ? hex2(a * 255) : '');
+}
+
 // Every lock color, both modes, resolved to a comparable hex. Values that aren't parseable
 // hex (var(...), rgba(...), etc.) are skipped silently — the goal is a suggestion, not a
 // second schema check.
@@ -622,12 +741,42 @@ function tokensCssDescription(extraTokenCssPaths, rel) {
   return `in ${present.map((p) => rel(p)).join(' or ')}`;
 }
 
+// Colour presentation attributes: SVG paints and their siblings, HTML's legacy bgcolor, style, and
+// class (a Tailwind arbitrary value such as shadow-[0_1px_0_#FFF] is CSS; '#' never starts a
+// plain class name, so nothing else in a class list can match).
+const COLOR_ATTRS = new Set(['style', 'class', 'fill', 'stroke', 'stop-color', 'flood-color',
+  'lighting-color', 'color', 'bgcolor']);
+
+// An html file's CSS contexts, laid into a blank copy of the file at their own offsets (same
+// length, newlines kept, so a line in it is a line in the file): <style> bodies (token scopes and
+// CSS comments blanked), inline <script> bodies (JS comments blanked) and the COLOR_ATTRS values.
+// Prose and every other attribute stay blank: a hex in copy ("Order #12345678", a palette page
+// quoting a token's value) is text, not a colour use (owner ruling: CSS contexts only). Each
+// reader is one linear pass; a span two readers disagree on (malformed markup) is read once.
+function htmlColorContexts(content) {
+  const scripts = [];
+  const spans = [
+    ...styleBlocks(content, scripts).map((b) => ({ index: b.offset, text: stripTokenScopes(stripCssComments(b.css)) })),
+    ...scripts.map((b) => ({ index: b.offset, text: stripJsComments(b.js) })),
+    ...tagAttributeValues(content, COLOR_ATTRS, false).map((a) => ({ index: a.index, text: a.value })),
+  ].sort((x, y) => x.index - y.index);
+  const parts = [];
+  let at = 0;
+  for (const sp of spans) {
+    if (sp.index < at) continue;
+    parts.push(spaceFill(content.slice(at, sp.index)), sp.text);
+    at = sp.index + sp.text.length;
+  }
+  parts.push(spaceFill(content.slice(at)));
+  return parts.join('');
+}
+
 function checkRawHex(lock, files, rel, tokensCssDesc) {
   const lockColors = collectLockColorHexes(lock);
   for (const f of files) {
     let buf;
     if (f.ext === '.css') buf = stripTokenScopes(stripCssComments(f.content));
-    else if (f.ext === '.html') buf = stripTokenScopes(stripCssComments(stripHtmlComments(f.content)));
+    else if (f.ext === '.html') buf = htmlColorContexts(f.content);
     else buf = stripJsComments(f.content); // .js/.jsx/.tsx
     const grouped = new Map(); // value → { count, firstIdx }
     for (const h of scanHexHits(buf)) {
@@ -635,7 +784,16 @@ function checkRawHex(lock, files, rel, tokensCssDesc) {
       g.count += 1;
       grouped.set(h.value.toLowerCase(), g);
     }
-    for (const [valueLc, g] of grouped) {
+    // A functional literal groups by the colour it computes to (rgb(0,0,0) and rgb(0 0 0) are one
+    // value), apart from hex groups so each finding names the notation the author wrote.
+    for (const h of scanColorFunctionHits(buf)) {
+      const key = `fn:${h.hex}`;
+      const g = grouped.get(key) || { count: 0, firstIdx: h.index, raw: h.hex, fn: h.raw };
+      g.count += 1;
+      grouped.set(key, g);
+    }
+    for (const [key, g] of grouped) {
+      const valueLc = g.fn ? g.raw : key;
       const line = lineOf(buf, g.firstIdx);
       const nearest = lockColors.length > 0 ? nearestLockColor(g.raw, lockColors) : null;
       // All three bands are suggestions (what to do instead of this hex), including "no lock
@@ -652,7 +810,13 @@ function checkRawHex(lock, files, rel, tokensCssDesc) {
           suggestion = 'no lock token is close — this is an off-lock value; derive it and add it to the lock plus a DECISIONS.md entry before using it';
         }
       }
-      if (ANCHOR_HEX.has(valueLc)) {
+      if (g.fn && ANCHOR_HEX.has(valueLc)) {
+        add('WARN', 'raw-hex', rel(f.abs),
+          `absolute white/black ${g.fn} = #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw colour is an ERROR`, line, suggestion);
+      } else if (g.fn) {
+        add('ERROR', 'raw-hex', rel(f.abs),
+          `raw colour ${g.fn} = #${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars`, line, suggestion);
+      } else if (ANCHOR_HEX.has(valueLc)) {
         add('WARN', 'raw-hex', rel(f.abs),
           `absolute white/black #${g.raw} outside a token scope (${g.count}x) — prefer a token var; WARN-only carve-out, every other raw hex is an ERROR`, line, suggestion);
       } else {
@@ -913,18 +1077,89 @@ function checkPlaceholders(files, rel) { // hue's patterns; {{...}} tightened so
   }
 }
 
+// Attributes whose value a reader sees (a tooltip, a placeholder, a broken-image alt) or hears (a
+// screen reader announces the aria text and alt). Copy in them is copy; data-* and the rest are not.
+const TEXT_ATTRS = new Set(['alt', 'title', 'placeholder', 'aria-label', 'aria-description',
+  'aria-roledescription', 'aria-valuetext', 'aria-placeholder']);
+
+// The values of the named attributes of a page's tags: [{ name, value (raw), index }], tag by tag
+// with attributesOf. Comments and script/style text are skipped (and <head> when skipHead, as
+// blankNonContent drops it), in one forward pass, as an HTML tokenizer reads it: a tag,
+// comment or raw-text region that never closes runs to the end of the file and ends the scan, so
+// no character is read twice. (openTagsOf retries from every later '<', and the regexes behind
+// blankNonContent rescan an unclosed region once per opener: both are quadratic on hostile input.)
+function tagAttributeValues(html, names, skipHead) {
+  const out = [];
+  const n = html.length;
+  const closer = { comment: /-->/g, head: /<\/head>/gi, script: /<\/script[\s/>]/gi, style: /<\/style>/gi };
+  const skipTo = (re, from) => { re.lastIndex = from; const c = re.exec(html); return c ? c.index + c[0].length : -1; };
+  let headCloses = true; // false once a search for </head> has reached the end of the file
+  let i = html.indexOf('<');
+  while (i !== -1) {
+    if (html.startsWith('<!--', i)) {
+      const k = skipTo(closer.comment, i + 4);
+      if (k === -1) break;
+      i = html.indexOf('<', k);
+      continue;
+    }
+    if (!/[a-zA-Z]/.test(html[i + 1] ?? '')) { i = html.indexOf('<', i + 1); continue; }
+    if (skipHead && headCloses && /^<head[\s>]/i.test(html.slice(i, i + 6))) {
+      const k = skipTo(closer.head, i + 5);
+      if (k !== -1) { i = html.indexOf('<', k); continue; }
+      headCloses = false;
+    }
+    let j = i + 1;
+    let end = -1;
+    while (j < n) {
+      const c = html[j];
+      if (c === '>') { end = j; break; }
+      if (c === '"' || c === "'") {
+        const k = html.indexOf(c, j + 1);
+        if (k === -1) break;
+        j = k + 1;
+        continue;
+      }
+      j += 1;
+    }
+    if (end === -1) break;
+    const tag = html.slice(i, end + 1);
+    const raw = /^<(script|style)(?![\w-])/i.exec(tag);
+    if (raw) {
+      const k = skipTo(closer[raw[1].toLowerCase()], end + 1);
+      if (k === -1) break;
+      i = html.indexOf('<', k);
+      continue;
+    }
+    for (const [name, a] of attributesOf(tag)) {
+      if (names.has(name) && a.offset >= 0) out.push({ name, value: a.value, index: i + a.offset });
+    }
+    i = html.indexOf('<', end + 1);
+  }
+  return out;
+}
+// The TEXT_ATTRS values of the body's tags, entities decoded (what a reader sees or hears).
+const textAttributeValues = (html) => tagAttributeValues(html, TEXT_ATTRS, true)
+  .map((a) => ({ value: decodeEntities(a.value), index: a.index }));
+
 function checkEmDash(htmlFiles, rel) {
   for (const f of htmlFiles) {
-    const count = (f.vis.match(/—/g) || []).length;
+    const visCount = (f.vis.match(/—/g) || []).length;
+    const attrs = textAttributeValues(f.content).filter((a) => a.value.includes('—'));
+    const count = visCount + attrs.reduce((s, a) => s + a.value.split('—').length - 1, 0);
     if (count === 0) continue;
-    const idx = f.vis.indexOf('—');
     // The count is taken from visible text, so the line must be too. The first raw '—' in the
     // file can sit in a comment, the <head> or an attribute and name the wrong line (or none,
     // when the copy uses &mdash;). See visibleLines for why its first '—' is f.vis's first.
+    // A dash in a text attribute (alt, title, aria-label…) is copy as well; the line reported is
+    // whichever comes first (attrs is in document order, so attrs[0] is the first of them).
     const at = visibleLines(f.content).findIndex((l) => l.includes('—'));
+    const visLine = at >= 0 ? at + 1 : undefined;
+    const attrLine = attrs.length ? lineOf(f.content, attrs[0].index) : undefined;
+    const first = visLine == null ? attrLine : attrLine == null ? visLine : Math.min(visLine, attrLine);
+    const where = visCount > 0 ? snippet(f.vis, f.vis.indexOf('—'), 60) : snippet(attrs[0].value, attrs[0].value.indexOf('—'), 60);
     add('ERROR', 'em-dash', rel(f.abs),
-      `${count} em-dash(es) in visible text (hard rule: never ship em-dashes): ${snippet(f.vis, idx, 60)}`,
-      at >= 0 ? at + 1 : undefined);
+      `${count} em-dash(es) in ${attrs.length ? 'visible text and text attributes' : 'visible text'} (hard rule: never ship em-dashes): ${where}`,
+      first);
   }
 }
 
@@ -944,7 +1179,9 @@ function checkBannedFonts(lock, lockLabel, files, rel) {
       add('WARN', 'banned-fonts', lockLabel, `tokens.typography.${role}.family is "${fam}" — ${FONT_WARN_TEXT}`);
     }
   }
-  // (b) h1 / display-styled CSS rules in source (hue's logic, one level of var() resolution)
+  // (b) heading (h1-h6) / display-styled CSS rules in source (hue's logic, one level of var()
+  // resolution). The lock half reads both the display and the heading role, so the source half
+  // reads every heading level: h2-h6 used to pass with the same face h1 is warned for.
   for (const f of files) {
     const cssTexts = f.ext === '.css' ? [f.content]
       : f.ext === '.html' ? styleBlocks(f.content).map((b) => b.css) : [];
@@ -965,7 +1202,7 @@ function checkBannedFonts(lock, lockLabel, files, rel) {
     while ((m = ruleRe.exec(css))) {
       const selector = m[1].trim();
       if (selector.startsWith('@')) continue;
-      if (!/(^|[^\w-])h1([^\w-]|$)/.test(selector) && !/display/i.test(selector)) continue;
+      if (!/(^|[^\w-])h[1-6]([^\w-]|$)/.test(selector) && !/display/i.test(selector)) continue;
       const fontM = m[2].match(/font-family\s*:\s*([^;]+)/);
       if (!fontM) continue;
       let value = fontM[1].trim();
@@ -2142,6 +2379,44 @@ function checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel) {
   }
 }
 
+// ---------------------------------------------------------------- export-artifacts
+//
+// Figma export leftovers (references/spec-capture.md, "Figma export artifacts to NEVER
+// reproduce"). Built in, not read from the lock: they are wrong in any system's source. Each
+// pattern is a fixed literal, never a regex a lock supplies, so the scan stays linear on untrusted
+// input. Banned: the export's own node attribute, and the asset hosts whose URLs expire (download
+// the file beside the lock instead). NOT banned: the engine's instrumentation, data-fig-id /
+// data-fig-name / data-fig-key (CONTRACT.md: elements mapped to Figma nodes carry data-fig-id; a
+// skill may use a slug there by design), and links to a Figma file (figma.com/design/…), which
+// do not expire. Comments are blanked first: commented-out code ships nothing.
+const EXPORT_ARTIFACTS = [
+  { literal: 'data-node-id', word: true, what: 'Figma export node attribute',
+    fix: 'drop it; the engine\'s instrumentation is data-fig-id (CONTRACT.md)' },
+  ...['figma.com/api/mcp/asset/', 'figma-alpha-api.s3', 's3-alpha-sig.figma.com'].map((literal) => ({
+    literal, word: false, what: 'expiring Figma asset URL',
+    fix: 'download the asset beside the lock (reference/ or assets/) and reference the local file' })),
+];
+const EXPORT_ARTIFACT_RES = EXPORT_ARTIFACTS.map((a) => ({ ...a,
+  re: new RegExp(a.word ? `(?<![\\w-])${escapeRe(a.literal)}(?![\\w-])` : escapeRe(a.literal), 'gi') }));
+
+function checkExportArtifacts(files, rel) {
+  for (const f of files) {
+    const buf = f.ext === '.css' ? stripCssComments(f.content)
+      : f.ext === '.html' ? stripCssComments(stripHtmlComments(f.content))
+      : stripJsComments(f.content);
+    for (const a of EXPORT_ARTIFACT_RES) {
+      a.re.lastIndex = 0;
+      let m; let count = 0; let firstIdx = -1;
+      while ((m = a.re.exec(buf))) { count += 1; if (firstIdx === -1) firstIdx = m.index; }
+      if (count > 0) {
+        add('ERROR', 'export-artifacts', rel(f.abs),
+          `${a.what} "${a.literal}" (${count}x) — a Figma export leftover, never reproduced in source`,
+          lineOf(buf, firstIdx), a.fix);
+      }
+    }
+  }
+}
+
 // ================================================================ MICROCOPY GATE (plan §5.7 mechanical subset)
 
 function checkBannedJargon(lock, htmlFiles, rel) {
@@ -2150,30 +2425,59 @@ function checkBannedJargon(lock, htmlFiles, rel) {
     add('SKIP', 'banned-jargon', '(lock)', 'lock has no content.bannedJargon — check skipped');
     return;
   }
+  const items = []; // { locale, e, needle } in lock order, which is report order
   for (const [locale, entries] of Object.entries(jargon)) {
     if (!Array.isArray(entries)) continue;
-    for (const e of entries) {
-      if (!e?.term) continue;
-      const needle = e.term.normalize('NFC').toLowerCase();
-      for (const f of htmlFiles) {
-        const hay = f.vis.toLowerCase();
-        if (!hay.includes(needle)) continue;
-        const count = hay.split(needle).length - 1;
-        // Line of the first VISIBLE occurrence. The first raw occurrence can sit in a comment,
-        // the <head> or an attribute. Searched in the line-aligned visible text, folded the way
-        // hay is (NFC, lower case); f.vis collapsed every whitespace run to one space, so each
-        // run in the needle matches \s+ here, line breaks included: a term wrapped across two
-        // source lines is still found, and the line reported is where it starts.
-        const text = visibleLines(f.content).map((l) => l.normalize('NFC').toLowerCase()).join('\n');
-        const m = new RegExp(needle.split(/\s+/).map(escapeRe).join('\\s+')).exec(text);
-        // No replacement in the lock → no suggestion; never print `use: "undefined"`.
-        const hasReplacement = typeof e.replacement === 'string' && e.replacement.trim() !== '';
-        add('ERROR', 'banned-jargon', rel(f.abs),
-          `banned jargon (${locale}) "${e.term}" found ${count}x`,
-          m ? lineOf(text, m.index) : undefined, hasReplacement ? `use: "${e.replacement}"` : null);
-      }
-    }
+    for (const e of entries) if (e?.term) items.push({ locale, e, needle: e.term.normalize('NFC').toLowerCase() });
   }
+  // Each term is a literal substring grep (an inflected "beneficiarul" is still "beneficiar"). One
+  // exception: a hit lying wholly inside a longer banned term's hit is that term's word, not a
+  // second one ("beneficiar" inside "beneficiary" read one English word as RO jargon too, two
+  // errors for one word). Hits are non-overlapping per term, as split() counted them; sorted by
+  // start then longest first, a hit is inside an earlier one exactly when the furthest end seen so
+  // far reaches its own end. A tie (the same span twice) keeps the term listed first.
+  const kept = htmlFiles.map((f) => {
+    const hay = f.vis.toLowerCase();
+    const spans = [];
+    items.forEach(({ needle }, k) => {
+      let ord = 0;
+      for (let p = hay.indexOf(needle); p !== -1; p = hay.indexOf(needle, p + needle.length)) {
+        spans.push({ k, start: p, end: p + needle.length, ord: ord++ });
+      }
+    });
+    spans.sort((x, y) => x.start - y.start || y.end - x.end || x.k - y.k);
+    const ords = items.map(() => []); // per term: ordinals of its counted hits
+    let reach = -1;
+    for (const sp of spans) {
+      if (sp.end <= reach) continue;
+      reach = sp.end;
+      ords[sp.k].push(sp.ord);
+    }
+    for (const o of ords) o.sort((x, y) => x - y);
+    return ords;
+  });
+  items.forEach(({ locale, e, needle }, k) => {
+    htmlFiles.forEach((f, fi) => {
+      const ords = kept[fi][k];
+      const count = ords.length;
+      if (count === 0) return;
+      // Line of the first COUNTED visible occurrence. The first raw occurrence can sit in a
+      // comment, the <head> or an attribute. Searched in the line-aligned visible text, folded the
+      // way hay is (NFC, lower case); f.vis collapsed every whitespace run to one space, so each
+      // run in the needle matches \s+ here, line breaks included: a term wrapped across two
+      // source lines is still found, and the line reported is where it starts. Occurrences keep
+      // their order between the two forms, so the n-th match here is hay's n-th hit.
+      const text = visibleLines(f.content).map((l) => l.normalize('NFC').toLowerCase()).join('\n');
+      const re = new RegExp(needle.split(/\s+/).map(escapeRe).join('\\s+'), 'g');
+      let m = null;
+      for (let n = 0; n <= ords[0]; n++) if (!(m = re.exec(text))) break;
+      // No replacement in the lock → no suggestion; never print `use: "undefined"`.
+      const hasReplacement = typeof e.replacement === 'string' && e.replacement.trim() !== '';
+      add('ERROR', 'banned-jargon', rel(f.abs),
+        `banned jargon (${locale}) "${e.term}" found ${count}x`,
+        m ? lineOf(text, m.index) : undefined, hasReplacement ? `use: "${e.replacement}"` : null);
+    });
+  });
 }
 
 function checkDisclosures(lock, lockDir, htmlFiles, rel) {
@@ -2289,9 +2593,11 @@ function checkColorOnlyStatus(htmlFiles, rel) {
     while ((m = re.exec(f.content))) {
       if (VOID_TAGS.has(m[1].toLowerCase())) continue;
       const text = decodeEntities(m[3].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-      if (text === '') {
+      // Text means a letter or a digit. A dot, a tick or an icon glyph alone (●, ✓, ⚠) is the
+      // icon half of icon+text: shape and colour, still no words.
+      if (!/[\p{L}\p{N}]/u.test(text)) {
         add('WARN', 'color-only-status', rel(f.abs),
-          `<${m[1]} class="${m[2]}"> has no text content — status must not be conveyed by color alone (icon+text required)`,
+          `<${m[1]} class="${m[2]}"> has no text content${text ? ` (only "${text.slice(0, 20)}")` : ''} — status must not be conveyed by color alone (icon+text required)`,
           lineOf(f.content, m.index));
       }
     }
@@ -3036,6 +3342,7 @@ function main() {
   checkTextWrap(htmlFiles, cssFiles, rel);
   checkRadiusArithmetic(lock, files, rel);
   checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel);
+  checkExportArtifacts(files, rel);
 
   // ---- MICROCOPY GATE
   checkBannedJargon(lock, htmlFiles, rel);

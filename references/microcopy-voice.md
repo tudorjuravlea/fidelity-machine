@@ -137,7 +137,9 @@ Efectivă, the RO equivalent of APR) always expands on first use: "DAE (costul t
 creditului pe an)"; **IBAN**, **CNP**, **PIN**, **OTP** likewise.
 
 Both glossaries are literal grep blocklists: the lock's `content.bannedJargon` feeds
-`adherence-lint.mjs`; a hit blocks the content gate with the suggested replacement.
+`adherence-lint.mjs`; a hit blocks the content gate with the suggested replacement. A hit that
+lies inside a longer banned term's hit (RO "Beneficiar" inside EN "Beneficiary") is that word,
+counted once; an inflected form ("Beneficiarul") is still a hit.
 
 ## RO localisation rules
 

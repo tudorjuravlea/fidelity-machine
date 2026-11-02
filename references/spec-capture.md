@@ -118,7 +118,9 @@ assumption above:
   semantic tokens — filtered out, summarized in one warning.
 - **Figma export artifacts to NEVER reproduce**: micro skews (`skew-x-[0.17deg]` on labels),
   Figma asset URLs (expire in ~7 days — download to `reference/` beside the lock immediately),
-  and `data-node-id` attributes (ours is `data-fig-id` per CONTRACT).
+  and `data-node-id` attributes (ours is `data-fig-id` per CONTRACT). adherence-lint's
+  `export-artifacts` section fails `data-node-id` and the asset hosts (`figma.com/api/mcp/asset/`,
+  `figma-alpha-api.s3…`, `s3-alpha-sig.figma.com`); skews stay a review item.
 - **Spacing/radius often are NOT variables** — real systems frequently hardcode them in
   component specs (e.g. `px-24 py-12 rounded-12` on Button). Harvest them from
   `get_design_context` per component into `tokens.spacing`/`radii` — an empty `tokens.spacing`

@@ -52,7 +52,8 @@ longest locale.
 
 ### Multi-modal
 - **Never rely on color alone.** Pair every status color with an icon *and* a text
-  label: "Error: Email required" + icon — the lint blocks color-only status.
+  label: "Error: Email required" + icon — the lint blocks color-only status, and a glyph
+  alone (a dot, a tick) is the icon, not the label.
 - Provide text alternatives for icons and images.
 - Contrast ≥ **4.5:1** for body text (WCAG AA).
 

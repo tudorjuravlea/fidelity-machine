@@ -172,6 +172,15 @@
       "planted": "design-lock.json carries both colour modes and the screen is light; one paragraph sets data-theme=\"dark\""
     },
     {
+      "id": "export-artifacts",
+      "section": "export-artifacts",
+      "level": "ERROR",
+      "lock": "export-artifacts/design-lock.json",
+      "src": "export-artifacts",
+      "minCount": 1,
+      "planted": "a Figma export node attribute left on the h1"
+    },
+    {
       "id": "banned-jargon",
       "section": "banned-jargon",
       "level": "ERROR",
