@@ -181,6 +181,15 @@
       "planted": "a Figma export node attribute left on the h1"
     },
     {
+      "id": "phone-runnable",
+      "section": "phone-runnable",
+      "level": "ERROR",
+      "lock": "phone-runnable/design-lock.json",
+      "src": "phone-runnable",
+      "minCount": 1,
+      "planted": "the page declares data-phone-runnable and a :hover rule sits outside @media (hover: hover); the missing baseline lines warn in the same section"
+    },
+    {
       "id": "banned-jargon",
       "section": "banned-jargon",
       "level": "ERROR",

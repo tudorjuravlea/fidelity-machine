@@ -7,6 +7,24 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **`phone-runnable`** (source group, ERROR and WARN; registered last in that group, after
+  `export-artifacts`: the microcopy and gate-integrity sections each move one place later; 33
+  sections). Opt-in per page: only an `.html` page whose `<html>` carries `data-phone-runnable`
+  is judged, and an undeclared page gets no finding of any level, so no existing screen, deck or
+  poster changes result. On a declared page the platform-layer faults that are wrong on any
+  phone are errors: zoom switched off in the viewport meta, a `:hover` rule outside
+  `@media (hover: hover)`, a `100vh` height with no `dvh`/`svh` line for the same selector (a
+  `100vh` fallback above a `dvh` line passes), tappable controls with no `:active` rule or
+  pointerdown listener, a `touchmove` listener that prevents default, `user-select: none` or
+  `touch-action: none` on the document root, `env(safe-area-inset-*)` without
+  `viewport-fit=cover`, one `theme-color` on a page that styles both colour schemes, and
+  `navigator.userAgent`. A missing baseline line is a warning, with the line to add as the
+  suggestion: the viewport meta's parts, `theme-color`, the tap-highlight reset,
+  `text-size-adjust`, `overscroll-behavior` on the root, `touch-action: manipulation`,
+  `user-select: none` on controls, and text fields under 16px. Static only: none of this shows in
+  a desktop render, and a clean run does not replace a check on hardware. Negative fixture
+  `fixtures/lint/phone-runnable/`; the rules are pinned in `fixtures/lint/phone-runnable.test.mjs`
+  (26 cases, in CI). CONTRACT.md, model-facing rules, states the declaration.
 - **`export-artifacts`** (source group, ERROR; registered last in that group, after
   `scheme-mixing`: the source sections keep their order, and the microcopy and gate-integrity
   sections each move one place later; 32 sections). Figma export leftovers in any screen source:

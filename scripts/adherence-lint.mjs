@@ -6,7 +6,8 @@
 //   SOURCE ADHERENCE  raw-hex · css-vars · tokens-only-spacing · placeholders · em-dash ·
 //                     banned-fonts · contrast · transition-all · a11y ·
 //                     forbidden-substitutes · raw-motion · tabular-nums · text-wrap ·
-//                     radius-arithmetic · scheme-mixing · export-artifacts (on --src files)
+//                     radius-arithmetic · scheme-mixing · export-artifacts ·
+//                     phone-runnable (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
 //                     sentence-length · color-only-status · content-lock (plan §5.7 mechanical subset)
 //   GATE INTEGRITY    signatures · imagery-provenance · figid-coverage · provenance ·
@@ -52,6 +53,10 @@
 //     heading is two words and sets none).
 //   * raw-motion / radius-arithmetic: with no tokens.motion / tokens.radii in the lock, each
 //     reports one SKIP and enforces nothing: there is no token to name in the suggestion.
+//   * phone-runnable: judges only a page that declares itself (`data-phone-runnable` on <html>),
+//     and says nothing at all about any other page, not even a SKIP: a deck, a poster or a
+//     fixed-width screen shown in a drawn phone frame is not a web app on a phone. On a declared
+//     page the faults that are wrong on any phone are ERRORs and a missing baseline line is a WARN.
 //
 // Optional lock fields this file reads:
 //   * lock.lint.note (string): appended to every PRINTED finding's detail as " — <note>" at
@@ -111,7 +116,9 @@ const SECTION_GROUPS = {
     // Appended after forbidden-substitutes so every pre-existing section keeps its report position.
     'raw-motion', 'tabular-nums', 'text-wrap', 'radius-arithmetic', 'scheme-mixing',
     // Appended last for the same reason: every earlier section keeps its report position.
-    'export-artifacts'],
+    'export-artifacts',
+    // Appended after export-artifacts, again so no earlier section moves.
+    'phone-runnable'],
   'microcopy': ['banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',
     'sentence-length', 'color-only-status', 'content-lock'],
   // provenance sat outside the registry for a while: its findings sorted last and never reached
@@ -1767,15 +1774,16 @@ function cssReaching(f, cssFiles) {
   return [...own, ...linked].join('\n');
 }
 
-// Flat rules { selector, body }, nested @media bodies included (the inner rule matches on its
-// own). The pinned rule regex is checkBannedFonts', for the same performance reason.
+// Flat rules { selector, body, index }, nested @media bodies included (the inner rule matches on
+// its own); index = where the selector starts in `css`. The pinned rule regex is checkBannedFonts',
+// for the same performance reason.
 function cssRules(css) {
   const out = [];
   const re = /(?<![^{}])([^{}]+)\{([^{}]*)\}/g;
   let m;
   while ((m = re.exec(css))) {
     const selector = m[1].trim();
-    if (!selector.startsWith('@')) out.push({ selector, body: m[2] });
+    if (!selector.startsWith('@')) out.push({ selector, body: m[2], index: m.index + m[1].length - m[1].trimStart().length });
   }
   return out;
 }
@@ -2413,6 +2421,242 @@ function checkExportArtifacts(files, rel) {
           `${a.what} "${a.literal}" (${count}x) — a Figma export leftover, never reproduced in source`,
           lineOf(buf, firstIdx), a.fix);
       }
+    }
+  }
+}
+
+// ---------------------------------------------------------------- phone-runnable
+//
+// A web page on a real phone gives itself away through the platform layer (viewport, touch,
+// scroll, safe areas, browser chrome), and none of it shows in a desktop render or in device
+// emulation, so the pixel gate cannot see it. This section reads the source for it.
+//
+// Scope: ONLY an .html page whose <html> tag carries `data-phone-runnable` (any value but
+// "false"). The page says it is meant to be opened on a phone; nothing else is judged, and an
+// undeclared page gets no finding of any level. CSS read: the page's own <style> blocks and the
+// stylesheets it links (cssReaching's evidence rule). JS read: its inline <script> blocks.
+//
+// ERROR, wrong on any phone:
+//   zoom           viewport meta with user-scalable=no/0 or maximum-scale <= 1
+//   hover          a :hover rule outside `@media (hover: hover)` (the stricter
+//                  `(hover: hover) and (pointer: fine)` is what the suggestion writes; the gate
+//                  accepts either, since a framework's hover variant compiles to the first)
+//   100vh          height / min-height / max-height of 100vh with no dvh or svh line for the same
+//                  selector and property. A 100vh fallback above a dvh line, or overridden under
+//                  @supports, is the supported pattern and passes.
+//   press feedback tappable controls (button, role="button", onclick, input type button/submit/
+//                  reset) with no :active rule in the CSS and no pointerdown, touchstart or
+//                  mousedown in the scripts: every press is answered on release, or not at all
+//   touchmove      an addEventListener('touchmove', …) call that prevents default (preventDefault
+//                  in the call, or passive: false)
+//   root rules     user-select: none, or touch-action: none, in a rule on html, body, * or :root
+//   safe area      env(safe-area-inset-*) with no viewport-fit=cover in the viewport meta
+//   theme-color    theme-color tags, none with a media attribute, on a page that styles both
+//                  colour schemes (prefers-color-scheme in its CSS, or a color-scheme meta naming
+//                  light and dark)
+//   user agent     navigator.userAgent read in an inline script
+// WARN, a baseline line that is missing (one finding per line, the line to add as the suggestion):
+//   the viewport meta's width=device-width, viewport-fit=cover and interactive-widget=
+//   resizes-content; a theme-color meta; -webkit-tap-highlight-color; text-size-adjust;
+//   overscroll-behavior on the root; touch-action: manipulation; user-select: none on a control;
+//   and a text field (input that takes text, textarea, select) whose every reaching font-size is
+//   a px literal under 16, or that no font-size rule reaches (the browser default is 13.33px).
+//
+// Cannot see: whether an element with touch-action: none is small enough to scroll past, whether
+// a 100dvh block is an app shell or a hero (a hero wants svh), scripts loaded by src, a theme
+// switched by class, elements a script builds, and anything only hardware shows. A size read
+// through var(), inherit, rem or em is not judged. So a clean run means "no known tell in the
+// source", never "feels native": that is still confirmed on a phone.
+const PHONE_ROOT_SELECTOR = /^(?:html|body|\*|:root)$/i;
+const PHONE_HOVER_MEDIA = /@media[^{]*\(\s*(?:any-)?hover\s*:\s*hover\s*\)[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gi;
+const PHONE_HEIGHT_PROPS = new Set(['height', 'min-height', 'max-height']);
+const PHONE_NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'range', 'hidden', 'button', 'submit', 'reset', 'file', 'color', 'image']);
+const PHONE_VIEWPORT_TAG = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">';
+
+function checkPhoneRunnable(htmlFiles, cssFiles, rel) {
+  for (const f of htmlFiles) {
+    if (!/data-phone-runnable/i.test(f.content)) continue;
+    const html = stripHtmlComments(f.content);
+    const tagsOnly = html.replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, spaceFill); // a tag inside JS/CSS text is not markup
+    const tags = openTagsOf(tagsOnly, false).map((t) => ({ index: t.index, tag: t.tag, el: elementOf(t.tag), attrs: attributesOf(t.tag) }));
+    const attr = (t, name) => (t.attrs.get(name)?.value ?? '').trim().toLowerCase();
+    const declared = tags.find((t) => t.el.tag === 'html');
+    if (!declared || !declared.attrs.has('data-phone-runnable') || attr(declared, 'data-phone-runnable') === 'false') continue;
+
+    const file = rel(f.abs);
+    const err = (detail, line, fix) => add('ERROR', 'phone-runnable', file, detail, line, fix);
+    const warn = (detail, line, fix) => add('WARN', 'phone-runnable', file, detail, line, fix);
+    const lineHtml = (idx) => lineOf(f.content, idx);
+    const sheets = [
+      ...styleBlocks(html).map((b) => ({ css: stripCssComments(b.css), offset: b.offset })),
+      ...linkedStylesheets(f, cssFiles).sheets.map((c) => ({ css: stripCssComments(c.content), offset: null })),
+    ];
+    // A linked stylesheet has no line in this page: the finding is still filed on the page.
+    const lineCss = (sheet, idx) => (sheet.offset === null ? undefined : lineHtml(sheet.offset + idx));
+    const rulesOf = (sheet, css = sheet.css) => cssRules(css).map((r) => ({ ...r, sheet, decls: declsOf(r.body), selector: r.selector.replace(/\s+/g, ' ') }));
+    const rules = sheets.flatMap((s) => rulesOf(s));
+    const lineRule = (r) => lineCss(r.sheet, r.index);
+    const scripts = scriptBlocks(html).map((b) => ({ js: stripJsComments(b.js), offset: b.offset }));
+    const metas = (name) => tags.filter((t) => t.el.tag === 'meta' && attr(t, 'name') === name);
+    const viewportTag = metas('viewport')[0];
+    const viewport = new Map((viewportTag ? attr(viewportTag, 'content') : '').split(/[,;]/)
+      .map((part) => part.split('=').map((x) => x.trim())).filter(([k]) => k).map(([k, v = '']) => [k, v]));
+    const onRoot = (r) => selectorList(r.selector).some((s) => PHONE_ROOT_SELECTOR.test(s));
+    const declares = (r, props, value) => r.decls.some((d) => props.includes(d.prop) && value.test(d.value));
+    const SELECT = ['user-select', '-webkit-user-select'];
+
+    // ---- ERROR: wrong on any phone
+    if (['no', '0'].includes(viewport.get('user-scalable'))) {
+      err('viewport meta sets user-scalable=no — pinch zoom is switched off, an accessibility failure',
+        lineHtml(viewportTag.index), 'remove it; if the page zoomed into a text field, give the field a 16px font size');
+    }
+    const maxScale = parseFloat(viewport.get('maximum-scale'));
+    if (maxScale <= 1) {
+      err(`viewport meta sets maximum-scale=${maxScale} — pinch zoom is switched off, an accessibility failure`,
+        lineHtml(viewportTag.index), 'remove it; if the page zoomed into a text field, give the field a 16px font size');
+    }
+
+    const ungated = sheets.flatMap((s) => rulesOf(s, s.css.replace(PHONE_HOVER_MEDIA, spaceFill)))
+      .filter((r) => /:hover(?![\w-])/i.test(r.selector));
+    if (ungated.length) {
+      err(`${ungated.length} :hover rule(s) outside @media (hover: hover) (first: "${ungated[0].selector}") — a touch browser applies :hover on tap and keeps it until the next tap elsewhere`,
+        lineRule(ungated[0]), 'move every :hover rule inside @media (hover: hover) and (pointer: fine); press feedback belongs on :active');
+    }
+
+    const dynamicHeights = new Set(rules.flatMap((r) => r.decls
+      .filter((d) => PHONE_HEIGHT_PROPS.has(d.prop) && /\d[ds]vh\b/i.test(d.value)).map((d) => `${r.selector}|${d.prop}`)));
+    const fullVh = rules.flatMap((r) => r.decls
+      .filter((d) => PHONE_HEIGHT_PROPS.has(d.prop) && /(?<![\w.])100vh\b/i.test(d.value) && !dynamicHeights.has(`${r.selector}|${d.prop}`))
+      .map((d) => ({ r, d })));
+    if (fullVh.length) {
+      const { r, d } = fullVh[0];
+      err(`${fullVh.length} height(s) of 100vh with no dvh or svh line for the same selector (first: "${r.selector} { ${d.prop}: ${d.value} }") — 100vh is the viewport with the browser bars hidden, so on load the block overflows by the height of the URL bar`,
+        lineRule(r), `keep the 100vh line as a fallback and add ${d.prop}: 100dvh under it (100svh for a hero or first screen)`);
+    }
+
+    const tappable = tags.filter((t) => t.el.tag === 'button' || attr(t, 'role') === 'button' || t.attrs.has('onclick')
+      || (t.el.tag === 'input' && ['button', 'submit', 'reset'].includes(attr(t, 'type'))));
+    if (tappable.length && !rules.some((r) => /:active(?![\w-])/i.test(r.selector))
+      && !scripts.some((s) => /\b(?:pointerdown|touchstart|mousedown)\b/.test(s.js))) {
+      err(`${tappable.length} tappable control(s) and no :active rule or pointerdown listener — a control that only reacts on click answers when the finger leaves, which reads as lag`,
+        lineHtml(tappable[0].index), 'give every tappable control an :active state (100 to 160ms, ease-out), or listen to pointerdown');
+    }
+
+    let blocking = 0;
+    let blockingLine;
+    for (const s of scripts) {
+      const re = /addEventListener\s*\(\s*(['"`])touchmove\1/g;
+      let m;
+      while ((m = re.exec(s.js))) {
+        let depth = 1;
+        let j = re.lastIndex;
+        for (; j < s.js.length && depth > 0; j++) {
+          if (s.js[j] === '(') depth += 1;
+          else if (s.js[j] === ')') depth -= 1;
+        }
+        const call = s.js.slice(re.lastIndex, j);
+        if (/\bpreventDefault\s*\(/.test(call) || /\bpassive\s*:\s*false\b/.test(call)) {
+          blocking += 1;
+          blockingLine ??= lineHtml(s.offset + m.index);
+        }
+      }
+    }
+    if (blocking) {
+      err(`${blocking} touchmove listener(s) that prevent default — a non-passive listener holds every scroll frame until the script answers`,
+        blockingLine, 'against overscroll use overscroll-behavior (none on the root, contain on an inner scroller); for a gesture the element owns, declare touch-action (pan-y, pan-x or none) and use pointer events');
+    }
+
+    const selectRoot = rules.find((r) => onRoot(r) && declares(r, SELECT, /^none\b/i));
+    if (selectRoot) {
+      err(`user-select: none on the document root ("${selectRoot.selector}") — nobody can copy an address, an error message or an order number`,
+        lineRule(selectRoot), 'put it on controls only: button, [role="button"], tabs, chips, drag handles');
+    }
+    const touchRoot = rules.find((r) => onRoot(r) && declares(r, ['touch-action'], /^none\b/i));
+    if (touchRoot) {
+      err(`touch-action: none on the document root ("${touchRoot.selector}") — the page cannot be scrolled by touch`,
+        lineRule(touchRoot), 'put it only on an element whose gesture owns both axes; pan-y or pan-x leaves the other axis to the browser');
+    }
+
+    const cover = viewport.get('viewport-fit') === 'cover';
+    const safeArea = rules.find((r) => /env\(\s*safe-area-inset-/i.test(r.body));
+    if (safeArea && !cover) {
+      err('env(safe-area-inset-*) is read but the viewport meta has no viewport-fit=cover — every inset resolves to 0',
+        lineRule(safeArea), 'add viewport-fit=cover to the viewport meta, then pad the fixed header and bottom bar with the insets');
+    }
+
+    const themes = metas('theme-color');
+    const bothSchemes = sheets.some((s) => /prefers-color-scheme/i.test(s.css))
+      || metas('color-scheme').some((t) => /\blight\b/.test(attr(t, 'content')) && /\bdark\b/.test(attr(t, 'content')));
+    if (themes.length && bothSchemes && !themes.some((t) => t.attrs.has('media'))) {
+      err('one theme-color for a page that styles both colour schemes — the status bar is wrong in one of them',
+        lineHtml(themes[0].index), 'one <meta name="theme-color"> per scheme, each with media="(prefers-color-scheme: …)" and the colour at the top of the page in that scheme');
+    }
+
+    for (const s of scripts) {
+      const m = /\bnavigator\s*\.\s*userAgent\b/.exec(s.js);
+      if (!m) continue;
+      err('navigator.userAgent is read — a user-agent string does not say what the device can do (a tablet with a trackpad, a laptop with a touchscreen)',
+        lineHtml(s.offset + m.index), 'ask the platform: @media (hover: hover), (pointer: fine | coarse), or matchMedia with the same queries');
+      break;
+    }
+
+    // ---- WARN: a baseline line that is missing
+    const missing = [
+      viewport.get('width') !== 'device-width' && 'width=device-width',
+      !cover && !safeArea && 'viewport-fit=cover', // with env() in use its absence is the ERROR above
+      viewport.get('interactive-widget') !== 'resizes-content' && 'interactive-widget=resizes-content',
+    ].filter(Boolean);
+    if (missing.length) {
+      warn(viewportTag
+        ? `viewport meta lacks ${missing.join(', ')} — the baseline for a page that paints edge to edge and resizes for the software keyboard`
+        : 'no viewport meta — the phone lays the page out at desktop width and scales it down',
+      viewportTag ? lineHtml(viewportTag.index) : undefined, PHONE_VIEWPORT_TAG);
+    }
+    if (!themes.length) {
+      warn('no theme-color meta — the status bar and the browser chrome keep their default colour',
+        undefined, '<meta name="theme-color" content="…"> with the colour at the very top of the page; one per prefers-color-scheme when the page has two schemes');
+    }
+    const anywhere = (props, value = /./) => rules.some((r) => declares(r, props, value));
+    if (!anywhere(['-webkit-tap-highlight-color'])) {
+      warn('no -webkit-tap-highlight-color — the browser paints its grey or blue flash over every tapped control',
+        undefined, 'html { -webkit-tap-highlight-color: transparent; }, and an :active state on every tappable control');
+    }
+    if (!anywhere(['-webkit-text-size-adjust', 'text-size-adjust'])) {
+      warn('no text-size-adjust — the phone inflates font sizes when it turns to landscape',
+        undefined, 'html { -webkit-text-size-adjust: 100%; }');
+    }
+    if (!rules.some((r) => onRoot(r) && declares(r, ['overscroll-behavior', 'overscroll-behavior-y'], /./))) {
+      warn('no overscroll-behavior on the document root — scrolling past the top pulls to refresh or rubber-bands the whole page',
+        undefined, 'html, body { overscroll-behavior: none; }, and contain on inner scrollers; leave it out on purpose when the page is a document where pull-to-refresh is welcome');
+    }
+    if (!anywhere(['touch-action'], /\bmanipulation\b/i)) {
+      warn('no touch-action: manipulation — a tap can wait for a possible double-tap zoom before it fires',
+        undefined, 'button, a, [role="button"] { touch-action: manipulation; }');
+    }
+    if (!rules.some((r) => !onRoot(r) && declares(r, SELECT, /^none\b/i))) {
+      warn('no user-select: none on any control — a long press selects a button\'s label',
+        undefined, 'button, [role="button"] { user-select: none; -webkit-user-select: none; } (controls only, never body text)');
+    }
+
+    const fields = tags.filter((t) => t.el.tag === 'textarea' || t.el.tag === 'select'
+      || (t.el.tag === 'input' && !PHONE_NON_TEXT_INPUTS.has(attr(t, 'type') || 'text')));
+    // undefined = not a px literal (var(), inherit, rem, em): not judged.
+    const pxOf = (d) => {
+      const m = d.prop === 'font-size' ? d.value.match(/^(\d*\.?\d+)px\b/i) : d.value.match(/(?<![\w.])(\d*\.?\d+)px\b/i);
+      return m ? Number(m[1]) : undefined;
+    };
+    const isSize = (d) => d.prop === 'font-size' || d.prop === 'font';
+    const sizeRules = rules.flatMap((r) => r.decls.filter(isSize)
+      .map((d) => ({ subjects: selectorList(r.selector).map(subjectCompound), px: pxOf(d) })));
+    const sizesOf = (t) => [
+      ...sizeRules.filter((s) => s.subjects.some((c) => compoundMatches(c, t.el))).map((s) => s.px),
+      ...(t.el.style === null ? [] : declsOf(t.el.style).filter(isSize).map(pxOf)),
+    ];
+    const small = fields.map((t) => ({ t, sizes: sizesOf(t) })).filter(({ sizes }) => sizes.every((px) => px < 16));
+    if (small.length) {
+      const { t, sizes } = small[0];
+      warn(`${small.length} text field(s) under 16px (first: <${t.el.tag}>, ${sizes.length ? `font-size ${Math.max(...sizes)}px` : 'no font-size rule reaches it, so it takes the browser default of 13.33px'}) — iOS zooms the page when the field takes focus and does not zoom back`,
+        lineHtml(t.index), 'input, textarea, select { font-size: 16px; } (inside @media (pointer: coarse) when the desktop wants them smaller)');
     }
   }
 }
@@ -3343,6 +3587,7 @@ function main() {
   checkRadiusArithmetic(lock, files, rel);
   checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel);
   checkExportArtifacts(files, rel);
+  checkPhoneRunnable(htmlFiles, cssFiles, rel);
 
   // ---- MICROCOPY GATE
   checkBannedJargon(lock, htmlFiles, rel);

@@ -15,13 +15,16 @@ One folder per section, `fixtures/lint/<section>/`:
   `<!-- lint-negative: <section> — <what was planted> -->`.
 - `tokens.dtcg.json`: a stand-in derived artifact whose hash the provenance receipt records.
 
-All 32 folders share one clean base, which lints to `No findings.`. Its copy is short on
+All 33 folders share one clean base, which lints to `No findings.`. Its copy is short on
 purpose: real sentence punctuation, the longest sentence 10 words, the button 2 words. A
-change to how a copy rule counts must not tip the base over a limit. Two folders add to the
+change to how a copy rule counts must not tip the base over a limit. Three folders add to the
 base what their section needs in order to run at all, not a fault: `scheme-mixing` carries a
-second colour mode (in the lock and as a `[data-theme="dark"]` token block), and
+second colour mode (in the lock and as a `[data-theme="dark"]` token block),
 `transition-all` reads its duration from a token-scope custom property so `raw-motion` stays
-quiet.
+quiet, and `phone-runnable` declares the page (`data-phone-runnable` on `<html>`), since the
+section judges no other page. The base carries none of the phone baseline, so that fixture's
+section also warns once per missing baseline line, beside the planted error. Its rules are
+pinned one by one in `phone-runnable.test.mjs`.
 
 ## The one-fault rule
 

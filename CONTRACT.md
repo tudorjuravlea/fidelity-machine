@@ -313,6 +313,15 @@ rounds improve by < 10% relative, STOP and report — never thin-retry into inve
 - Generated elements mapped to Figma nodes carry `data-fig-id="<figmaNodeId>"`. Figma's own export
   leftovers (`data-node-id`, expiring Figma asset URLs) fail lint (section `export-artifacts`).
 - Generated pages set `data-render-ready` on `<html>` (or any element) once fonts/data/layout are settled.
+- A page meant to be opened on a real phone (a prototype handed out by link, an installable web
+  app) declares it: `<html data-phone-runnable>`. Lint section `phone-runnable` then judges its
+  platform layer: faults that are wrong on any phone fail (zoom switched off, a `:hover` rule
+  outside `@media (hover: hover)`, `100vh` with no `dvh`/`svh` line, no press feedback, a
+  `touchmove` listener that prevents default, `user-select: none` or `touch-action: none` on the
+  document root, `env(safe-area-inset-*)` without `viewport-fit=cover`, one `theme-color` for two
+  colour schemes, `navigator.userAgent`), and a missing baseline line warns. An undeclared page is
+  not judged: a deck, a poster or a fixed-width screen in a drawn phone frame is not one. A clean
+  run is not proof the page feels native; that is still confirmed on hardware.
 - Text slots are typed (`data-slot="button|label|error|…"`) and flex: no fixed widths on text
   containers, ≥2 lines of vertical slack on labels/errors/empty states, `overflow-x-hidden` on `main`.
 - Chart regions carry `data-chart="line|bar|legend|…"` — conditional lock signatures (`when:
