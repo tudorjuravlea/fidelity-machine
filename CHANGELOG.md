@@ -34,7 +34,9 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   full opacity, in one frame is a pop (WARN). Cut windows (the kit's new `meta.scenes[].cutHalf`),
   travel from off the frame, a reveal from under a moving plate and `data-snap` are not judged;
   under four samples is SKIP, named inconclusive; a deck is SKIP. Planted fixture
-  `continuity-jump` in the self-test manifest.
+  `continuity-jump` in the self-test manifest; the two clock-driven determinism fixtures
+  (`determinism-timer`, `determinism-wall-clock`) tolerate the gate, since their planted value
+  steps between frames by as much as each frame took to draw.
 
 - **`phone-runnable`** (source group, ERROR and WARN; registered last in that group, after
   `export-artifacts`: the microcopy and gate-integrity sections each move one place later; 33

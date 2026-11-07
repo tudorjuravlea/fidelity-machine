@@ -60,7 +60,10 @@
         "gate": "determinism",
         "result": "FAIL"
       },
-      "planted": "piece.js: the frame hook sets the mark's word-spacing from performance.now(), which the harness does not freeze"
+      "planted": "piece.js: the frame hook sets the mark's word-spacing from performance.now(), which the harness does not freeze",
+      "tolerate": [
+        "continuity"
+      ]
     },
     {
       "id": "offline-remote-stylesheet",

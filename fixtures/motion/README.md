@@ -56,8 +56,8 @@ symlink (release-check refuses them), and `check` does not need one.
 | `golden-deck` | deck | all | pass | nothing. 1920x1080, three scenes, five presses with a note each, a `block`, a `draw`, a `count`, a `fade` exit and a `wipe` exit |
 | `golden-devices` | film | all | pass | nothing. 1920x1080, 18.75 s, three scenes: a phone alone on the left on the lock's half ground, turned +10 toward the copy, the full band tall, turning in (`turn`); a row of three, phone, tablet, phone, flat, rising in turn; a phone resting at its band over 1.4 that plays the synthetic clip (the kit's `clip.js` on a canvas) and zooms to its action, the rest pose taken mid-dwell so the audit measures it zoomed |
 | `determinism-css-transition` | film | determinism | FAIL | `index.html`: `#mark { transition: opacity 2s linear }`; the same frame differs with the frame drawn before it. Tolerates `lint`: `raw-motion` also fires, because the lock declares motion tokens |
-| `determinism-timer` | film | determinism | FAIL | `piece.js`: a `setInterval` that moves the mark's word-spacing. The `self-time` WARN it also raises is only a warning, so nothing is tolerated |
-| `determinism-wall-clock` | film | determinism | FAIL | `piece.js`: the `frame` hook reads `performance.now()`, which the harness does not freeze (it freezes `Date` and seeds `Math.random`, so an unseeded `Math.random` would not show). The `self-time` WARN it also raises is only a warning, so nothing is tolerated |
+| `determinism-timer` | film | determinism | FAIL | `piece.js`: a `setInterval` that moves the mark's word-spacing. The `self-time` WARN it also raises is only a warning. Tolerates `continuity`: the timer-moved value steps between frames |
+| `determinism-wall-clock` | film | determinism | FAIL | `piece.js`: the `frame` hook reads `performance.now()`, which the harness does not freeze (it freezes `Date` and seeds `Math.random`, so an unseeded `Math.random` would not show). The `self-time` WARN it also raises is only a warning. Tolerates `continuity`: the clock-driven value steps between frames on a slow enough machine |
 | `offline-remote-stylesheet` | film | offline | FAIL | `index.html`: a stylesheet from `https://assets.example.invalid/remote.css` (a reserved name that never resolves, so the run needs no network) |
 | `pictures-missing-image` | film | pictures | FAIL | `index.html`: an `<img>` whose `src` file does not exist |
 | `tokens-unresolved-role` | film | tokens | FAIL | `piece.js`: `motion.ease.enter` is `'overshoot'`, an easing the lock does not declare |
@@ -83,10 +83,12 @@ fail every golden on the fonts gate unless a font binary were bundled, which the
 negative therefore has a lock of its own in `fonts/` (the same tokens, one declared family, its own derived
 `assets/`) and a one-row manifest; run it with `--manifest fixtures/motion/fonts/manifest.json` (CI runs both).
 
-**Tolerances.** Two fixtures tolerate a second gate, each because that gate is right to speak: `determinism-css-transition`
-tolerates `lint` (a CSS transition is also a raw motion value), and `determinism-timer` tolerates `continuity` (a value
-moved by a 20 ms timer steps between frames, which is a jump by the frame-to-frame reading as much as a determinism
-fault). The self-test counts only FAIL as a second fault.
+**Tolerances.** Three fixtures tolerate a second gate, each because that gate is right to speak: `determinism-css-transition`
+tolerates `lint` (a CSS transition is also a raw motion value), and `determinism-timer` and `determinism-wall-clock`
+tolerate `continuity` (a value moved by a 20 ms timer, or read off the wall clock, steps between frames by however long
+each frame took to draw, which is a jump by the frame-to-frame reading as much as a determinism fault; whether the step
+clears the jump threshold depends on the machine's speed, so the tolerance is declared rather than left to luck). The
+self-test counts only FAIL as a second fault.
 
 **Goldens: what is tolerated.** All three goldens end `RESULT: PASS` with 0 errors and 0 warnings. Two lines
 are not a plain `pass`, and both are by design:
