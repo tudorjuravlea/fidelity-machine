@@ -171,7 +171,7 @@ async function assemble(def) {
     kind: 'film',
     meta: {
       title: def.title ?? document.title, W, H, fps, frames, duration, margin,
-      scenes: scenes.map(s => ({ id: s.id, start: s.start, end: s.end, rest: s.rest, cut: s.cut.type })),
+      scenes: scenes.map(s => ({ id: s.id, start: s.start, end: s.end, rest: s.rest, cut: s.cut.type, cutHalf: s.half })),
       picturesMissing,
       motion: { resolved: motion.resolved, unresolved: motion.unresolved, literals: reg.literals },
     },

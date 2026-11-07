@@ -180,6 +180,7 @@ No fireworks, confetti or particle showers: ornament fails the information rule 
 | `self-time` | A static scan of the piece's own source for `Date`, `Math.random`, timers, `requestAnimationFrame`, `performance.now` | WARN |
 | `determinism` | Sampled instants are byte-equal across three drawing orders (below) | FAIL |
 | `layout` | At each rest nothing that arrived lies outside the margin (FAIL) or overlaps without `data-over` (WARN) | FAIL / WARN |
+| `continuity` (film) | Every frame drawn in turn (a stride past 360 samples), the box of every visible element recorded: no element steps more than 2 px in one frame while calm either side (a jump, FAIL); none appears at full opacity and stays put, or vanishes from full opacity, in one frame (a pop, WARN). Cuts, travel from off the frame, a reveal from under a moving plate and `data-snap` are not judged | FAIL / WARN |
 | `presses` (deck) | Every press changes the picture; two byte-identical consecutive poses warn | WARN |
 | `clicker` (deck) | Live, by keyboard: next alone walks every pose, a burst skips none, back returns, a reload returns to the hash | FAIL |
 | `frame-time` | Per-frame draw time on this machine against `--budget-ms`; it measures the machine, not the piece | WARN, never FAIL |
@@ -238,6 +239,8 @@ in-betweens are checked, and the remainder is reviewed by a person on contact sh
 | A transform has no effect, an entrance clashes with the element's tilt, or type is wrong on the first frame only | The element is inline, or sets `rotate`, `scale` or `translate` itself (make it `block`, use `data-r`, add a wrapper), or its size was computed before the fonts arrived (compute it in `setup`) |
 | `fonts` exits 4 | A lock face is not loaded by the page. Add the `@font-face` with its files; a weight beyond a variable font's range fails the same way |
 | `layout` flags an element that looks inside, or plates that should overlap | A tilted or skewed box is wider than its text, so pull it in, or use `data-bleed`. For intended overlap use `data-over` |
+| `continuity` reports a jump | Something is set from `t` by a step, not a ramp: a draw hook that switches a value at an instant, a zoom whose two dwells meet with no travel between them, a class toggled at a time. Ease it from the frame before to the frame after (`ramp`, a curve), or, for a step the viewer should see as a step (a counter's digit, a caret), mark that node `data-snap` |
+| `continuity` warns of a pop | An element is shown or removed in one frame without a fade, a move or a cover: give it an entrance (`data-fx`) or an exit, or keep it mounted and fade it |
 | `presses` warns, `clicker` FAIL | Two poses look identical, so a press did nothing a viewer can see: fold it into its neighbour or add a visible change. `clicker` fails on a zero-length press or a `draw` that throws at some pose: add `steps` or content and inspect it with `stills --only N` |
 | `offline` FAIL | A resource is fetched over the network. Ask the user, then store the file beside the piece and reference it by relative path |
 | Soft picture, or emoji that differ elsewhere | The MP4 was scaled (set the real size in the piece), or emoji came from the system font (use inline SVG) |

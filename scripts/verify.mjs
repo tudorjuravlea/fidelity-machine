@@ -8,8 +8,10 @@
  *      screen regardless of visuals (compliance > clarity > motivation).
  *   2. Taste self-critique — model gate, not scriptable; its place is noted in the report.
  *   3. render.mjs → geometry.mjs (structure before pixels; exits 0 on all-no-ground-truth
- *      B2 screens) → diff.mjs (pixel gate) → colour-census.mjs (colour drift below the
- *      pixel gate's cutoff; runs whenever diff ran).
+ *      B2 screens) → layout-audit.mjs (self-consistency of the rendered boxes, no ground
+ *      truth needed; it may come back INCONCLUSIVE, exit 6, when the page was still moving
+ *      or offered nothing to measure) → diff.mjs (pixel gate) → colour-census.mjs (colour
+ *      drift below the pixel gate's cutoff; runs whenever diff ran).
  * A failed gate short-circuits the later gates for that screen; the ordering is the
  * priority, not only a sequence. One exception: the colour census runs whenever diff ran,
  * pass or fail, because it is an independent signal (drift the pixel metric cannot score),
@@ -36,8 +38,12 @@
  *
  * Exit codes (CONTRACT §Exit codes):
  *   0 pass · 1 fidelity/lint failure · 2 setup/usage error · 3 DIMENSION_MISMATCH ·
- *   4 FONT_PARITY · 5 render failure/timeout. Codes 2/3/4/5 from children are
- *   propagated; the report and stderr name the child.
+ *   4 FONT_PARITY · 5 render failure/timeout · 6 INCONCLUSIVE. Codes 2/3/4/5 from children
+ *   are propagated; the report and stderr name the child. A finding (1) beats inconclusive
+ *   (6): verify exits 6 only when nothing failed and some screen could not be judged. Every
+ *   screen in the report carries a status — pass, fail or inconclusive — and the
+ *   manualReview[] notes of what no gate judged (the taste gate, and what layout-audit
+ *   says it cannot see).
  */
 
 import { spawnSync } from 'node:child_process';
@@ -45,7 +51,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
+// VERIFY_SCRIPTS_DIR is the test seam (fixtures/layout/verify-status.test.mjs): a directory of
+// stub gates, so the orchestration — three outcomes, the exit-code order — can be proved without
+// a browser. Unset in every real run; the children are the siblings of this file.
+const SCRIPTS_DIR = process.env.VERIFY_SCRIPTS_DIR ? path.resolve(process.env.VERIFY_SCRIPTS_DIR) : path.dirname(fileURLToPath(import.meta.url));
 const CHILD_TIMEOUT_MS = 180_000;
 const MAX_ROUNDS = 4;
 const MIN_RELATIVE_IMPROVEMENT = 0.10;
@@ -58,6 +67,7 @@ const GATE_SCRIPTS = {
   lint: 'adherence-lint.mjs',
   render: 'render.mjs',
   geometry: 'geometry.mjs',
+  layout: 'layout-audit.mjs',
   diff: 'diff.mjs',
   census: 'colour-census.mjs',
 };
@@ -69,6 +79,7 @@ const EXIT_MEANING = {
   3: 'DIMENSION_MISMATCH — render dims != reference dims (config error, NOT a fix target; never silently resample)',
   4: 'FONT_PARITY — a required document.fonts.check() failed; refused to screenshot a fallback',
   5: 'render failure/timeout (environment)',
+  6: 'INCONCLUSIVE — the tool could not judge (nothing measured, or geometry still moving when measured); not a pass, not a finding: settle the page or declare what to audit, then re-run',
 };
 
 const TASTE_GATE_NOTE =
@@ -197,7 +208,7 @@ function gateFromChild(res) {
   }
   const ok = res.exitCode === 0;
   const gate = {
-    status: res.timedOut ? 'timeout' : (ok ? 'pass' : 'fail'),
+    status: res.timedOut ? 'timeout' : (ok ? 'pass' : res.exitCode === 6 ? 'inconclusive' : 'fail'),
     exitCode: res.exitCode,
     meaning: meaning(res.exitCode),
   };
@@ -324,6 +335,8 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     const id = screen.id;
     const gates = {};
     const blockers = [];
+    const inconclusive = [];      // why this screen could not be judged (exit-6 gates)
+    const manualReview = [TASTE_GATE_NOTE];   // what no script judged on this screen
     let globalPct = null;
     let worstTile = null;
 
@@ -358,6 +371,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     if (lintBlocked) {
       gates.render = skippedGate('skipped — content/compliance gate blocked this screen (three-gate ordering: content > taste > geometry/pixels)');
       gates.geometry = skippedGate('skipped — content/compliance gate blocked this screen');
+      gates.layout = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.diff = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.census = skippedGate('skipped, content/compliance gate blocked this screen');
     } else {
@@ -387,6 +401,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
 
       if (!renderOk) {
         gates.geometry = skippedGate('skipped — render produced no output (.render/*.png + geometry dump required)');
+        gates.layout = skippedGate('skipped — render produced no output (.render/*.layout.json required)');
         gates.diff = skippedGate('skipped — render produced no output');
         gates.census = skippedGate('skipped, render produced no output');
       } else {
@@ -410,6 +425,37 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
             blockers.push(`geometry.mjs exit ${gres.exitCode} — ${meaning(gres.exitCode)}`);
             noteFinding(65, `[${id}] geometry.mjs exit ${gres.exitCode} — ${meaning(gres.exitCode)}`);
           }
+        }
+
+        // Gate 3b', layout self-consistency (CONTRACT §Invocation contract, layout-audit.mjs).
+        // No ground truth needed, so it runs for every rendered screen, B2 included. It does not
+        // gate the diff: a tight inset or an overrun box does not make pixel evidence noise.
+        // Exit 6 is INCONCLUSIVE: the page offered nothing to measure or was still moving;
+        // the screen then cannot pass, and verify says so without calling it a failure.
+        const lres2 = runChild(GATE_SCRIPTS.layout, ['--lock', lockPath, '--screen', id]);
+        gates.layout = gateFromChild(lres2);
+        const layoutReport = readJsonSafe(path.join(reportDir, `${id}.layout.json`));
+        if (layoutReport) {
+          gates.layout.report = `.report/${id}.layout.json`;
+          for (const m of layoutReport.manual ?? []) manualReview.push(`layout-audit: ${m}`);
+        }
+        if (lres2.missing) {
+          missingScripts.add(GATE_SCRIPTS.layout);
+          noteEvent(2, GATE_SCRIPTS.layout, id);
+          blockers.push(`setup: ${GATE_SCRIPTS.layout} is missing — layout self-consistency gate could not run`);
+          noteFinding(70, `[${id}] missing script ${GATE_SCRIPTS.layout} (expected in ${SCRIPTS_DIR})`);
+        } else if (lres2.exitCode === 1) {
+          const n = Array.isArray(layoutReport?.findings) ? layoutReport.findings.filter((f) => f.level === 'ERROR').length : null;
+          blockers.push(`layout gate: ${n ?? '>=1'} self-consistency error(s) — a control's content overruns its box or a container's last child sits in its own padding; see .report/${id}.layout.json`);
+          noteFinding(28, `[${id}] layout gate failed — ${n ?? '>=1'} error(s); fix the boxes named in .report/${id}.layout.json`);
+        } else if (lres2.exitCode === 6) {
+          const why = Array.isArray(layoutReport?.inconclusiveReasons) ? layoutReport.inconclusiveReasons.join('; ') : 'see .report/' + id + '.layout.json';
+          inconclusive.push(`layout gate: ${why}`);
+          noteFinding(12, `[${id}] layout gate inconclusive — ${why}`);
+        } else if (lres2.exitCode !== 0) {
+          noteEvent(lres2.exitCode, GATE_SCRIPTS.layout, id);
+          blockers.push(`layout-audit.mjs exit ${lres2.exitCode} — ${meaning(lres2.exitCode)}`);
+          noteFinding(65, `[${id}] layout-audit.mjs exit ${lres2.exitCode} — ${meaning(lres2.exitCode)}`);
         }
 
         // Gate 3c — diff. Runs when geometry passed, or when geometry.mjs itself is
@@ -480,7 +526,13 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       }
     }
 
-    const pass = ['lint', 'render', 'geometry', 'diff', 'census'].every((k) => gates[k]?.status === 'pass');
+    const GATE_KEYS = ['lint', 'render', 'geometry', 'layout', 'diff', 'census'];
+    const pass = GATE_KEYS.every((k) => gates[k]?.status === 'pass');
+    // Three outcomes, never two: a screen with every gate green passes; a screen with any gate
+    // failed, timed out or missing fails; a screen whose only non-green gate is INCONCLUSIVE
+    // (exit 6) is inconclusive — not green, but nothing for the model to fix either.
+    const failedGate = GATE_KEYS.some((k) => ['fail', 'timeout', 'missing-script'].includes(gates[k]?.status));
+    const status = pass ? 'pass' : failedGate ? 'fail' : inconclusive.length || GATE_KEYS.some((k) => gates[k]?.status === 'inconclusive') ? 'inconclusive' : 'fail';
 
     // Loop-control bookkeeping — only rounds that produced a measurement count.
     let loop;
@@ -500,6 +552,9 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       mode: screen.mode ?? null,
       gates,
       pass,
+      status,
+      inconclusive,
+      manualReview,
       globalPct,
       worstTile,
       passThreshold: screen.passThreshold ?? null,
@@ -510,10 +565,14 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
   }
 
   const overallPass = Object.values(screenReports).every((s) => s.pass) && missingScripts.size === 0;
-  const firstPropagate = events.find((e) => e.code >= 2) ?? null;
+  // Exit 6 never propagates as a blocking child: a setup code wins, then a finding, then inconclusive.
+  const firstPropagate = events.find((e) => e.code >= 2 && e.code !== 6) ?? null;
+  const anyFail = Object.values(screenReports).some((s) => s.status === 'fail') || missingScripts.size > 0;
+  const anyInconclusive = Object.values(screenReports).some((s) => s.status === 'inconclusive');
   let exitCode = 0;
   if (firstPropagate) exitCode = firstPropagate.code;
-  else if (!overallPass) exitCode = 1;
+  else if (anyFail) exitCode = 1;
+  else if (anyInconclusive) exitCode = 6;
 
   const report = {
     tool: 'verify.mjs',
@@ -527,6 +586,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     firstBlockingChild: firstPropagate,
     screens: screenReports,
     pass: overallPass,
+    status: overallPass ? 'pass' : anyFail || firstPropagate ? 'fail' : 'inconclusive',
     exitCode,
     exitMeaning: meaning(exitCode),
   };
@@ -539,17 +599,19 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     if (g.status === 'skipped') return '--';
     if (g.status === 'missing-script') return 'MISSING';
     if (g.status === 'timeout') return 'TIMEOUT';
+    if (g.status === 'inconclusive') return 'INCONCLUSIVE';
     return `FAIL(${g.exitCode})`;
   };
   console.log(`verify — lock: ${lockPath}`);
   for (const [id, s] of Object.entries(screenReports)) {
     const g = s.gates;
     console.log(
-      `${s.pass ? 'PASS' : 'FAIL'}  ${id} [${s.mode ?? '?'}]  `
-      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} diff=${cell(g.diff)} census=${cell(g.census)}  `
+      `${s.status.toUpperCase()}  ${id} [${s.mode ?? '?'}]  `
+      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} layout=${cell(g.layout)} diff=${cell(g.diff)} census=${cell(g.census)}  `
       + `globalPct=${pctFmt(s.globalPct)} (pass <= ${pctFmt(s.passThreshold)})  worstTile=${pctFmt(num(s.worstTile))} (ceil ${pctFmt(s.tileCeiling)})`
     );
     for (const m of s.loop?.messages ?? []) console.log(`      ${m}`);
+    for (const m of s.inconclusive ?? []) console.log(`      inconclusive: ${m}`);
   }
   if (findings.length) {
     findings.sort((a, b) => b.severity - a.severity);

@@ -67,6 +67,7 @@ symlink (release-check refuses them), and `check` does not need one.
 | `self-time-clock-read` | film | self-time | WARN | `piece.js`: `const startedAt = Date.now()`, read and never used |
 | `layout-outside-margin` | film | layout | FAIL | `index.html`: `.source` pulled left of the frame margin by a negative margin |
 | `layout-overlap` | film | layout | WARN | `index.html`: `.unit` pulled up over the counted figure by a negative margin |
+| `continuity-jump` | film | continuity | FAIL | `piece.js`: a `frame` hook that moves `#tag` 40 px up at 2.0 s and back at 2.6 s with no easing; a pure function of `t` (determinism passes) and back in place at the scene's rest (layout passes), so only the frame-by-frame reading sees the two snaps |
 | `devices-zoom-outside-margin` | film | layout | FAIL | `piece.js`: `armZoom` given bounds a million pixels wide, so the zoom's fit bound is off and the requested scale of 2 grows the device past the frame margins and its band at the proto rest (its box reaches 13 px above the frame). The overlap with the head it also causes is the same fault and only a WARN, so nothing is tolerated |
 | `deck-step-past-last-press` | deck | loads | FAIL | `index.html`: an element on press 3 in the opening scene, which has press 1 only, so press 2 has nothing to play and the deck refuses to load |
 | `deck-identical-poses` | deck | presses | WARN | `piece.js`: `steps: [0, 1]` gives the opening scene a second press that plays no entrance, so its pose equals the one before |
@@ -82,8 +83,10 @@ fail every golden on the fonts gate unless a font binary were bundled, which the
 negative therefore has a lock of its own in `fonts/` (the same tokens, one declared family, its own derived
 `assets/`) and a one-row manifest; run it with `--manifest fixtures/motion/fonts/manifest.json` (CI runs both).
 
-**Tolerances.** Only `determinism-css-transition` tolerates a gate (`lint`), because a CSS transition is
-also a raw motion value and the lint is right to say so. The self-test counts only FAIL as a second fault.
+**Tolerances.** Two fixtures tolerate a second gate, each because that gate is right to speak: `determinism-css-transition`
+tolerates `lint` (a CSS transition is also a raw motion value), and `determinism-timer` tolerates `continuity` (a value
+moved by a 20 ms timer steps between frames, which is a jump by the frame-to-frame reading as much as a determinism
+fault). The self-test counts only FAIL as a second fault.
 
 **Goldens: what is tolerated.** All three goldens end `RESULT: PASS` with 0 errors and 0 warnings. Two lines
 are not a plain `pass`, and both are by design:

@@ -34,6 +34,7 @@ import { chromium } from 'playwright';
 import pixelmatch from 'pixelmatch';
 import pngjs from 'pngjs';
 import { PIXELMATCH_THRESHOLD } from './pixelmatch-threshold.mjs';
+import { recordBoxes, analyseContinuity } from './continuity-core.mjs';
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const ENGINE = path.dirname(path.dirname(SCRIPT));
@@ -86,7 +87,8 @@ function usage() {
     '         unambiguous. --format defaults to social-portrait (film) or slide (deck).',
     '  check  --lock L --id <id> [--json] [--budget-ms 400] [--every <s>]',
     '         gates, in order: loads · offline · fonts (exit 4) · pictures · tokens · lint · self-time · determinism ·',
-    '         layout · deck: presses, clicker · frame-time. One line each: pass|FAIL|WARN|SKIP  <name>: <detail>,',
+    '         layout · continuity (film: every frame drawn, a one-frame jump FAILs, a pop WARNs; deck: SKIP) ·',
+    '         deck: presses, clicker · frame-time. One line each: pass|FAIL|WARN|SKIP  <name>: <detail>,',
     '         then RESULT: PASS|FAIL — e error(s), w warning(s), s skipped (exit n). --json: NDJSON {"type":"gate"}',
     '         per gate, the lint child\'s {"type":"finding"} lines, one {"type":"summary"} last. --every adds a dense',
     '         film determinism probe every <s> seconds; --budget-ms is the frame-time budget (film 400, deck 34).',
@@ -554,8 +556,10 @@ function pixelsApart(a, b) {
 
 // --------------------------------------------------------------------------------------------------------- check
 
-const GATE_ORDER = ['loads', 'offline', 'fonts', 'pictures', 'tokens', 'lint', 'self-time', 'determinism', 'layout', 'presses', 'clicker', 'frame-time'];
-const MEASURING = new Set(['fonts', 'pictures', 'tokens', 'determinism', 'layout', 'presses', 'clicker', 'frame-time']);
+const GATE_ORDER = ['loads', 'offline', 'fonts', 'pictures', 'tokens', 'lint', 'self-time', 'determinism', 'layout', 'continuity', 'presses', 'clicker', 'frame-time'];
+const MEASURING = new Set(['fonts', 'pictures', 'tokens', 'determinism', 'layout', 'continuity', 'presses', 'clicker', 'frame-time']);
+// The continuity gate draws every frame; past this many samples it strides, and says so on its line.
+const CONTINUITY_MAX_SAMPLES = 360;
 
 async function cmdCheck(args) {
   const L = loadLock(args.lock);
@@ -608,6 +612,8 @@ async function cmdCheck(args) {
     await measure('determinism', async () => { shots = await determinismGate(); });
     S.net.setPhase('layout');
     await measure('layout', layoutGate);
+    S.net.setPhase('continuity');
+    await measure('continuity', continuityGate);
     if (kind === 'deck') {
       await measure('presses', async () => pressesGate(shots));
       S.net.setPhase('clicker');
@@ -781,6 +787,27 @@ async function cmdCheck(args) {
       [out.length && `outside the ${meta.margin}px margin: ${out.map((p) => `${p.where}: ${p.what} at [${p.box.join(', ')}]`).join('; ')}`,
         over.length && `overlaps: ${over.map((p) => `${p.where}: ${p.what} by ${p.by.join('×')}px (meant? data-over)`).join('; ')}`].filter(Boolean).join(' · ')
         || `${rests.length} rest pose(s) audited: everything inside the ${meta.margin}px margin, no overlap`, { problems });
+  }
+
+  // Every frame drawn in turn (a stride past CONTINUITY_MAX_SAMPLES), the box of every visible element recorded,
+  // then judged offline: a one-frame jump FAILs; an element that pops in or out WARNs; a cut is never judged.
+  async function continuityGate() {
+    if (kind !== 'film') return gate('continuity', 'SKIP', 'not measured for a deck: its beats are judged by the presses and clicker gates');
+    const stride = Math.max(1, Math.ceil(meta.frames / CONTINUITY_MAX_SAMPLES));
+    const recording = [];
+    for (let n = 0; n < meta.frames; n += stride) {
+      const scene = await drawFrame(S.page, n);
+      recording.push({ t: n / meta.fps, scene, items: await S.page.evaluate(recordBoxes) });
+    }
+    const r = analyseContinuity(recording, { fps: meta.fps, stride, cuts: meta.scenes.map((sc) => ({ start: sc.start, half: sc.cutHalf ?? 0 })) });
+    const sampled = `${r.coverage.samples} frame(s)${stride > 1 ? ` every ${stride} (${secs(stride / meta.fps)})` : ', every frame'} over ${secs(r.coverage.spanS)}`;
+    const data = { coverage: r.coverage, jumps: r.jumps, noEntrance: r.noEntrance, noExit: r.noExit };
+    if (r.coverage.status !== 'complete') return gate('continuity', 'SKIP', `inconclusive: ${r.coverage.reasons.join('; ')} (${sampled})`, data);
+    const warns = [...r.noEntrance, ...r.noExit];
+    const list = (xs) => `${xs.slice(0, 6).map((x) => oneLine(x.message, 200)).join('; ')}${xs.length > 6 ? `; and ${xs.length - 6} more (--json lists them)` : ''}`;
+    if (r.jumps.length) return gate('continuity', 'FAIL', `${r.jumps.length} jump(s) in ${sampled}: ${list(r.jumps)}${warns.length ? ` · also ${warns.length} pop(s): ${list(warns)}` : ''}`, data);
+    if (warns.length) return gate('continuity', 'WARN', `no jumps in ${sampled}; ${warns.length} element(s) appear or vanish in one frame: ${list(warns)}`, data);
+    gate('continuity', 'pass', `${sampled}: no element steps, pops in or vanishes between samples${stride > 1 ? ' (a stride can miss a step shorter than itself)' : ''}`, data);
   }
 
   function pressesGate(shots) {

@@ -2,7 +2,7 @@
 //
 // Contract: ../CONTRACT.md — §Invocation contract, §Determinism invariants (1–7), §Exit codes.
 //   node render.mjs --lock <path/to/design-lock.json> --screen <id>
-//   → writes .render/<id>.png + .render/<id>.geometry.json next to the lock.
+//   → writes .render/<id>.png + .render/<id>.geometry.json + .render/<id>.layout.json next to the lock.
 //   A screen's relative url resolves against the lock's directory; a `?query` or `#hash` on `url`
 //   is kept on the navigation and ignored for path checks.
 //
@@ -37,6 +37,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { auditLayout } from './layout-audit-core.mjs';
 
 // Determinism constants (CONTRACT §Determinism invariant 3).
 const FROZEN_EPOCH_MS = Date.UTC(2026, 0, 15, 10, 0, 0); // 2026-01-15T10:00:00Z
@@ -289,6 +290,7 @@ async function main() {
   const renderDir = path.join(lockDir, '.render');
   const pngPath = path.join(renderDir, `${screen.id}.png`);
   const geometryPath = path.join(renderDir, `${screen.id}.geometry.json`);
+  const layoutPath = path.join(renderDir, `${screen.id}.layout.json`);
 
   let browser = null;
   try {
@@ -567,6 +569,11 @@ async function main() {
     // been scoring green for weeks without its only primary action in frame.
     const documentHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
 
+    // Self-consistency layout audit (layout-audit-core.mjs), measured here because only the live
+    // page has the boxes; judged by layout-audit.mjs from the dump. A page read, so it sits before
+    // the final offline gate like every other read. The function is serialised into the page.
+    const layoutAudit = await page.evaluate(auditLayout, { screenId: screen.id });
+
     // Offline gate, final pass: after the capture and the last page read, before anything is
     // written. A request the page started after readiness (a timer, a late element) may already
     // have been blocked by the route while the frame was taken; the frame could be the degraded
@@ -605,9 +612,10 @@ async function main() {
       externalRequestCount: externalRecords.length,
     };
     await writeFile(geometryPath, `${JSON.stringify(geometry, null, 2)}\n`);
+    await writeFile(layoutPath, `${JSON.stringify({ screenId: screen.id, mode: screen.mode ?? null, url, ...layoutAudit }, null, 2)}\n`);
 
     const foundCount = figResults.filter((r) => r.found).length;
-    console.log(`render ok: ${screen.id} → ${pngPath} (${screen.captureWidth}x${screen.captureHeight} css px @ dpr ${screen.dpr}) + ${path.basename(geometryPath)} (${foundCount}/${figResults.length} figIds found, ${fontCheckResults.length} font checks passed)`);
+    console.log(`render ok: ${screen.id} → ${pngPath} (${screen.captureWidth}x${screen.captureHeight} css px @ dpr ${screen.dpr}) + ${path.basename(geometryPath)} (${foundCount}/${figResults.length} figIds found, ${fontCheckResults.length} font checks passed) + ${path.basename(layoutPath)} (${layoutAudit.findings.length} layout finding(s), ${layoutAudit.deferred.length} deferred)`);
     // A note, not a failure (observe mode never changes the exit code): on stderr so stdout's
     // `render ok:` line stays the single machine-read line it has always been.
     // The host list is capped so a page with dozens of hosts still prints one readable line; the

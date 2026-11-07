@@ -21,6 +21,15 @@
       "planted": "nothing: the clean devices film (a solo phone on a half ground, a flat row of three, a zooming prototype)"
     },
     {
+      "id": "continuity-jump",
+      "kind": "film",
+      "expect": {
+        "gate": "continuity",
+        "result": "FAIL"
+      },
+      "planted": "piece.js: a frame hook that moves #tag 40px up at 2.0 s and back at 2.6 s with no easing — deterministic and inside the margin at every rest, so only the frame-by-frame reading sees the two snaps"
+    },
+    {
       "id": "determinism-css-transition",
       "kind": "film",
       "expect": {
@@ -39,7 +48,10 @@
         "gate": "determinism",
         "result": "FAIL"
       },
-      "planted": "piece.js: a setInterval (20 ms) that moves the mark's word-spacing; its value depends on how long each frame took to shoot"
+      "planted": "piece.js: a setInterval (20 ms) that moves the mark's word-spacing; its value depends on how long each frame took to shoot",
+      "tolerate": [
+        "continuity"
+      ]
     },
     {
       "id": "determinism-wall-clock",

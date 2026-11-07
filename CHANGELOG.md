@@ -7,6 +7,35 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Layout self-consistency gate** (`scripts/layout-audit-core.mjs`, `scripts/layout-audit.mjs`;
+  `render.mjs` now also writes `.render/<screen>.layout.json`; `verify.mjs` runs the gate as
+  `layout` between geometry and the pixel diff). The geometry gate needs the lock's Figma rects
+  and skips a B2 screen by design; this gate needs no reference. It runs inside the rendered
+  page and asks whether the boxes agree with themselves: a control whose content, padding and
+  borders need more height than it has, and a container whose last child sits inside its own
+  bottom padding, are ERRORs; words under 8 px from their surface's edge, type under 10 px, a
+  number and its unit broken over two lines, one-line rows over 3.4× their type, a `[data-pane]`
+  left more than 65 % empty, one nav mixing filled and outline glyphs, an emoji standing in for an
+  icon, and a control padded on one side only are WARNs (`--strict` fails them). `data-layout-ignore`
+  opts a subtree out. The report keeps `manual[]`, what the audit does not judge. Fixtures:
+  `fixtures/layout/` (one bad/good page per rule, the golden screen clean).
+- **Exit code 6, INCONCLUSIVE** (CONTRACT §Exit codes): the tool could not judge — nothing to
+  measure, or geometry still moving when measured. Not a pass, not a finding; a finding (1) and
+  the setup codes (2–5) take precedence. `layout-audit.mjs` uses it; `verify.mjs` gives every
+  screen a `status` of `pass`, `fail` or `inconclusive` plus `manualReview[]` notes (the taste
+  gate, and what the layout audit says it cannot see), prints `INCONCLUSIVE` in the row, and
+  exits 6 only when nothing failed and some screen could not be judged. `VERIFY_SCRIPTS_DIR` is
+  verify's test seam (stub gates), proved in `fixtures/layout/verify-status.test.mjs`.
+- **Continuity gate for films** (`scripts/continuity-core.mjs`; `motion.mjs check` gate
+  `continuity`, after `layout`). Because a film is a pure function of `t`, every frame is drawn
+  in turn (a stride past 360 samples, said on the line) and the box of every visible element
+  recorded; a one-frame step of more than 2 px that is more than three times the movement either
+  side is a jump (FAIL); an element appearing at full opacity and staying put, or vanishing from
+  full opacity, in one frame is a pop (WARN). Cut windows (the kit's new `meta.scenes[].cutHalf`),
+  travel from off the frame, a reveal from under a moving plate and `data-snap` are not judged;
+  under four samples is SKIP, named inconclusive; a deck is SKIP. Planted fixture
+  `continuity-jump` in the self-test manifest.
+
 - **`phone-runnable`** (source group, ERROR and WARN; registered last in that group, after
   `export-artifacts`: the microcopy and gate-integrity sections each move one place later; 33
   sections). Opt-in per page: only an `.html` page whose `<html>` carries `data-phone-runnable`
@@ -34,6 +63,12 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   Figma file are not leftovers. Negative fixture `fixtures/lint/export-artifacts/`.
 
 ### Fixed
+
+- **`runtime/motion/devices.js` `stopsOf`**: two zoom dwells declared back to back (one ending
+  where the next begins) handed the camera over in `EPS` of the clip — a 12 px snap in
+  `golden-devices` at clip seconds 4 and 5 that no earlier gate could see. Stops with a different
+  camera now sit at least `MIN_TRAVEL` (0.04 of the clip) apart, the meeting point giving half
+  the travel to each side; the devices golden passes the continuity gate.
 
 - **`Font(...)` letter-spacing is no longer assumed to be px** (class: major for capture bundles —
   a bundle with a non-zero bare composite letter-spacing and no declared unit now exits 2 instead

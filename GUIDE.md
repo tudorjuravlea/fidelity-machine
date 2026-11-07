@@ -25,10 +25,10 @@ node scripts/verify.mjs --lock /tmp/playground/design-lock.json --screen home
 You get one line that matters:
 
 ```
-PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
+PASS  home [B2]  lint=ok render=ok geometry=ok layout=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
 ```
 
-Read it left to right: the content lint passed, the screen rendered deterministically, the layout geometry matched, the pixel diff against the reference measured 0.0000% against an allowed 0.5000%, and the colour census found no drift hiding below that diff's own cutoff. That is what "on-brand" looks like as a measurement instead of an opinion.
+Read it left to right: the content lint passed, the screen rendered deterministically, the layout geometry matched, the rendered boxes agree with themselves (no control overrunning its box, nothing sitting in its own padding), the pixel diff against the reference measured 0.0000% against an allowed 0.5000%, and the colour census found no drift hiding below that diff's own cutoff. That is what "on-brand" looks like as a measurement instead of an opinion.
 
 ## 3. Break it on purpose
 
@@ -86,7 +86,7 @@ node scripts/verify.mjs --lock /tmp/playground/design-lock.json --screen home
 ```
 
 ```
-PASS  home [B2]  lint=ok render=ok geometry=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
+PASS  home [B2]  lint=ok render=ok geometry=ok layout=ok diff=ok census=ok  globalPct=0.0000% (pass <= 0.5000%)
 ```
 
 That round trip, red with a named cause, then green with a measurement, is the entire working loop. In real use, the AI agent generates, the machine judges, the findings go back to the agent, and the loop repeats until green or until the machine says honestly that it cannot converge.

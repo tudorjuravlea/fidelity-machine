@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { zoomPose, fitOf, stopsOf, cameraAt, deviceFx, LEAD_IN, TAIL, PULLBACK_Z, TURN_DEG, LID_DEG, FIT_SHARE } from './devices.js';
+import { zoomPose, fitOf, stopsOf, cameraAt, deviceFx, LEAD_IN, TAIL, PULLBACK_Z, MIN_TRAVEL, TURN_DEG, LID_DEG, FIT_SHARE } from './devices.js';
 import { timing, rigOf, FACTORS } from './entrances.js';
 import { resolveMotion, inout } from './time.js';
 
@@ -74,6 +74,25 @@ test('a pull-back beat only between segments more than PULLBACK_GAP of the clip 
   near(back.t, 0.4); assert.equal(back.u, 0.5);
   const close = stopsOf([{ t0: 1, t1: 2, u: 0.2, v: 0.2, z: 1.5 }, { t0: 2.5, t1: 3.5, u: 0.8, v: 0.8, z: 1.5 }], 10);
   assert.equal(close.some(s => s.z === PULLBACK_Z), false);
+});
+
+test('back-to-back segments still get a travel: the camera never jumps between two dwells', () => {
+  // two dwells meeting at second 4 of a 10 s clip: the move from one to the other takes MIN_TRAVEL of the clip,
+  // split either side of the meeting point, so no two consecutive stops with a different camera are EPS apart
+  const stops = stopsOf([{ t0: 3, t1: 4, u: 0.5, v: 0.97, z: 1.5 }, { t0: 4, t1: 5, u: 0.37, v: 0.74, z: 1.8 }], 10);
+  for (let i = 1; i < stops.length; i++) {
+    const a = stops[i - 1], b = stops[i];
+    const moves = a.u !== b.u || a.v !== b.v || a.z !== b.z;
+    if (moves) assert.ok(b.t - a.t >= MIN_TRAVEL - 1e-9, `stops ${i - 1}→${i} travel over ${b.t - a.t} of the clip, under MIN_TRAVEL`);
+  }
+  const leave = stops.findIndex(s => s.u === 0.5 && s.t > 0.3), arrive = stops.findIndex(s => s.u === 0.37);
+  near(stops[leave].t, 0.4 - MIN_TRAVEL / 2); near(stops[arrive].t, 0.4 + MIN_TRAVEL / 2);
+  // and the travel is a move, not a step: the camera half-way between is half-way between
+  const mid = cameraAt(stops, 0.4);
+  near(mid.u, 0.5 + (0.37 - 0.5) * inout(0.5));
+  // a dwell shorter than the travel it needs keeps its order; the stops stay strictly increasing
+  const tight = stopsOf([{ t0: 3, t1: 3.1, u: 0.2, v: 0.2, z: 1.5 }, { t0: 3.1, t1: 3.2, u: 0.8, v: 0.8, z: 1.5 }, { t0: 3.2, t1: 3.3, u: 0.4, v: 0.4, z: 1.5 }], 10);
+  for (let i = 1; i < tight.length; i++) assert.ok(tight[i].t > tight[i - 1].t, 'stops are strictly increasing');
 });
 
 test('the camera sits on a stop exactly, eases inout between two, and rests after the last', () => {

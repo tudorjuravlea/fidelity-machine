@@ -25,6 +25,7 @@ import { clamp, ramp, inout } from './time.js';
 export const LEAD_IN = 0.08, TAIL = 0.12;   // fractions of the clip no segment may enter
 export const PULLBACK_GAP = 0.08;            // a gap longer than this fraction of the clip earns a pull-back beat
 export const PULLBACK_Z = 1.08;              // how far the pull-back comes out, relative to rest
+export const MIN_TRAVEL = 0.04;              // the least a move between two different camera stops may take, as a fraction of the clip
 export const FIT_SHARE = 0.99;               // the fit scale keeps 1 % of the room for a tilted device's near edge
 export const TURN_DEG = 24;                  // a turn entrance starts this much further round than the rest tilt
 export const LID_DEG = 80;                   // a notebook's lid starts tipped back this far
@@ -57,7 +58,10 @@ export function zoomPose(rest, screen, point, room, zoom) {
 }
 
 // The camera stops of a clip, as fractions of its length: rest, each segment's dwell (clamped into the lead-in and
-// the tail), a pull-back in every long gap, rest again. Stops that would collide are separated by EPS.
+// the tail), a pull-back in every long gap, rest again. Stops that would collide are separated by EPS. Two stops with
+// a different camera never sit closer than MIN_TRAVEL: two dwells declared back to back (one ending where the next
+// begins) would otherwise hand the camera over in zero time, a snap no eased curve can hide, so the meeting point
+// gives half the travel to each side.
 export function stopsOf(segments, duration) {
   const d = duration > 0 ? duration : 1;
   const inner = t => clamp(t, LEAD_IN, 1 - TAIL);
@@ -71,6 +75,16 @@ export function stopsOf(segments, duration) {
   });
   stops.push({ t: 1, u: 0.5, v: 0.5, z: 1 });
   stops.sort((a, b) => a.t - b.t);
+  const same = (a, b) => a.u === b.u && a.v === b.v && a.z === b.z;
+  for (let i = 1; i < stops.length - 1; i++) {
+    const a = stops[i - 1], b = stops[i];
+    if (same(a, b) || b.t - a.t >= MIN_TRAVEL) continue;
+    // open the travel around the meeting point, never past the stop before or the stop after
+    const mid = (a.t + b.t) / 2;
+    const lo = i >= 2 ? stops[i - 2].t + EPS : 0, hi = stops[i + 1].t - EPS;
+    a.t = Math.max(lo, mid - MIN_TRAVEL / 2);
+    b.t = Math.min(hi, mid + MIN_TRAVEL / 2);
+  }
   for (let i = 1; i < stops.length - 1; i++) if (stops[i].t <= stops[i - 1].t) stops[i].t = stops[i - 1].t + EPS;
   return stops;
 }
