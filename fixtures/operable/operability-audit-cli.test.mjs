@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -188,15 +188,25 @@ test('the lock schema takes screens[].operable as a boolean and nothing else', (
 });
 
 test('verify runs the real audit on a screen that declares operable, and reports the gate with its report file', () => {
+  // The golden lock asks for a font only macOS has, and render.mjs refuses to draw a fallback (exit
+  // 4), which would skip every later gate on another platform. So the other gates are stubs here
+  // (verify's test seam) and only the audit is the real script: it needs no host font.
   const { dir, lockPath } = goldenCopy((lock) => { lock.screens[0].operable = true; });
-  const r = spawnSync(process.execPath, [path.join(ENGINE, 'scripts', 'verify.mjs'), '--lock', lockPath], { encoding: 'utf8' });
+  const stubs = path.join(dir, 'stubs');
+  mkdirSync(stubs);
+  for (const gate of ['adherence-lint.mjs', 'render.mjs', 'geometry.mjs', 'layout-audit.mjs', 'diff.mjs', 'colour-census.mjs']) {
+    writeFileSync(path.join(stubs, gate), 'process.exit(0);\n');
+  }
+  writeFileSync(path.join(stubs, 'operability-audit.mjs'),
+    `import { spawnSync } from 'node:child_process';\nconst r = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...process.argv.slice(2)], { stdio: 'inherit' });\nprocess.exit(r.status ?? 2);\n`);
+  const r = spawnSync(process.execPath, [path.join(ENGINE, 'scripts', 'verify.mjs'), '--lock', lockPath], { encoding: 'utf8', env: { ...process.env, VERIFY_SCRIPTS_DIR: stubs } });
   const report = JSON.parse(readFileSync(path.join(dir, '.report', 'verify-report.json'), 'utf8'));
   const gate = report.screens.home.gates.operable;
   const own = JSON.parse(readFileSync(path.join(dir, '.report', 'home.operable.json'), 'utf8'));
   rmSync(dir, { recursive: true, force: true });
-  // The pixel gate's reference is platform-bound, so only the operability gate is asserted here.
   assert.equal(gate.status, 'pass', r.stdout + r.stderr);
   assert.equal(gate.report, '.report/home.operable.json');
   assert.equal(own.status, 'pass');
-  assert.match(r.stdout, /layout=\S+ operable=ok diff=/);
+  assert.equal(own.checked.controls, 1, 'the report is the real audit\'s, of the real golden screen');
+  assert.match(r.stdout, /layout=ok operable=ok diff=ok/);
 });

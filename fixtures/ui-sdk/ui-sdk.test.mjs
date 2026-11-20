@@ -155,6 +155,10 @@ test('wrapping the golden screen\'s button in the runtime changes its behaviour 
     const dir = tmp();
     cpSync(path.join(ENGINE, 'fixtures', 'golden'), dir, { recursive: true });
     const lock = path.join(dir, 'design-lock.json');
+    // The golden lock asks for a font only macOS has, and render.mjs refuses a fallback (exit 4).
+    // This test compares two renders on one machine, so the font requirement is dropped from the
+    // copy: both renders then use the same fallback, whatever the platform.
+    writeFileSync(lock, JSON.stringify({ ...JSON.parse(readFileSync(lock, 'utf8')), fonts: [] }));
     if (wrap) {
       assert.equal(run('link', '--lock', lock).status, 0);
       const file = path.join(dir, 'screen-home.html');
