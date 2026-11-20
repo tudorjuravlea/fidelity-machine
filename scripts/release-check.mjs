@@ -32,6 +32,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync,
 } from 'node:fs';
@@ -208,14 +209,29 @@ section('1. Brand leakage');
       re: /(?<![A-Za-z0-9])(?:(?:[Tt]he|[Aa]n?|[Oo]ur|[Yy]our)[*_]{0,2}\s+[*_]{0,2}(?:[Tt]he|an?)|[Nn]o[*_]{0,2}\s+[*_]{0,2}[Tt]he|[Pp]roduct[*_]{0,2}\s+[*_]{0,2}[Pp]roduct|[Pp]latform[*_]{0,2}\s+[*_]{0,2}[Pp]latform|[Tt]ool[*_]{0,2}\s+[*_]{0,2}[Tt]ool|[Ss]ervice[*_]{0,2}\s+[*_]{0,2}[Ss]ervice)(?![A-Za-z0-9])/ },
   ];
   const PATTERN_CARVE_OUT = 'scripts/release-check.mjs'; // FILES paths are posix-normalized
+  // Second carve-out, by hash rather than by name: runtime/ui-sdk/ is a copy of published
+  // third-party code (scripts/ui-sdk.mjs, NOTICE), and minified code is full of shapes these
+  // classes read as hosts (`e.local`, `t.internal`). A file there is left out of the pattern
+  // classes only while its sha256 is the one VENDORED.json recorded; an edited or added file is
+  // read like any other. The literal ban-list scan still reads every one of them.
+  const VENDORED_DIR = 'runtime/ui-sdk/';
+  const vendored = new Set();
+  try {
+    const recorded = JSON.parse(readFileSync(path.join(ENGINE, VENDORED_DIR, 'VENDORED.json'), 'utf8')).files ?? {};
+    for (const [file, hash] of Object.entries(recorded)) {
+      const rel = VENDORED_DIR + file;
+      if (FILES.includes(rel) && createHash('sha256').update(readFileSync(path.join(ENGINE, rel))).digest('hex') === hash) vendored.add(rel);
+    }
+  } catch { /* no vendored runtime, or an unreadable manifest: nothing is carved out */ }
   const textFiles = FILES.filter(isText);
   p(`  scanning ${textFiles.length} text files (${FILES.length - textFiles.length} binary skipped) for ${terms.length} banned terms: ${terms.join(', ')}`);
   p(`  pattern classes: ${PATTERN_CLASSES.map((c) => (c.scope ? `${c.label} (${c.scope.join('/')} only)` : c.label)).join(', ')} (carve-out: ${PATTERN_CARVE_OUT} — it defines these regexes and would self-flag)`);
+  if (vendored.size) p(`  ${VENDORED_DIR}: ${vendored.size} vendored file(s) match VENDORED.json and are left out of the pattern classes (the ban list still reads them)`);
   const hits = [];
   for (const rel of textFiles) {
     const lines = readFileSync(path.join(ENGINE, rel), 'utf8').split(/\r?\n/);
     const ext = path.extname(rel).toLowerCase();
-    const classesHere = rel === PATTERN_CARVE_OUT ? [] : PATTERN_CLASSES.filter((c) => (!c.scope || c.scope.includes(ext)) && !(c.exempt ?? []).includes(rel));
+    const classesHere = rel === PATTERN_CARVE_OUT || vendored.has(rel) ? [] : PATTERN_CLASSES.filter((c) => (!c.scope || c.scope.includes(ext)) && !(c.exempt ?? []).includes(rel));
     lines.forEach((line, i) => {
       const matched = matchers.filter((m) => m.re.test(line)).map((m) => m.term);
       for (const c of classesHere) if (c.re.test(line)) matched.push(`class:${c.label}`);

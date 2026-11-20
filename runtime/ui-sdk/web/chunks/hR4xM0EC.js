@@ -1,0 +1,1 @@
+function e(e,t,n,r){let i=()=>{Array.from(e.querySelectorAll(n)).filter(t=>t.closest(e.localName)===e).forEach((e,n)=>{if(!(`text`in e.dataset)&&e.childNodes.length)return;e.dataset.text=``;let i=r(e,t,n);e.textContent!==i&&(e.textContent=i)})},a=t.subscribe(i);return queueMicrotask(i),a}export{e as t};

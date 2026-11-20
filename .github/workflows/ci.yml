@@ -46,6 +46,9 @@ jobs:
       - run: node --test "fixtures/capture/*.test.mjs"
       - run: node --test "fixtures/lint/*.test.mjs"
       - run: node --test "fixtures/layout/*.test.mjs"
+      - run: node --test "fixtures/operable/*.test.mjs"
+      - run: node scripts/ui-sdk.mjs verify
+      - run: node --test "fixtures/ui-sdk/*.test.mjs"
       - run: node --test "fixtures/motion/*.test.mjs"
       - run: node scripts/motion.mjs --self-test
       - run: node scripts/motion.mjs --self-test --manifest fixtures/motion/fonts/manifest.json

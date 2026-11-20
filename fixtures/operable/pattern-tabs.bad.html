@@ -1,0 +1,21 @@
+<!DOCTYPE html><html lang="en" data-render-ready><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}[role=tablist]{display:flex;gap:4px}[role=tab]{font:inherit;padding:6px 12px;border:1px solid #c9c6bd;background:#fff;border-radius:6px}[role=tab][aria-selected=true]{background:#0f5132;color:#fff}[role=tabpanel]{margin-top:12px;padding:12px;border:1px solid #c9c6bd;width:320px}</style></head><body>
+<div role="tablist" aria-label="Account sections">
+  <button type="button" role="tab" id="t-overview" aria-selected="true" aria-controls="p-overview" tabindex="0">Overview</button>
+  <button type="button" role="tab" id="t-activity" aria-selected="false" aria-controls="p-activity" tabindex="0">Activity</button>
+  <button type="button" role="tab" id="t-limits" aria-selected="false" aria-controls="p-limits" tabindex="0">Limits</button>
+</div>
+<div role="tabpanel" id="p-overview" aria-labelledby="t-overview" tabindex="0">Balance and recent totals.</div>
+<div role="tabpanel" id="p-activity" aria-labelledby="t-activity" tabindex="0" hidden>Every movement this month.</div>
+<div role="tabpanel" id="p-limits" aria-labelledby="t-limits" tabindex="0" hidden>Daily and monthly limits.</div>
+<script>
+const tabs = [...document.querySelectorAll('[role=tab]')];
+const select = (tab) => {
+  for (const t of tabs) {
+    const on = t === tab;
+    t.setAttribute('aria-selected', String(on));
+    document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+  }
+};
+for (const tab of tabs) tab.addEventListener('click', () => select(tab));
+</script>
+</body></html>

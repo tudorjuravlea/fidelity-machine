@@ -436,6 +436,10 @@
           "id": {
             "type": "string"
           },
+          "operable": {
+            "type": "boolean",
+            "description": "true = this screen is meant to be operated (a clickable prototype, a web page), so verify.mjs also runs operability-audit.mjs on it as a gate: every control named, every id reference landing, nothing that answers a click out of the keyboard's reach, a visible focus, and the keys of every widget driven by the pattern checker. Omit it for a poster, a slide or any screen that is a picture: such a page has nothing to operate."
+          },
           "mode": {
             "enum": [
               "A",

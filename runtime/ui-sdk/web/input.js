@@ -1,0 +1,1 @@
+import{n as e,r as t,t as n}from"./chunks/MLXyr6tU.js";n(),e();export{t as createInputController};

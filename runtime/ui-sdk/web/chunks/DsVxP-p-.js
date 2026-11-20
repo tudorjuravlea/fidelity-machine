@@ -1,0 +1,1 @@
+function e(e,t,n){let r=r=>{for(let i of n){let n=e.getAttribute(i);n!==null&&((!r||!t.hasAttribute(i))&&t.setAttribute(i,n),e.removeAttribute(i))}};r(!0),new MutationObserver(()=>r(!1)).observe(e,{attributeFilter:[...n]})}export{e as t};

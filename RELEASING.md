@@ -13,6 +13,10 @@ none of these steps excuses a red script.
    `--ban <term>` (repeatable) or `--ban-file <path>` (one extra banned term per line) for
    client and system names the built-in sweep cannot know. Do not use `--skip-fresh` on a
    release run — the fresh-install simulation is the point.
+   The vendored behaviour runtime is part of the release: `node scripts/ui-sdk.mjs verify`
+   must pass (the copy is what was vendored), and `node scripts/ui-sdk.mjs outdated` says
+   whether a newer one is published. Moving to it is a change of its own, tested and
+   written in the changelog, never slipped into a release commit.
 3. **Version and changelog move together.** One commit bumps the version and writes the
    changelog entry (what changed, why, compatibility impact per CONTRACT.md §Change
    classes); the git tag matches the version exactly. Never tag first and document later.

@@ -10,8 +10,11 @@
  *   3. render.mjs → geometry.mjs (structure before pixels; exits 0 on all-no-ground-truth
  *      B2 screens) → layout-audit.mjs (self-consistency of the rendered boxes, no ground
  *      truth needed; it may come back INCONCLUSIVE, exit 6, when the page was still moving
- *      or offered nothing to measure) → diff.mjs (pixel gate) → colour-census.mjs (colour
- *      drift below the pixel gate's cutoff; runs whenever diff ran).
+ *      or offered nothing to measure) → operability-audit.mjs, only for a screen the lock
+ *      declares `operable: true` (every control named, reachable and visibly focused from the
+ *      keyboard, the keys of its widgets driven; it does not gate the diff) → diff.mjs (pixel
+ *      gate) → colour-census.mjs (colour drift below the pixel gate's cutoff; runs whenever
+ *      diff ran).
  * A failed gate short-circuits the later gates for that screen; the ordering is the
  * priority, not only a sequence. One exception: the colour census runs whenever diff ran,
  * pass or fail, because it is an independent signal (drift the pixel metric cannot score),
@@ -68,6 +71,7 @@ const GATE_SCRIPTS = {
   render: 'render.mjs',
   geometry: 'geometry.mjs',
   layout: 'layout-audit.mjs',
+  operable: 'operability-audit.mjs',
   diff: 'diff.mjs',
   census: 'colour-census.mjs',
 };
@@ -333,6 +337,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
 
   for (const screen of screens) {
     const id = screen.id;
+    const operable = screen.operable === true;
     const gates = {};
     const blockers = [];
     const inconclusive = [];      // why this screen could not be judged (exit-6 gates)
@@ -372,6 +377,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       gates.render = skippedGate('skipped — content/compliance gate blocked this screen (three-gate ordering: content > taste > geometry/pixels)');
       gates.geometry = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.layout = skippedGate('skipped — content/compliance gate blocked this screen');
+      if (operable) gates.operable = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.diff = skippedGate('skipped — content/compliance gate blocked this screen');
       gates.census = skippedGate('skipped, content/compliance gate blocked this screen');
     } else {
@@ -402,6 +408,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       if (!renderOk) {
         gates.geometry = skippedGate('skipped — render produced no output (.render/*.png + geometry dump required)');
         gates.layout = skippedGate('skipped — render produced no output (.render/*.layout.json required)');
+        if (operable) gates.operable = skippedGate('skipped — render produced no output');
         gates.diff = skippedGate('skipped — render produced no output');
         gates.census = skippedGate('skipped, render produced no output');
       } else {
@@ -456,6 +463,39 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
           noteEvent(lres2.exitCode, GATE_SCRIPTS.layout, id);
           blockers.push(`layout-audit.mjs exit ${lres2.exitCode} — ${meaning(lres2.exitCode)}`);
           noteFinding(65, `[${id}] layout-audit.mjs exit ${lres2.exitCode} — ${meaning(lres2.exitCode)}`);
+        }
+
+        // Gate 3b'', operability (CONTRACT §Invocation contract, operability-audit.mjs), only for a
+        // screen the lock declares `operable: true`: a poster has nothing to operate, a screen
+        // meant to be used must not ship unless it can be. It renders the page itself, needs no
+        // ground truth and does not gate the diff. Exit 6 (nothing to operate, or a Tab walk or
+        // a pattern check that could not finish) is INCONCLUSIVE, as for the layout gate.
+        if (operable) {
+          const ores = runChild(GATE_SCRIPTS.operable, ['--lock', lockPath, '--screen', id]);
+          gates.operable = gateFromChild(ores);
+          const operableReport = readJsonSafe(path.join(reportDir, `${id}.operable.json`));
+          if (operableReport) {
+            gates.operable.report = `.report/${id}.operable.json`;
+            for (const m of operableReport.manual ?? []) manualReview.push(`operability-audit: ${m}`);
+          }
+          if (ores.missing) {
+            missingScripts.add(GATE_SCRIPTS.operable);
+            noteEvent(2, GATE_SCRIPTS.operable, id);
+            blockers.push(`setup: ${GATE_SCRIPTS.operable} is missing — operability gate could not run`);
+            noteFinding(70, `[${id}] missing script ${GATE_SCRIPTS.operable} (expected in ${SCRIPTS_DIR})`);
+          } else if (ores.exitCode === 1) {
+            const n = Array.isArray(operableReport?.findings) ? operableReport.findings.filter((f) => f.level === 'ERROR').length : null;
+            blockers.push(`operability gate: ${n ?? '>=1'} error(s) — a control without a name, a reference to nothing, something a keyboard cannot reach or see, or a widget whose keys do not work; see .report/${id}.operable.json`);
+            noteFinding(29, `[${id}] operability gate failed — ${n ?? '>=1'} error(s); fix the elements named in .report/${id}.operable.json`);
+          } else if (ores.exitCode === 6) {
+            const why = Array.isArray(operableReport?.inconclusiveReasons) ? operableReport.inconclusiveReasons.join('; ') : 'see .report/' + id + '.operable.json';
+            inconclusive.push(`operability gate: ${why}`);
+            noteFinding(12, `[${id}] operability gate inconclusive — ${why}`);
+          } else if (ores.exitCode !== 0) {
+            noteEvent(ores.exitCode, GATE_SCRIPTS.operable, id);
+            blockers.push(`operability-audit.mjs exit ${ores.exitCode} — ${meaning(ores.exitCode)}`);
+            noteFinding(65, `[${id}] operability-audit.mjs exit ${ores.exitCode} — ${meaning(ores.exitCode)}`);
+          }
         }
 
         // Gate 3c — diff. Runs when geometry passed, or when geometry.mjs itself is
@@ -526,7 +566,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
       }
     }
 
-    const GATE_KEYS = ['lint', 'render', 'geometry', 'layout', 'diff', 'census'];
+    const GATE_KEYS = ['lint', 'render', 'geometry', 'layout', ...(operable ? ['operable'] : []), 'diff', 'census'];
     const pass = GATE_KEYS.every((k) => gates[k]?.status === 'pass');
     // Three outcomes, never two: a screen with every gate green passes; a screen with any gate
     // failed, timed out or missing fails; a screen whose only non-green gate is INCONCLUSIVE
@@ -607,7 +647,7 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     const g = s.gates;
     console.log(
       `${s.status.toUpperCase()}  ${id} [${s.mode ?? '?'}]  `
-      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} layout=${cell(g.layout)} diff=${cell(g.diff)} census=${cell(g.census)}  `
+      + `lint=${cell(g.lint)} render=${cell(g.render)} geometry=${cell(g.geometry)} layout=${cell(g.layout)}${g.operable ? ` operable=${cell(g.operable)}` : ''} diff=${cell(g.diff)} census=${cell(g.census)}  `
       + `globalPct=${pctFmt(s.globalPct)} (pass <= ${pctFmt(s.passThreshold)})  worstTile=${pctFmt(num(s.worstTile))} (ceil ${pctFmt(s.tileCeiling)})`
     );
     for (const m of s.loop?.messages ?? []) console.log(`      ${m}`);

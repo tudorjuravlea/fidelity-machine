@@ -1,0 +1,1 @@
+import{r as e,t}from"./chunks/CQBW4QWJ.js";t();export{e as createMenubarController};

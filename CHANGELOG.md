@@ -7,6 +7,52 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Behaviour kit: a vendored runtime and its checker** (`runtime/ui-sdk/`, `scripts/ui-sdk.mjs`,
+  `references/behavior-kit.md`; UI SDK by Vercel, Apache-2.0, pinned at 0.1.0-beta.10, credited
+  in NOTICE). The engine proved how a screen looks and nothing about what it does. The runtime's
+  headless elements wrap a design system's own markup and write the role, the ARIA, the tab
+  stops and the state onto it, while every class, token and pixel stays the lock's: the tests
+  wrap the golden screen's button and the two screenshots are the same bytes. `ui-sdk.mjs link`
+  puts the runtime inside a capture so it loads from the lock's own tree and renders under an
+  offline lock; `verify` holds the copy to recorded hashes; `outdated` and `update` move it to a
+  newer release. Its default stylesheet is left out on purpose. `operability-audit.mjs` gains a
+  pattern pass, on by default: every tab list, radio group, toolbar, tree, listbox, combobox,
+  slider, switch, checkbox, menubar, open menu and open dialog with an authored role is handed
+  to the runtime's own checker, which presses the pattern's keys and reports where focus and
+  state did not follow, as `pattern-<name>` ERRORs. The checker reads only roles, ARIA, tabindex
+  and focus, so hand-written markup is judged the same way: hand-made tabs that rove, wrap and
+  answer Home and End pass, and a role that only looks like a widget fails. `--no-patterns`
+  leaves the pass out for a screen that is meant to be a picture. A component library written
+  in React takes the same behaviour from `@ui-sdk/react`, an exact-version dependency that
+  `build-component-fixture.mjs` bundles into the fixture page; `ui-sdk.mjs verify` fails when
+  that pin and the vendored version differ. Known gap in this version, written in the reference
+  and pinned by a test that will fail when upstream closes it: a radio group inside `ui-field`
+  is not named by the field's label. The audit's `unnamed-group` rule catches it.
+- **Operability as a ship gate, per screen** (`design-lock.schema.json` `screens[].operable`,
+  `verify.mjs`). A screen that declares `"operable": true` takes `operability-audit.mjs` as a
+  gate after layout and before the pixel diff, and its row shows `operable=`. A finding fails
+  the screen, an audit that had nothing to operate makes it INCONCLUSIVE, and the diff still
+  runs. A screen that does not declare it is not audited and its row is unchanged.
+- **Rendered operability audit** (`scripts/operability-core.mjs`, `scripts/operability-audit.mjs`).
+  The `a11y` lint section reads the source; this renders the screen in the pinned Chromium and
+  reads what the browser built, with no ground truth and nothing from the lock but where the
+  screen is and how big, so it holds for any design system. ERRORs: a control whose computed
+  accessible name is empty; an id reference that points nowhere (`aria-labelledby`, `label[for]`,
+  `aria-controls` unless the trigger is collapsed, `aria-owns`, `aria-activedescendant`,
+  `aria-errormessage`); a radio group, tab list, listbox, tree, grid or dialog role exposed
+  with no name, read from the browser's accessibility tree; an explicit role missing the state
+  its pattern cannot work without
+  (`aria-checked`, `aria-expanded`, `aria-valuenow`); a `tab`, `option`, menu item or `treeitem`
+  outside its container role; an element that answers a click and cannot be reached from the
+  keyboard; a Tab stop on a control where fewer than 24 px of the page change when it has focus
+  (the page is photographed focused and not focused at every stop). A dangling
+  `aria-describedby` is a WARN (`--strict` fails it). `data-operable-ignore` opts a subtree out.
+  Exit 6 when the page has nothing to operate or the Tab walk was cut at `--max-stops`; exit 5
+  when the page does not load or never becomes ready. The report keeps `manual[]`, what it does not judge: the keys inside a
+  composite, focus on open and close, screen reader output, contrast, any state but the rendered
+  one, a text caret as a focus indicator, shadow roots and iframes. Fixtures: `fixtures/operable/`
+  (one bad/good page per rule, the golden screen clean; the tests were checked by breaking the
+  audit one line at a time: 48 breaks, each caught by a test).
 - **Layout self-consistency gate** (`scripts/layout-audit-core.mjs`, `scripts/layout-audit.mjs`;
   `render.mjs` now also writes `.render/<screen>.layout.json`; `verify.mjs` runs the gate as
   `layout` between geometry and the pixel diff). The geometry gate needs the lock's Figma rects

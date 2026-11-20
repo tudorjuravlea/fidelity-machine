@@ -46,6 +46,13 @@ David Aerne (meodai), CC-BY-4.0 for the curation
 (https://github.com/meodai/skill.color-expert); the scientific claims remain their
 original authors'.
 
+runtime/ui-sdk/ is a copy of UI SDK (the browser build of @ui-sdk/web, and the testing kit of
+@ui-sdk/core bundled into one script), Copyright 2026 Vercel, Inc., Apache License 2.0
+(https://github.com/vercel-labs/ui); the licence text is runtime/ui-sdk/LICENSE and the
+version, package integrity and per-file hashes are in runtime/ui-sdk/VENDORED.json.
+runtime/ui-sdk/COMPOSITION.md is cut from the documentation shipped in @ui-sdk/web.
+scripts/operability-core.mjs runs that testing kit's checkPattern on rendered pages.
+
 skill-scaffold/root/evals/HARNESS.md and skill-scaffold/root/evals/tasks.json adapt the
 before/after correction-experiment methodology from @shadcn/lint,
 Copyright (c) 2026 shadcn, MIT License

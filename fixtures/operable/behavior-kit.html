@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>operable fixture: the vendored runtime around our own markup</title>
+<script type="module" src="../../runtime/ui-sdk/web.js"></script>
+<style>
+  :root { --accent: #0f5132; --surface: #fff; --line: #c9c6bd; --text: #1c1b18; --radius: 8px; }
+  body { margin: 24px; font: 14px/20px Arial, sans-serif; color: var(--text); background: #f7f6f3; }
+  :focus-visible { outline: 2px solid #1a56db; outline-offset: 2px; }
+  .segments { display: inline-flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .segments button { font: inherit; border: 0; background: transparent; padding: 6px 12px; border-radius: 6px; color: var(--text); }
+  .segments button[data-selected] { background: var(--accent); color: #fff; }
+  .panel { display: block; margin-top: 12px; padding: 12px; width: 320px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .panel[hidden] { display: none; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+  .toggle { display: inline-block; position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line); }
+  .toggle[data-checked] { background: var(--accent); }
+  .knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+  .toggle[data-checked] .knob { left: 18px; }
+  .choices { display: flex; gap: 16px; margin-top: 8px; }
+  .choices label { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { display: inline-block; position: relative; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); }
+  .dot[data-checked] { border-color: var(--accent); }
+  .dot ui-radio-indicator { display: block; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+  .dot ui-radio-indicator[hidden] { display: none; }
+</style>
+</head>
+<body>
+<ui-tabs default-value="overview">
+  <ui-tabs-list class="segments" aria-label="Account sections">
+    <ui-tabs-tab value="overview"><button type="button">Overview</button></ui-tabs-tab>
+    <ui-tabs-tab value="activity"><button type="button">Activity</button></ui-tabs-tab>
+    <ui-tabs-tab value="limits"><button type="button">Limits</button></ui-tabs-tab>
+  </ui-tabs-list>
+  <ui-tabs-panel class="panel" value="overview">Balance and recent totals.</ui-tabs-panel>
+  <ui-tabs-panel class="panel" value="activity">Every movement this month.</ui-tabs-panel>
+  <ui-tabs-panel class="panel" value="limits">Daily and monthly limits.</ui-tabs-panel>
+</ui-tabs>
+
+<label class="row">Notifications
+  <ui-switch class="toggle"><ui-switch-thumb class="knob"></ui-switch-thumb></ui-switch>
+</label>
+
+<p class="row" id="format-label">Statement format</p>
+<ui-radio-group class="choices" default-value="pdf" aria-labelledby="format-label">
+  <label><ui-radio class="dot" value="pdf"><ui-radio-indicator></ui-radio-indicator></ui-radio> PDF</label>
+  <label><ui-radio class="dot" value="csv"><ui-radio-indicator></ui-radio-indicator></ui-radio> CSV</label>
+</ui-radio-group>
+
+<p class="row"><ui-button><button type="button" class="save">Save</button></ui-button></p>
+
+<script type="module">
+  const tags = [...new Set([...document.querySelectorAll('*')].map((el) => el.localName).filter((name) => name.startsWith('ui-')))];
+  await Promise.all(tags.map((tag) => customElements.whenDefined(tag)));
+  await document.fonts.ready;
+  requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.setAttribute('data-render-ready', '')));
+</script>
+</body>
+</html>

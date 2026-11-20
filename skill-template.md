@@ -136,6 +136,21 @@ Max 1–2 ethical nudges; dark patterns banned outright.
    cannot see. Net-new screens without a reference: gates 1–2 + render + visual review carry
    it, say so plainly.
 
+A screen meant to be operated (a clickable prototype, a web page, not a poster or a slide)
+declares `"operable": true` on its lock screen, and verify then runs `operability-audit.mjs` on it
+as a gate (`operable=` in its row); run it alone with `--lock <lock> --screen <id>`: every control
+named, every id reference landing, nothing that answers a click out of the keyboard's reach,
+something painted when a control has focus, and the keys of every tab list, menu, dialog and
+switch driven by a pattern checker. Exit 6 means the page had nothing to operate. It audits the
+rendered state only: open a menu or a dialog in the page before auditing it, and say in the
+report which states were not opened. A role that only looks like a widget fails it. Give the
+system's own markup real behaviour with the vendored runtime instead of hand-rolling keys and
+focus: `ENGINE/references/behavior-kit.md` (link it with `ui-sdk.mjs link`, wrap, style from
+state, re-run the pixel gate: a wrap must not move a pixel). A library component written in
+React imports the same parts from `@ui-sdk/react/<component>`, which the engine pins and
+`build-component-fixture.mjs` bundles: the behaviour goes inside the component, once, never
+around it on each screen.
+
 Loop ≤4 rounds, best-so-far, revert regressions, STOP honestly on no progress. Threshold caps
 are law — a stubborn screen gets diagnosed (`ENGINE/references/pixel-diff-tuning.md`), never a
 looser gate.

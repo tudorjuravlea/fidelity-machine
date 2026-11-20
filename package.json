@@ -4,6 +4,8 @@
   "description": "fidelity-machine \u2014 a machine-verified ship gate for design-system work: capture a frozen design lock, generate visuals against it, and refuse anything off-system (render, geometry, pixel-diff, content and microcopy lint).",
   "type": "module",
   "dependencies": {
+    "@ui-sdk/core": "0.1.0-beta.10",
+    "@ui-sdk/react": "0.1.0-beta.10",
     "esbuild": "^0.28.1",
     "pixelmatch": "^7.2.0",
     "playwright": "^1.61.1",

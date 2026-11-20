@@ -1,0 +1,1 @@
+import{ft as e}from"./C59yJGP2.js";import{t}from"./D52wcz_K.js";const n=e=>!!e.props.disabled?.(),r=e=>e.props.focusable?.()??!0;function i(e){let t=!1;return()=>{t||(t=!0,queueMicrotask(()=>{t=!1,e()}))}}const a={stop:!0};function o(n,r,i){let o=[e(n,a,i),t(n,`stop`,r,i),t(n,`stop`,null,i)];return()=>o.forEach(e=>e())}export{i,n,r,o as t};
