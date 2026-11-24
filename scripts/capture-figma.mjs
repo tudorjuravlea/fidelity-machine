@@ -181,6 +181,10 @@ Expected capture.json shape (only "variableDefs" is required):
                                            // Figma's MCP drops it; read one text style's unit in Figma.
                                            // Required when any Font(...) composite has a non-zero bare
                                            // letterSpacing (exit 2 otherwise); an inline "%"/"px" wins.
+  "variableScopes": {                      // optional: Plugin API Variable.scopes per variableDefs key, as written by
+    "Size/Control": ["CORNER_RADIUS"]      // runtime/figma/inventory.js. A numeric value no name family claims is routed
+  },                                       // by scope (CORNER_RADIUS -> radii, GAP -> spacing); a family that disagrees
+                                           // with the declared scopes is warned, never failed. Any other shape: exit 2.
   "variableDefs": {                        // Figma get_variable_defs, flat name -> value
     "color/light/background": "#F7F6F3",
     "color/dark/background": "#171613",
@@ -256,7 +260,9 @@ Token-name mapping heuristics (variableDefs name -> lock tokens):
   A duration slot "ease-x" next to an easing slot "x" would both be --motion-ease-x in
   tokens.css: the duration is warned + skipped.
   Fallback: any other name whose VALUE looks like a color routes to colors (full path as slot);
-  everything else is reported as unmapped and skipped — nothing is silently dropped.
+  a numeric value whose variableScopes entry declares CORNER_RADIUS routes to radii (slot = the
+  whole name, kebab-cased) and one declaring GAP joins the spacing scale; everything else is
+  reported as unmapped and skipped — nothing is silently dropped.
 
 Derived outputs (hand-editing banned — re-run this script instead):
   assets/tokens.css           :root { --<colorSlot>, --space-<px/4> (or --space-<px>px when not
@@ -478,8 +484,18 @@ function isReferenceRamp(name) {
 
 // --- token derivation ---------------------------------------------------
 
-function deriveTokens(variableDefs, warn, letterSpacingUnit) {
+// Plugin API Variable.scopes -> the token family the author declared for it. Scopes with no lock
+// family (WIDTH_HEIGHT, OPACITY, TEXT_CONTENT, …) and ALL_SCOPES say nothing and are ignored.
+const SCOPE_FAMILY = new Map(Object.entries({
+  CORNER_RADIUS: 'radius', GAP: 'spacing',
+  ALL_FILLS: 'color', FRAME_FILL: 'color', SHAPE_FILL: 'color', TEXT_FILL: 'color', STROKE_COLOR: 'color', EFFECT_COLOR: 'color',
+  FONT_FAMILY: 'typography', FONT_STYLE: 'typography', FONT_WEIGHT: 'typography', FONT_SIZE: 'typography', LINE_HEIGHT: 'typography', LETTER_SPACING: 'typography',
+}));
+const declaredFamilies = (scopes) => new Set((scopes ?? []).map((sc) => SCOPE_FAMILY.get(String(sc).toUpperCase())).filter(Boolean));
+
+function deriveTokens(variableDefs, warn, letterSpacingUnit, variableScopes = {}) {
   const ambiguousLetterSpacing = []; // Font(...) roles whose bare letterSpacing has no declared unit
+  let scopeRouted = 0; let scopeDisagreements = 0;
   const light = {}; const dark = {};
   const spacing = new Set();
   const radii = {};
@@ -511,6 +527,11 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit) {
     const segs = name.split('/').map((s) => s.trim()).filter(Boolean);
     const family = FAMILY_OF.get(segs[0]?.toLowerCase());
     const rest = segs.slice(1);
+    const declared = declaredFamilies(variableScopes[rawName] ?? variableScopes[name]);
+    if (family && declared.size > 0 && !declared.has(family === 'duration' || family === 'easing' ? 'motion' : family)) {
+      scopeDisagreements++;
+      warn(`"${name}": the name routes it to ${family} but its declared scopes (${(variableScopes[rawName] ?? variableScopes[name]).join(', ')}) say ${[...declared].join('/')} — routed by name; check which is wrong`);
+    }
 
     if (family === 'color') {
       const schemeSegs = rest.filter((s) => /^(light|dark)$/i.test(s)).map((s) => s.toLowerCase());
@@ -621,6 +642,14 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit) {
       const schemeSegs = segs.filter((s) => /^(light|dark)$/i.test(s)).map((s) => s.toLowerCase());
       const slotSegs = segs.filter((s) => !/^(light|dark)$/i.test(s));
       putColor(schemeSegs, slotSegs, value, name);
+    } else if (declared.has('radius') && parsePx(value) !== null) {
+      // no family in the name, but the author scoped the variable to corner radii: route by scope
+      const slot = kebab(segs.join('-'));
+      radii[slot] = parsePx(value); scopeRouted++;
+      warn(`"${name}": routed to radii.${slot} by its CORNER_RADIUS scope (no family in the name)`);
+    } else if (declared.has('spacing') && parsePx(value) !== null) {
+      spacing.add(parsePx(value)); scopeRouted++;
+      warn(`"${name}": joined the spacing scale by its GAP scope (no family in the name)`);
     } else {
       warn(`"${name}": no family prefix matched and value is not a color — unmapped`);
       unmapped++;
@@ -694,7 +723,7 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit) {
     if (Object.keys(durationsMs).length > 0) tokens.motion.durationsMs = durationsMs;
     if (Object.keys(easings).length > 0) tokens.motion.easings = easings;
   }
-  return { tokens, unmapped, ambiguousLetterSpacing };
+  return { tokens, unmapped, ambiguousLetterSpacing, scopeRouted, scopeDisagreements };
 }
 
 // --- screens enrichment -------------------------------------------------
@@ -1095,7 +1124,13 @@ for (const s of captureScreens) {
 if (capture.letterSpacingUnit !== undefined && !['percent', 'px'].includes(capture.letterSpacingUnit)) {
   fail(`"letterSpacingUnit" must be "percent" or "px" (got ${JSON.stringify(capture.letterSpacingUnit)})`);
 }
-const { tokens, unmapped, ambiguousLetterSpacing } = deriveTokens(capture.variableDefs, warn, capture.letterSpacingUnit);
+if (capture.variableScopes !== undefined) {
+  const bad = !isPlainObject(capture.variableScopes)
+    || Object.values(capture.variableScopes).some((v) => !Array.isArray(v) || v.some((sc) => typeof sc !== 'string'));
+  if (bad) fail('"variableScopes" must be an object of { "<variableDefs key>": ["SCOPE", …] } (see --help)');
+}
+const { tokens, unmapped, ambiguousLetterSpacing, scopeRouted, scopeDisagreements } =
+  deriveTokens(capture.variableDefs, warn, capture.letterSpacingUnit, capture.variableScopes ?? {});
 if (ambiguousLetterSpacing.length > 0) {
   const rows = ambiguousLetterSpacing.map(({ name, value, sizePx }) =>
     `  "${name}": letterSpacing ${value} at ${sizePx}px → ${Math.round((value / 100) * 1e6) / 1e6}em if percent, ` +
@@ -1204,6 +1239,7 @@ derived.written.forEach((p, i) => console.log(`  ${i === 0 ? 'assets: ' : '     
 console.log(`  tokens hash: ${derived.provenance.lockTokensHash}`);
 for (const w of deviceEntries(lock.tokens).warnings) warn(w);
 if (unmapped > 0) console.log(`  unmapped variableDefs entries: ${unmapped} (see warnings)`);
+if (scopeRouted > 0 || scopeDisagreements > 0) console.log(`  scopes:  ${scopeRouted} routed by declared scope · ${scopeDisagreements} name/scope disagreement(s) (see warnings)`);
 if (warnings.length > 0) {
   console.log(`  warnings: ${warnings.length}`);
   for (const w of warnings) console.log(`  [warn] ${w}`);

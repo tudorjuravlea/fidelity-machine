@@ -71,6 +71,16 @@ using, but the reference is captured at one viewport, so only the branch that ap
 width is ever pixel-verified. The other branches are unverified. Say so rather than implying
 the component was checked at every size.
 
+**The implicit grid column that takes the page with it.** A scroller (a wide table, a code
+block) placed in a grid column that was never sized sits in an implicit `auto` track, which
+grows to the content's max-content width and widens the page; `min-inline-size: 0` on the
+panel lets the panel shrink and does nothing for the implicit column inside it. Size the track
+(`grid-template-columns: minmax(0, 1fr)`) and the scroller scrolls instead of the page. The
+sibling trap: an absolutely positioned visually-hidden span with no positioned ancestor
+resolves against the initial containing block and reports a page-wide overflow while
+everything visible fits; give it a positioned ancestor. (Both from the eval record of
+ux-ui-agent-skills, Thientan Soparat, MIT, github.com/plugin87/ux-ui-agent-skills.)
+
 ## Tokens still apply
 
 None of this is an exemption. Durations and curves come from `tokens.motion`, colours and

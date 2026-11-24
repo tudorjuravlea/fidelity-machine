@@ -1,0 +1,38 @@
+# A gate that says yes to broken work converts a real defect into a green tick, so this is the
+# report the engine most wants. Shape adapted from ux-ui-agent-skills (Thientan Soparat, MIT; NOTICE).
+name: Gate gap, something passed that should have failed
+description: A gate, lint section or audit rule said yes to broken work, or missed a defect it claims to cover.
+title: "[gate gap] "
+labels: ["gate-gap"]
+body:
+  - type: input
+    id: gate
+    attributes:
+      label: Which gate
+      description: The script and, for adherence-lint, the section that should have caught it.
+      placeholder: scripts/adherence-lint.mjs, section raw-hex
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest input that reproduces it
+      description: The minimal HTML, CSS, piece or lock fragment. Smaller beats realistic; the lint negatives under fixtures/lint are mostly under twenty lines. Synthetic values only, never a client's material.
+      render: html
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What the gate printed
+      description: The real output and the exit code, pasted, not summarised.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What it should have said
+      description: Which rule was broken, and where that rule is written (CONTRACT.md section, reference file, lock field).
+    validations:
+      required: true

@@ -241,6 +241,30 @@ A dashboard is a screen in the lock like any other, with extra density disciplin
   detail view. Whitespace is the grouping mechanism, not boxes inside boxes.
 - Auto-refresh or timestamp: every data view states when its data is from.
 
+## Domain checks no gate sees
+
+A chart can be drawn beautifully and mean nothing, and every geometric check stays green.
+Check these by hand, or bind them as data attributes the self-critique can read (adapted from
+the data-dashboard skill of ux-ui-agent-skills, Thientan Soparat, MIT,
+github.com/plugin87/ux-ui-agent-skills):
+
+- Correlation matrices mirror across the diagonal, and the diagonal reads 1.00 in every
+  cell; a matrix with independent values in the two triangles is spotted at once by anyone
+  who uses them.
+- The bands of a stacked area add up to the total at every x and never overlap or open
+  gaps; the common cause of dark wedges between bands is building the lower edge from the
+  previous series' index rather than its drawn coordinate.
+- A waterfall needs its connector lines, and its final bar must equal the first bar plus
+  every step between.
+- Depth on an order book climbs monotonically away from the mid-price on either side.
+- Donut and pie segments total the whole; anything else is a proportion that was never
+  computed.
+- A chart's accessible name says what it shows ("range 182.06 to 200.10, closing at 187.84"),
+  never that it is a chart; and a header that declares `aria-sort` must sort on a real click,
+  which is the operability audit's business once the state is declared.
+- Generate the geometry with a small deterministic script and paste the output; hand-typed
+  coordinates drift and cannot be regenerated.
+
 ## Gate integration
 
 - Register each chart or dashboard as a lock screen with canvas, color scheme, and state

@@ -19,6 +19,9 @@ banned everywhere: edit the lock, re-derive.
 ## Route
 
 - Figma MCP reachable → full capture (below). Screens enter as mode A/B1.
+- Figma MCP with `use_figma` → the same, with the token sheet read through the Plugin API
+  (`runtime/figma/inventory.js`, below) instead of the summary tool, so units, modes and scopes
+  arrive measured.
 - Reference images only → fallback B2 (bottom). No geometry gate; human review mandatory.
 
 ## Figma auth prerequisite
@@ -32,6 +35,90 @@ banned everywhere: edit the lock, re-derive.
   actually captured goes in `meta.figmaFiles[] {fileKey, nodeIds, role}`.
 - Collect links per role: variables/tokens frame → `role:"tokens"`; component sheet
   frames → `"components"`; each target screen frame → `"screens"`.
+
+## Capture preflight — four checks, then a status block, before any value is read
+
+A capture that discovers thirty minutes in that the library never loaded has already written
+values from the wrong file. Run these before the first token is read, stop on the first red, and
+print the block; the per-system skill keeps it with the capture notes.
+
+1. **Session.** `whoami` returns a user and a plan. Anything else: `/mcp`, re-authenticate, retry.
+2. **File.** `get_metadata` on the first node link returns the file name and its pages. A project
+   URL fails here by design (above).
+3. **Libraries.** `get_libraries` for the file key. Record every subscribed library as a row
+   (name, key) in the capture notes: a consumer file shows a library's tokens only through its
+   instances, so each library row is a second file key to capture from, with `role:"tokens"`.
+   Zero rows in a file that is plainly a consumer is the first finding, not a pass.
+4. **Inventory.** `runtime/figma/inventory.js` through `use_figma` (next section), or
+   `get_variable_defs` on a wide frame when `use_figma` is not available. Counts of collections,
+   variables, text, paint and effect styles, and every note the script returns.
+
+```
+session     — <user> · <plan>
+file        — <name> · <n> pages · <n> node links in <n> roles
+libraries   — <n> subscribed: <names>, or "none (local system)"
+inventory   — <n> variables in <n> collections (modes: …) · <n> text · <n> paint · <n> effect
+notes       — <n>: <the script's notes, one per line>
+```
+
+Adapted from the preflight in claude2figma (Sen Lin, MIT; `../NOTICE`), which runs the same four
+checks before an agent writes into Figma; here they run before it reads out of it.
+
+## Plugin-API inventory, through `use_figma`
+
+`get_variable_defs` returns composite strings: a text style's `letterSpacing` arrives without
+its unit (the field note below), theme modes are folded into names, and a variable's declared
+`scopes` are absent. The Plugin API carries all three, and `use_figma` runs plain JavaScript in
+that API. `runtime/figma/inventory.js` (contract: `../runtime/figma/README.md`) reads the file's
+collections, variables, text, paint and effect styles and returns a `capture.json` fragment:
+
+- `variableDefs`, in the shape capture-figma already maps: colours once per mode as
+  `<Mode name>/<variable name>` (hex, 8-digit under an opacity), numbers and strings once for
+  the collection's default mode (`NUMBER_MODE` picks another), each text style as a
+  `Font(...)` composite with `lineHeight` and `letterSpacing` units inline (`28px`, `-0.5%`), a
+  colour per single-solid paint style, an `Effect(...)` chain per drop-shadow style.
+- `variableScopes`, the same keys → the author's declared scopes. capture-figma routes a
+  number no name family claims by them (`CORNER_RADIUS` → radii, `GAP` → spacing) and warns
+  when a name's family and its scopes disagree; the name still wins the routing, and the warning
+  is a capture question to settle, not a defect to fix in the script.
+- `libraries`, `collections`, `counts`, `notes`. Everything the sandbox cannot express is a
+  note (a gradient paint style, an `AUTO` line height, a boolean) and is never guessed.
+
+Paste the whole file; set no option on the first run. Then `capture.json` takes `variableDefs`
+and `variableScopes` as returned, the notes go to the capture notes, and
+`runtime/figma/components.js`, one page per call, seeds `components/INDEX.md` with every set
+and solo component by node id. `get_design_context` on the instances still supplies anatomy;
+the inventory supplies the sheet.
+
+What it cannot see: the Plugin API's local calls return this file's variables and styles only.
+In a consumer file the library's tokens live in the library file; `inventory.js` names the
+subscribed library collections under `libraries[]` and says so. Capture them from the library
+file's own key (preflight check 3). Values from a page's frames via `get_variable_defs` remain
+the right instrument for one question the inventory does not answer: which of the sheet a given
+screen actually consumes.
+
+## Binding census of the masters
+
+Before trusting the sheet as the mold, measure how much of the system it says.
+`runtime/figma/binding-census.js`, run on the component page (one page per call), judges every
+node under the masters: text style bound or not, fill and stroke bound to a style or a variable
+or raw, effect style, padding, gap and corner radius bound or raw. It returns the totals per
+class, the raw hexes with their counts, the raw paddings, gaps and radii with theirs, and the
+forty nodes with the most raw properties.
+
+- A raw share is a number for the capture notes, in place of "often". It decides how much of
+  the lock comes from `get_design_context` per component rather than from the variable sheet.
+- `rawNumbers` is the spacing and radius scale the masters really use; harvest it into
+  `tokens.spacing` and `tokens.radii` (the field note below said this was expected; now it is
+  counted).
+- A `rawColours` hex near a variable's value and not equal to it is a swatch-versus-implementation
+  candidate (§Field notes, source lifecycle): keep both, record which generation uses as a
+  `decisions[]` entry, never average.
+- The census judges binding, not correctness: a raw value can be right and a bound one wrong. It
+  is a map of where the sheet is silent, so the capture knows where to look.
+
+The per-property checks are the post-write audit from claude2figma (Sen Lin, MIT; `../NOTICE`),
+turned from a verdict on the agent's own nodes into a census of the design system's masters.
 
 ## Figma REST fallback, when the MCP seat quota is gone
 
@@ -61,6 +148,9 @@ file.
 | geometry | `get_metadata` on each component/screen frame | frame original width/height → `captureWidth/captureHeight`; per-child rects → `screens[].figIds[].rect` (modes A/B1) |
 | references | `get_screenshot` per frame at its original dims | PNG saved beside the lock (`reference/<screenId>.png`) → `screens[].referenceImage` |
 | component map | `get_code_connect_map` probe on component nodes | `componentMap` entries if Code Connect exists; usually empty → Phase A bootstrap (`./mode-a.md`) |
+| inventory | `use_figma` with `../runtime/figma/inventory.js` (paste the file) | `variableDefs` with units, modes and scopes + `variableScopes` → `capture.json` as returned; `libraries[]` → preflight check 3; `notes[]` → capture notes |
+| registry | `use_figma` with `../runtime/figma/components.js`, one page per call | `components/INDEX.md` seeds (name → nodeId → spec file) and Phase-A targets |
+| census | `use_figma` with `../runtime/figma/binding-census.js` on the component page | capture notes: raw share per class, the masters' real spacing and radius scale, swatch-vs-implementation candidates as `decisions[]` |
 
 Hard rules while capturing:
 
@@ -114,6 +204,9 @@ assumption above:
   text-style letter-spacing was PERCENT. Read one text style's unit in Figma (plugin API:
   `style.letterSpacing.unit`, or the text panel) and set `"letterSpacingUnit"` in capture.json;
   capture-figma refuses a non-zero bare value without it (exit 2).
+  With `use_figma` available this step disappears: `runtime/figma/inventory.js` reads the unit
+  from each style and writes it inline (`letterSpacing: -0.5%`), which capture-figma takes over
+  any bundle-level unit.
 - **Illustration/ramp variables** (`light-theme/yellow/base/tone 03`) are reference data, not
   semantic tokens — filtered out, summarized in one warning.
 - **Figma export artifacts to NEVER reproduce**: micro skews (`skew-x-[0.17deg]` on labels),

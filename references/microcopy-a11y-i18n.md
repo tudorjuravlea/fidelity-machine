@@ -104,6 +104,34 @@ rewrite — never cutting a mandatory disclosure.
 Plan Arabic/Hebrew mirroring early — a left-biased layout is costly to flip later.
 Directional words ("next", "back", "left") and directional icons may need to mirror.
 
+### Scripts with marks above and below the line: Thai
+Three faults no colour, contrast or overflow check sees, from the Thai pages of
+ux-ui-agent-skills (Thientan Soparat, MIT, github.com/plugin87/ux-ui-agent-skills; the
+numbers below are that source's measurements in the fonts it names, not the engine's):
+- **The font decides the leading.** Thai stacks marks on both sides of the baseline: a tone
+  mark can sit over an above-vowel over a consonant, and a below-vowel hangs under it. Two
+  lines are too close as soon as the lower line's upper stack enters the band where the upper
+  line keeps its below-vowels, because a reader then attaches a mark to the wrong syllable. No
+  contact between the glyphs is needed for that; the source's own heading misread with 12 px
+  of clear air at a leading of 1.3. The required ratio is therefore measured per face, in the
+  loaded font, not chosen by eye (the source reports roughly 1.35, 1.43 and 1.49 for the three
+  faces it ships), and negative tracking is never applied to Thai.
+- **The browser's dictionary breaks compounds.** Chromium wraps Thai with an ICU word list that
+  knows the pieces of a compound but not the compound itself, so it will happily end a line in
+  the middle of one, and neither `word-break` nor `overflow-wrap` changes that. The remedy is
+  a non-breaking span around each unit that must stay whole (a compound, a proper name, a
+  prefix with the noun it forms, a number with its counter word), applied to generated strings
+  as well as authored ones, and applied sparingly: each span is a block the line cannot break
+  inside, and over-wrapping ruins the rag at phone width. Anything the list does not cover
+  still needs a native reader.
+- **What this is to the engine, by evidence.** The same source's library of systems measured
+  from live Thai sites ships leading between 1.0 and 1.17 on many of them, and about a fifth
+  of the type roles across its Thai-brand specs sit at or below 1.2. A captured system's
+  leading is therefore reproduced as captured (`./surface-classes.md` §The captured system
+  outranks every number here) and the collision named in the report; a readability check on a
+  lock screen is a layout finding or an opt-in, never a fidelity failure. On a net-new surface
+  the leading floor above applies.
+
 ### Pseudolocalization
 Before real translations exist, test with a pseudo-locale: extended look-alike
 characters plus length padding ("Account" → "[Àççôûñt␣␣␣]"). Surfaces expansion

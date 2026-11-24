@@ -199,6 +199,14 @@ label). Keeping both is intentional, not duplication.
 ## Reporting discipline
 
 - Every published number carries its run id and date. Never report one without both.
+- Every row carries its provenance: `blind` (a fresh agent given the brief verbatim and the
+  scaffolded project, nothing else) or `in-session` (built where the skill was built, able to
+  see its internals). A blind row supports "the skill transfers"; an in-session row supports
+  only "the gates catch real mistakes". Never average the two, and never edit a blind output
+  after it has been scored (`ENGINE/references/eval-harness.md` §Cold-start runs).
+- When this skill ships a critic answer key (`evals/critic/`: seeded-defect pages and a key),
+  the key's pages must pass every engine gate in both colour schemes, proved by a test, and the
+  critic never reads the key. The matched score is a floor; the hand read is the number.
 - Cost (tokens, wall time) is reported per run, not folded into the outcome label.
 - An `errored` task is itself a finding — its own row, never dropped from an average or
   folded into `non-convergent`.

@@ -89,6 +89,46 @@ across a dataset*. Compose them, never blur them:
 - Judges evaluate one item plus its task context, never the whole output list at once —
   list-level input invites cross-contamination between verdicts.
 
+## Cold-start runs, provenance, and an answer key for the critic
+
+Adapted from the eval suite of ux-ui-agent-skills by Thientan Soparat (MIT,
+github.com/plugin87/ux-ui-agent-skills), whose question is the one the gates above cannot
+answer: give an agent nothing but the skill and a brief, and is what comes back any good?
+
+- **A cold start is a protocol, not a mood.** Scaffold a clean project from the skill (no
+  example screens, no finished demo theme), hand a fresh agent the brief pasted verbatim and
+  the project path, and nothing else. Setup facts (where the project is, where to write) are
+  allowed; design hints, warnings about traps and coaching on the gates are not. An agent
+  that discovers the verification workflow unprompted and runs it has demonstrated the skill,
+  and that counts in its favour. Explaining the brief mid-run invalidates the run: the brief
+  needed editing, not the run rescuing.
+- **Provenance is a column of the results table, never a footnote.** Every run records who
+  built the output and whether they could see the skill's internals while doing it: a run made
+  inside the session that built the skill is *contaminated* and shows only that the gates catch
+  real mistakes; a *blind* run shows the skill transfers. The two claims are not the same and
+  the table says which one each row supports.
+- **Blind outputs are never edited.** They are evidence of what the agent did unaided, and a
+  patch to them is a patch to the experiment. A defect they expose is spent on the skill (a rule, a
+  gate, a fixture), and the row keeps the unedited score. In the source's own record, two blind
+  runs cost the skill seven defects four familiar runs had never hit, because a familiar run
+  keeps reaching for the finished demo theme instead of the template a real user gets.
+- **An answer key for the critic.** The self-critique (`./taste-and-composition.md` §3) is
+  itself an instrument and gets the same treatment as a gate: a few pages carrying seeded
+  defects that no script can see (nothing on the page leads the eye; an empty state that
+  offers no next action; a success toast above a list that is unchanged; a loading state that
+  looks disabled) and a key naming each defect, its rule and alternative phrasings. The property the
+  key rests on: every seeded page passes every gate in both colour schemes, re-proved by a test
+  on every run, because a defect a gate can catch measures the gate rather than the critic. The
+  critic never reads the key. The matched score is a floor: read the critiques before quoting
+  it, and when the matcher is calibrated on the critiques it scores say so, since the next
+  independent number is defects seeded by someone else.
+- **Three caveats travel with a first perfect score**, in the source's words as a shape worth
+  keeping: the fixtures and the key were written by the same party from the same doctrine, so
+  the score says the critic applies doctrine it was handed, not that it has taste; a keyword
+  matcher moved to agree with a hand count is a statement about the matcher; and a matcher
+  calibrated on the runs it scores is circular unless the controls still hold (a critique that
+  only quotes the page scores zero, an empty file scores zero).
+
 ## Building one from engine parts
 
 - A dataset item = a lock screen + its reference image. The golden fixture's screens are

@@ -25,6 +25,15 @@ cannot produce, or when a fixture trips a section outside its own. Adding a sect
 its fixture in the same change; `adherence-lint.mjs --self-test` separately proves the registry
 and its call sites agree.
 
+Two more things a new gate ships with: a header docstring saying what it measures and what it
+cannot (the report's `manual[]` and the README's limits are written from it), and, when a gate
+is found saying yes to broken work, a report in the gate-gap shape
+(`.github/ISSUE_TEMPLATE/gate-gap.yml`): which gate, the smallest input that reproduces it
+(smaller beats realistic; the lint negatives are mostly under twenty lines), what the gate
+printed with its real exit status, and which rule it should have enforced and where that rule
+is written. A gate that passes broken work converts a real defect into a green tick, which is
+why that report is the most valuable one this repository can receive.
+
 For `scripts/motion.mjs` the same discipline holds: every gate has a negative under `fixtures/motion/` (a
 minimal piece with one planted fault and a row in `fixtures/motion/manifest.json` naming the gate and the
 result), run by `node scripts/motion.mjs --self-test`; adding a gate means adding its negative in the same

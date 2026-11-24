@@ -66,3 +66,28 @@ fixture manifest), and references/spec-capture.md (the evidence tiers) re-expres
 from visualize,
 Copyright (c) 2026 Carl Rannaberg, MIT License
 (https://github.com/display-dev/visualize).
+
+runtime/figma/binding-census.js adapts the post-write binding audit, and
+references/spec-capture.md adapts the capture preflight (four checks and a status block), from
+claude2figma, Copyright (c) 2025 Sen Lin, MIT License
+(https://github.com/senlindesign/claude2figma).
+
+skill-scaffold/capture/templates/social/ARCHETYPES.md (the cover archetypes) and
+skill-scaffold/capture/formats.json (the social-3x4 format and its margin) re-express the ten
+cover compositions and their fixed/variable split from oh-my-cover-design, Copyright (c) 2026
+feitangyuan (MIT, stated by its README; no licence file ships)
+(https://github.com/hongfamonvAI/oh-my-cover-design), and from its derivative gbro-cover-design,
+Copyright (c) 2026 狗哥笔记, MIT License (https://github.com/pyang5166/gbro-cover-design);
+no prompt text, example image or likeness from either is carried.
+
+references/eval-harness.md (cold-start runs, provenance and the critic's answer key),
+skill-scaffold/root/evals/HARNESS.md (the provenance column), references/taste-and-composition.md
+(the delegated critic's stance, brake and render protocol), references/microcopy-a11y-i18n.md
+(Thai leading and line breaking), references/dataviz-craft.md (domain checks no gate sees),
+references/modern-css.md (the implicit grid column and the visually-hidden span),
+references/surface-classes.md (the width sweep, the mobile-first strip test and the foldable
+widths as a dated claim), SECURITY.md (the disclosure shape), CONTRIBUTING.md and
+.github/ISSUE_TEMPLATE/gate-gap.yml (the gate-gap report) adapt method and findings from
+ux-ui-agent-skills, Copyright (c) 2026 Thientan Soparat, MIT License
+(https://github.com/plugin87/ux-ui-agent-skills); none of its design-system library, token
+values, example pages or code is carried.

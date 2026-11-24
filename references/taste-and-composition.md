@@ -156,6 +156,22 @@ Mechanics:
 - **Any dimension in 0–4 → redo the composition now**, before invoking scripts. Two redo
   passes are normal. Needing a fourth means the approach is wrong — change the layout
   approach or variant set; don't grind the same one.
+- **A second critic sees the artifact, never the argument.** When the critique is delegated,
+  the critic runs in a fresh context with the render and the brief and nothing from the
+  conversation that produced the work: once a reviewer has read the maker's reasons, what
+  gets reviewed is the reasoning, and reasoning is easy to agree with. Its stance is that the work is
+  mediocre until the render shows otherwise, so the work carries the burden of proof; the
+  brake points both ways, and a critique whose findings are all Minor says so and clears the
+  work, because inflating severities to seem rigorous is the mirror image of flattery. It never
+  borrows a gate's number to support an aesthetic claim: a green gate proves the contrast was
+  measured and no value was hardcoded, and says nothing about where the eye lands.
+- **The critic's render protocol is concrete.** Every screen at the lock's capture width and
+  at a phone width when the surface is touch or both, in every colour scheme the lock declares,
+  with motion disabled and the cursor moved off the canvas; then every control is clicked and
+  the change, or its absence, written down. No change is a finding: a checkbox that passes the statics and
+  does not toggle, a tab that changes nothing, a dialog that traps nothing. (The critic method
+  is adapted from the design-critic of ux-ui-agent-skills by Thientan Soparat, MIT,
+  github.com/plugin87/ux-ui-agent-skills; the stance and the brake are its words re-expressed.)
 
 ## 4. Per-system signatures and don'ts — the "reads as a different system" test
 
@@ -187,6 +203,11 @@ bans.
   the ship report (e.g. the system mandates identical card grids → the "cards are lazy"
   heuristic yields; the type scale caps title/body below 2.5× → compose with weight + space
   and say so).
+- **A captured signature outranks a generic tell.** The tells that mark machine-made UI (one
+  radius and one shadow everywhere, a coloured bar on one side of a card or alert, the default
+  gradient) are useful on a net-new surface and void against a captured system that ships
+  exactly that treatment: a one-sided status bar on the system's own alert component is a
+  signature to reproduce, not slop to remove. Judge a tell only where the lock is silent.
 - The lint owns the checkable subset: spacing on the scale (tokens-only-spacing, WARN), type
   sizes and weights on the lock's roles (type-scale, WARN; the title/body ratio itself is not
   computed), tabular figures in numeric tables (tabular-nums, WARN), balanced or pretty wrapping

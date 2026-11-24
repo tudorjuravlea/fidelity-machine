@@ -19,12 +19,13 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally); @ui-sdk/react and @ui-sdk/core at one exact version, bundled into React component fixtures and held to runtime/ui-sdk's version by ui-sdk.mjs verify
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
-├── fixtures/capture/                # capture-figma's unit tests (node --test): composite parsing, incl. the letter-spacing unit refusal
+├── fixtures/capture/                # capture-figma's unit tests (node --test): composite parsing, incl. the letter-spacing unit refusal; scope routing; the runtime/figma scripts run under a mock of the Plugin API with their output fed to capture-figma, and the read-only guard that scans them
 ├── fixtures/operable/               # the operability audit's tests (node --test): one bad and one good page per rule, the judge's unit cases, the CLI's exit codes
 ├── fixtures/motion/                 # the motion verb's self-test: a lock with motion and devices tokens, a golden film, a golden deck, a golden devices film, one negative per gate (manifest.json)
 ├── runtime/ui-sdk/                  # the vendored behaviour runtime (UI SDK, Apache-2.0, one pinned version; NOTICE): headless elements that wrap a design system's own markup, the pattern checker operability-audit.mjs drives, COMPOSITION.md, VENDORED.json with every file's hash; a copy, never edited by hand; linked into a capture as <lockDir>/ui-sdk by ui-sdk.mjs link
 ├── fixtures/ui-sdk/                 # ui-sdk.mjs's tests (node --test): verify, link, update from unpacked packages, an offline render of a capture that links the runtime, a wrapped golden screen that stays byte-identical
 ├── runtime/motion/                  # the browser kit for films and clicker decks (the picture as a function of time) + the engine skeletons; linked into a capture as <lockDir>/kit by motion.mjs new, never copied
+├── runtime/figma/                   # plugin-sandbox scripts the model pastes into the Figma MCP's use_figma (not CLIs, no exit codes): inventory.js (styles and variables with their units, modes and scopes → a capture.json fragment), components.js (one page's component sets), binding-census.js (how much of a sheet's masters is bound to tokens); read-only by contract, held by the plugin-scripts test under fixtures/capture; README.md states each one's contract
 ├── scripts/
 │   ├── new-system.mjs               # scaffold ~/.claude/skills/<name>/ from skill-template.md + skill-scaffold/
 │   ├── setup-check.mjs              # readiness gate — verify deps; NEVER installs
@@ -125,7 +126,7 @@ Per-project artifacts live next to the project's `design-lock.json`, not in the 
 
 All scripts: `node scripts/<name>.mjs --lock <path/to/design-lock.json> [--screen <id>] [flags]`.
 - `render.mjs --lock L --screen S` → writes `.render/S.png` + `.render/S.geometry.json` + `.render/S.layout.json` (the in-page self-consistency audit of `layout-audit-core.mjs`, measured after the capture); the geometry carries `network {mode, allowHosts}`, `externalRequests[]` (every request that left the lock's tree — url with credentials stripped, host, resourceType, failed, blocked) and `externalRequestCount`; when the count is non-zero one stderr `render note:` line names the hosts (§Determinism invariant 8); with lock `render.network: "offline"` any external request to a host not in `render.allowHosts` is refused and the run exits 5 before writing output
-- `capture-figma.mjs --input C --out L [--merge]` · `capture-figma.mjs --derive --lock L` → writes the lock + derived token artifacts (§Provenance). A `Font(...)` composite's `letterSpacing` is converted to em by its unit: an inline `%` or `px` suffix wins, else the bundle's `letterSpacingUnit` (`"percent"` → value/100, `"px"` → value/size); a non-zero bare value with no declared unit is exit 2 naming every affected role and both readings, because Figma's MCP drops the unit and the two readings differ by a factor of size/100. Any other `letterSpacingUnit` value is exit 2
+- `capture-figma.mjs --input C --out L [--merge]` · `capture-figma.mjs --derive --lock L` → writes the lock + derived token artifacts (§Provenance). A `Font(...)` composite's `letterSpacing` is converted to em by its unit: an inline `%` or `px` suffix wins, else the bundle's `letterSpacingUnit` (`"percent"` → value/100, `"px"` → value/size); a non-zero bare value with no declared unit is exit 2 naming every affected role and both readings, because Figma's MCP drops the unit and the two readings differ by a factor of size/100. Any other `letterSpacingUnit` value is exit 2. An optional `variableScopes` (`{ "<variableDefs key>": ["CORNER_RADIUS", …] }`, the Plugin API's `Variable.scopes`, written by `runtime/figma/inventory.js`) routes a numeric value no name family claims by its declared scope (`CORNER_RADIUS` → `tokens.radii`, slot = the whole name; `GAP` → `tokens.spacing`) and warns, never fails, when a name's family and its declared scopes disagree (a `Radius/…` variable scoped `GAP` only); any other shape of `variableScopes` is exit 2
 - `geometry.mjs --lock L --screen S` → reads `.render/S.geometry.json`, writes `.report/S.geometry.json`
 - `layout-audit.mjs --lock L --screen S [--strict]` → reads `.render/S.layout.json`, writes `.report/S.layout.json`; judges the rendered boxes against themselves, no ground truth needed (so it runs for B2 too): a control whose content, padding and borders need more height than it has and a container whose last child sits inside its own bottom padding are ERRORs (exit 1); words under 8 px from their surface's edge, type under 10 px, a number and unit broken over two lines, one-line rows over 3.4× their type, a `[data-pane]` left more than 65 % empty, one nav mixing filled and outline glyphs, an emoji where an icon belongs are WARNs (exit 1 only under `--strict`); `data-layout-ignore` opts a subtree out; an element still animating when measured is deferred and the run is INCONCLUSIVE (exit 6), as is a page with nothing to measure. The report keeps `manual[]`: what the audit does not judge (optical centring, contrast, states, motion)
 - `operability-audit.mjs --lock L [--screen S] [--strict] [--no-patterns] [--max-stops <n>] [--ready-timeout <ms>]` → renders each screen itself in the pinned Chromium (the screen's `captureWidth` × `captureHeight` and `colorScheme`, always dpr 1, the same `[data-render-ready]` contract as render.mjs) and writes `.report/S.operable.json`; it reads nothing else from the lock and no reference, so it holds for any design system. verify.mjs runs it as a gate for every screen with `"operable": true`; on its own it audits whatever screen it is given. ERRORs (exit 1): a control whose computed accessible name is empty (the name Chromium's accessibility tree gives it); a `radiogroup`, `tablist`, `listbox`, `tree`, `grid`, `treegrid`, `dialog` or `alertdialog` role exposed with no name (`unnamed-group`; it stays out when the pattern checker already said so about the same widget); `aria-labelledby`, `label[for]`, `aria-controls`, `aria-owns`, `aria-activedescendant` or `aria-errormessage` naming an id that is not in the document (`aria-controls` on a trigger with `aria-expanded="false"` is allowed); an explicit `switch`/`checkbox`/`radio`/`menuitemcheckbox`/`menuitemradio` role with no `aria-checked`, `combobox` with no `aria-expanded`, `slider` with no `aria-valuenow`; a `tab`, `option`, menu item or `treeitem` outside its `tablist`, `listbox`, `menu`/`menubar` or `tree` (`aria-owns` counts); an element that answers a click (a `click` listener or an inline `onclick`, or a control role) while neither it, nor anything inside it, nor a control above it, nor its composite can take keyboard focus; a Tab stop on a control where fewer than 24 px of the viewport change between focused and not focused (two screenshots per stop). Then the pattern pass, on by default: every rendered `tablist`, `radiogroup`, `toolbar`, `tree`, `listbox`, `combobox`, `slider`, `switch`, `checkbox`, `menubar`, `menu` and open dialog with an authored role (a native input is the browser's own and is left alone; at most 40 a page, the rest deferred) is handed to the borrowed checker (`runtime/ui-sdk/testing.js`, UI SDK's `checkPattern`), which presses the pattern's keys and reports where focus and state did not follow; each problem is an ERROR named `pattern-<name>` in the checker's own words. It reads only roles, ARIA, tabindex and focus, so it judges anybody's markup, and a role that only looks like a widget fails it by design; `--no-patterns` leaves the pass out and the report records that. A check that could not run or timed out is deferred (exit 6 when nothing failed). A dangling `aria-describedby` or `aria-details` is a WARN (exit 1 only under `--strict`). `data-operable-ignore` opts a subtree out. A page with no control and no id reference, and a Tab walk cut at `--max-stops` (default 80), are INCONCLUSIVE (exit 6); a page that does not load or never sets `[data-render-ready]` is exit 5. The report keeps `manual[]`: what the audit does not judge (keys inside a disclosure, an accordion or a grid, and inside any widget when the pattern pass is off; where focus goes when something that is closed opens, screen reader output, contrast, any state but the rendered one, listeners attached by delegation, a text caret as a focus indicator, content inside a shadow root or an iframe)
@@ -154,6 +155,41 @@ path before its `?`/`#` is a setup error (exit 2); a file whose NAME contains `?
 as a `file://` url with the character encoded. `referenceImage` and font
 `files[]` paths resolve relative to the lock the same way. Output dirs `.render/` and `.report/`
 are created next to the lock.
+
+## Plugin-sandbox scripts (`runtime/figma/`)
+
+The Figma MCP is model-side, and its `use_figma` tool runs plain JavaScript inside Figma's plugin
+sandbox (top-level `await`, a `return` value, nothing else comes back). `runtime/figma/*.js` are
+scripts written for that sandbox: the model pastes a file's text into `use_figma` unchanged, and
+what comes back is a fragment in `capture.json`'s own shape (`variableDefs`, `variableScopes`,
+`styles`, `components`, `census`, `notes`) to paste beside the other MCP results before
+`capture-figma.mjs` runs. They are not CLIs: no exit codes, no flags; the one input a script takes
+is a constant on its first lines. Their contract, per script, is `runtime/figma/README.md`.
+
+- **Read-only by contract.** A script reads the document and never writes it: no `create*`,
+  `appendChild`, `remove`, `resize`, `set*Async`, `setBoundVariable*`, `setValueForMode`,
+  `setProperties`, `import*ByKeyAsync`, `loadFontAsync`, `clone`, `setPluginData`, and no
+  assignment to a property of a document object. The plugin-scripts test under `fixtures/capture/` scans
+  every script for those members and fails on any, and proves the scan can fail on a planted
+  write. The one state a script may change is the viewer's current page
+  (`setCurrentPageAsync`, at most once per call), because the Plugin API loads a page's content
+  only when it is current.
+- **Units travel.** `inventory.js` writes every text style as a `Font(...)` composite with its
+  `lineHeight` and `letterSpacing` units inline (`28px`, `-0.5%`), so `capture-figma.mjs` never
+  meets the bare value that forces `letterSpacingUnit`; colour variables are written once per
+  mode (`<Mode name>/<variable name>`), numbers once, for the collection's default mode; every
+  variable's `scopes` go to `variableScopes` under the same key.
+- **What they cannot see, said in the output.** `getLocalVariablesAsync` and the `getLocal*StylesAsync`
+  calls return the file's own variables and styles only; a consumer file shows a library's tokens
+  through its instances, not here. `inventory.js` lists the subscribed library collections it
+  can name (`figma.teamLibrary`) under `libraries[]` and says in `notes[]` that their variables
+  are not in `variableDefs`: capture those from the library file's own key. A value the sandbox
+  cannot express (a gradient paint style, an `AUTO` line height, a boolean or easing variable) is
+  counted in `notes[]`, never guessed.
+- **Pinned by a mock, not by a file.** The tests run each script under a mock of the Plugin API
+  built from its published typings and feed the result to `capture-figma.mjs`; no live Figma file
+  is part of the test suite. A live run that disagrees with the mock is a finding against the
+  mock first, and the README records the typings version the mock follows.
 
 ## Determinism invariants (render.mjs owns these; others assume them)
 

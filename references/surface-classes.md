@@ -118,6 +118,29 @@ Responsive behaviour, container-query branches and breakpoint changes are unveri
 they have their own captured screen. Say which widths were verified rather than implying the
 layout was checked everywhere. See `references/modern-css.md`.
 
+A width sweep belongs to one kind of screen only: a page that declares `data-phone-runnable`
+(CONTRACT.md §Model-facing rules), which will be opened at widths nobody captured. For such a
+page two checks are meaningful and neither is a fidelity gate: no horizontal overflow at the
+narrow widths a phone can present (read from `documentElement.scrollWidth` against its client
+width, which a clipped `main` hides, so a sweep lifts `overflow-x` on the root first), and a
+mobile-first proof, which strips every `@media` and `@container` rule except reduced-motion,
+print and forced-colours and renders the base at a phone width: a mobile-first page already
+fits, a desktop-first page cannot. A fixed-frame capture (a social canvas, a slide, a screen
+in a drawn device) is never swept; it has one width by definition. Both checks are the shape
+of ux-ui-agent-skills' responsive and mobile-first gates (Thientan Soparat, MIT,
+github.com/plugin87/ux-ui-agent-skills), recorded here as the method; whether the engine runs
+them is a decision for the gate list, not this file.
+
+**Foldable widths, a dated third-party claim.** The same source lists five CSS-pixel viewports
+for an iPhone Duo (382 outer upright, 385 per inner window side by side, 594 outer on its side,
+669 inner upright, 951 inner on its side), attributed to a WebKit publication for Safari 27.1,
+and a 40 px hinge band at 455 to 495 px in the 951-wide pose measured by a third party in a
+simulator, since the vendor does not publish it. Treat every one of those numbers as a claim
+about someone else's system with the date 2026-11 on it: re-check before relying on it, and
+never make the fold a requirement for a page to work. The rule that survives any revision:
+a page that answers the fold has claimed to know where the hinge is, so it then keeps every
+readable and tappable element off the hinge and keeps an unfolded fallback in every `env()`.
+
 ## Related
 
 - `references/taste-and-composition.md` for the state and hit-area rules this keys by class

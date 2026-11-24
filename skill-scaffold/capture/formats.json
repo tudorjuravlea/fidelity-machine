@@ -4,6 +4,7 @@
     "slide":           { "w": 1920, "h": 1080, "use": "presentation decks" },
     "social-portrait": { "w": 1080, "h": 1350, "use": "LinkedIn / IG feed (default social format)" },
     "social-square":   { "w": 1080, "h": 1080, "use": "IG, WhatsApp" },
+    "social-3x4":      { "w": 1080, "h": 1440, "use": "portrait cover for WeChat / Xiaohongshu-style feeds (3:4); every key element (a face, the title, the main prop) keeps 10% of each edge clear, so the zone is a composition margin, not platform chrome", "safeZone": { "topPx": 144, "bottomPx": 144, "leftPx": 108, "rightPx": 108 } },
     "story":           { "w": 1080, "h": 1920, "use": "IG/LinkedIn story", "safeZone": { "topPx": 250, "bottomPx": 300 } },
     "event-banner":    { "w": 1600, "h": 900,  "use": "LinkedIn event cover, webinar/meetup banner" },
     "screen-4k":       { "w": 3840, "h": 2160, "use": "event screens (opening, agenda, speaker slides) on a 4K wall; build in px of this frame, RGB" }

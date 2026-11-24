@@ -7,6 +7,67 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Plugin-sandbox capture scripts** (`runtime/figma/inventory.js`, `components.js`,
+  `binding-census.js`, `runtime/figma/README.md`; CONTRACT.md §Plugin-sandbox scripts). The
+  model pastes a file into the Figma MCP's `use_figma` and gets back a `capture.json` fragment.
+  `inventory.js` reads the file's collections, variables and text, paint and effect styles through
+  the Plugin API, follows aliases across collections, writes colours once per mode and numbers
+  once, and writes every text style as a `Font(...)` composite with its `lineHeight` and
+  `letterSpacing` units inline, so the bare value that forces `letterSpacingUnit` (1.1.1) never
+  arises; every variable's declared `scopes` go to `variableScopes`; what the sandbox cannot
+  express (a gradient paint style, an `AUTO` line height, a boolean) is a note, never a guess;
+  the subscribed library collections are named and declared unread. `components.js` seeds the
+  anatomy index with one page's sets and solos. `binding-census.js` counts, per property class,
+  how much of a component sheet's masters is bound to styles and variables and what the raw
+  colours, paddings, gaps and radii are: the "spacing and radius are often not variables" field
+  note, measured. All three are read-only by contract: `fixtures/capture/plugin-scripts.test.mjs`
+  scans them for the Plugin API's writing members, proves the scan fires on planted writes, runs
+  each script under a mock of the API shaped from `@figma/plugin-typings` 1.143.0 and feeds the
+  inventory into the real `capture-figma.mjs`. No live Figma file is in the suite; the README says
+  so and names the typings version the mock follows. The census adapts the post-write audit of
+  claude2figma (Sen Lin, MIT; NOTICE).
+- **Scope routing in capture-figma** (`scripts/capture-figma.mjs`, `fixtures/capture/variable-scopes.test.mjs`).
+  An optional `variableScopes` in `capture.json` routes a number no name family claims by its
+  declared scope (`CORNER_RADIUS` → `tokens.radii`, `GAP` → `tokens.spacing`) and warns, never
+  fails, when a name's family and its scopes disagree; the name keeps the routing. Any other
+  shape is exit 2. Locks without it derive byte-identically (patch).
+- **Capture preflight and binding census** (`references/spec-capture.md`). Four checks and a
+  status block before the first value is read (session, file, libraries, inventory), with a
+  consumer file's zero subscribed libraries named as the first finding; the Plugin-API inventory
+  route beside `get_variable_defs`; the census as the number that replaces "often" in the field
+  notes. The preflight adapts claude2figma's (NOTICE).
+- **A 3:4 cover format and ten cover archetypes** (`skill-scaffold/capture/formats.json`
+  `social-3x4` with a 10% safe zone on every edge; `skill-scaffold/capture/templates/social/ARCHETYPES.md`).
+  Compositions for a person and a title on a portrait canvas: the law of layers (background, title,
+  person, props; the title behind the person, never over the eyes or mouth), the safe margin, ten
+  archetypes with their fixed and variable parts and when to pick each, the three-round intake
+  (recommend, then list), and what is written per cover. The person is a captured cut-out, never
+  a likeness. Re-expressed from oh-my-cover-design and gbro-cover-design (MIT; NOTICE), where
+  they are prompts for an image model.
+- **Method and disclosure from ux-ui-agent-skills** (Thientan Soparat, MIT; NOTICE), read in
+  full from a tarball with nothing run, seven readers against a ledger of 597 rows (65 NEW,
+  82 EXTENDS, 193 LESSON) and a second session's six; nothing from its design-system library,
+  token values, pages or code is carried. In the references: cold-start evaluation runs with a
+  provenance column (blind against in-session), blind outputs never edited, and an answer key
+  of seeded defects that pass every gate for scoring the critic (`references/eval-harness.md`,
+  the scaffold's `evals/HARNESS.md`); the delegated critic's stance, two-sided brake and
+  concrete render protocol, and the rule that a captured signature outranks a generic slop
+  tell (`references/taste-and-composition.md`); Thai leading and line breaking with the
+  evidence that live Thai systems ship leading a readability check would fail, so on a lock
+  screen it is a layout finding, never a fidelity failure (`references/microcopy-a11y-i18n.md`);
+  domain checks for charts no gate sees (`references/dataviz-craft.md`); the implicit grid
+  column and the visually-hidden span that widen a page (`references/modern-css.md`); when a
+  width sweep and a mobile-first strip test apply (phone-runnable pages only, never a fixed
+  frame) and the foldable widths as a dated third-party claim (`references/surface-classes.md`).
+  `SECURITY.md` now states what the engine writes and where, the only commands that reach the
+  network, and what stays on disk and can quote a system's material, each claim naming its
+  file. `CONTRIBUTING.md` rule 2 gains the header docstring and the gate-gap report;
+  `.github/ISSUE_TEMPLATE/gate-gap.yml` is that report's shape. Gates proposed from the same
+  read and not built here (a merged list goes to the owner first): rendered contrast per state
+  with composited backgrounds, target size with the criterion's three exceptions, a focus trap,
+  reduced-motion parity, an interactive-contract click, clipped text and overlap, a report
+  bound to the source's hash, and lock token families for sizing, states, opacity and chart
+  palettes.
 - **Behaviour kit: a vendored runtime and its checker** (`runtime/ui-sdk/`, `scripts/ui-sdk.mjs`,
   `references/behavior-kit.md`; UI SDK by Vercel, Apache-2.0, pinned at 0.1.0-beta.10, credited
   in NOTICE). The engine proved how a screen looks and nothing about what it does. The runtime's
@@ -131,6 +192,34 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 - **Proof:** `fixtures/capture/letter-spacing.test.mjs` (7 cases, in CI). Run against the
   previous `capture-figma.mjs`, 5 of the 7 fail; the two that pass are the px and zero cases
   the old code already handled.
+- **`raw-hex` let a colour through when it was written as a keyword or a modern colour function**
+  (class: verdict-changing for source that paints with `navy`, `gray`, `oklch(...)` and the like;
+  no lock changes). Planted in a copy of the golden screen, none of these was reported:
+  `color: rebeccapurple`, `border: 1px solid gray`, `box-shadow: 0 1px 2px black`,
+  `color: oklch(40% 0.1 150)`, `<rect fill="tomato">`, `style="color: navy"`. Each looks right on
+  the page and is connected to no token, which is the fault the section exists for.
+  - The 148 CSS colour keywords are judged by the hex they paint (table read back from Chromium
+    149, 0 mismatches): an ERROR with the nearest lock token named, or the white/black WARN for
+    `white` and `black`. A keyword is read only where it can only be a colour: a paint declaration
+    (any property ending in `color`, the paint shorthands and their longhands, vendor prefixes
+    included), a paint attribute whose whole value is the keyword, and a quoted value on a paint
+    key in script or JSX. Never prose, a class name, a font or animation name, or an unquoted
+    script identifier.
+  - `oklch()`, `oklab()`, `lab()`, `lch()`, `hwb()` and `color()` literals are an ERROR. They are
+    not converted to sRGB, so no nearest token is named. A channel from var() or calc(), a
+    relative colour and alpha 0 are not literals.
+  - The condition of `@supports`, `@media` and `@container` is not read by these two scans: it
+    asks the browser a question and paints nothing. MEASURED on one real compiled stylesheet:
+    `@supports (color: color-mix(in lab, red, red))` read as 97 uses of `red` before this.
+  - Still unread, by name: a keyword inside a CSS-in-JS template or a style string built in
+    script, a custom property whose value holds a keyword among other words, a framework's own
+    palette class.
+  - **Proof:** `fixtures/lint/raw-colour-notations.test.mjs` (23 cases, in the `fixtures/lint`
+    suite CI already runs). 37 of 37 planted breaks of the new code fail it. Read-only over 53
+    real lock trees: the only new findings are true ones (test pages painting `red`, and compiled
+    `oklab()` fallbacks in a captured third-party stylesheet that already failed on hex).
+  - The lead came from claude2figma's "looks right, zero Design System connection" (Sen Lin, MIT;
+    NOTICE).
 - **Eight adherence-lint rule defects** (class: verdict-changing for source that writes colours as
   `rgb()`/`hsl()` or sets `system-ui` on a heading; the rest correct counts, lines or misses; no
   lock changes; the ninth defect is the `export-artifacts` section under Added):
