@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>layout fixture</title><style>:root{--edge:1px solid #d9d6cf;--ink:#222;--surface:#f3f2ee;--accent:#0f5132;--accent-rgb:15 81 50;--hairline:#d9d6cf;--shadow-1:0 1px 2px rgba(0,0,0,.2);--wash:linear-gradient(#f3f2ee,#e4e1da)}body{margin:24px;font:14px/20px Arial,sans-serif;color:var(--ink);background:var(--surface)}p{margin:8px 0}.btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 12px;font:inherit}.ruled{border-bottom:var(--edge);width:240px;padding:4px 0}[data-theme="night"]{--night-ink:#e8e6e1;--night-surface:#1c1b18}</style></head><body>
+<p>Words in the ink token.</p>
+<!-- a colour that transitions still follows its token at once when the token changes -->
+<p style="color:var(--accent);transition:color 2s">Words that ease between states.</p>
+<div style="background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid var(--hairline);box-shadow:var(--shadow-1);padding:12px;width:240px">A tinted card built from tokens.</div>
+<div style="background:rgb(var(--accent-rgb) / .5);width:120px;height:24px;margin-top:8px"></div>
+<div style="background-image:var(--wash);width:120px;height:24px;margin-top:8px"></div>
+<svg width="24" height="24" style="color:var(--accent)"><rect width="24" height="24" fill="currentColor"/></svg>
+<section data-theme="night" style="background:var(--night-surface);color:var(--night-ink);padding:12px;margin-top:8px">A themed section with tokens of its own.</section>
+<!-- a token may hold a whole border: the colour inside it is still a token's -->
+<div class="ruled">A row with a ruled edge.</div>
+<!-- absolute white on the accent: the lint has a carve-out for it, and so does this rule -->
+<button class="btn">Send money</button>
+<div style="width:120px;height:24px"></div>
+</body></html>

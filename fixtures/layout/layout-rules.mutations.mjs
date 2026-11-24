@@ -1,4 +1,4 @@
-// Planted breaks for the layout audit's text-clipped and control-overlap rules.
+// Planted breaks for the layout audit's text-clipped, control-overlap and colour-unbound rules.
 //   node scripts/mutation-run.mjs fixtures/layout/layout-rules.mutations.mjs
 // The suite named below must fail for every one. A break that no longer applies fails the run.
 export default {
@@ -118,6 +118,91 @@ export default {
       "name": "control-overlap: level raised to ERROR",
       "find": "add('control-overlap', 'WARN', small.el",
       "replace": "add('control-overlap', 'ERROR', small.el"
+    },
+    {
+      "name": "colour-unbound: solid red read as transparent",
+      "find": "/^rgba\\((?:[^,]+,){3}\\s*0\\)$/.test(c)",
+      "replace": "/,\\s*0\\)$/.test(c)"
+    },
+    {
+      "name": "colour-unbound: colours inside a composite token not forced",
+      "find": "        if (swapped !== v) forced.set(prop, swapped);",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: channel triples not forced",
+      "find": "      else if (/^[\\d.]+%?(?:\\s*[, ]\\s*[\\d.]+%?){2}$/.test(v)) forced.set(prop, v.includes(',') ? '1, 2, 3' : '1 2 3');",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: themed scopes not read",
+      "find": "for (const host of [document.documentElement, ...document.querySelectorAll('[data-theme]')]) {",
+      "replace": "for (const host of [document.documentElement]) {"
+    },
+    {
+      "name": "colour-unbound: transitions left running",
+      "find": "transition: none !important; }`;",
+      "replace": "}`;"
+    },
+    {
+      "name": "colour-unbound: forced without !important",
+      "find": "`${prop}: ${v} !important;`",
+      "replace": "`${prop}: ${v};`"
+    },
+    {
+      "name": "colour-unbound: white and black reported",
+      "find": "if (value === 'rgb(255, 255, 255)' || value === 'rgb(0, 0, 0)') { anchors++; continue; }",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: judged with no tokens on the page",
+      "find": "  if (forced.size === 0) {\n    manual.push('This page declares no colour token",
+      "replace": "  if (false) {\n    manual.push('This page declares no colour token"
+    },
+    {
+      "name": "colour-unbound: the page left restyled",
+      "find": "    const after = painted.map(paintsOf);\n    style.remove();",
+      "replace": "    const after = painted.map(paintsOf);"
+    },
+    {
+      "name": "colour-unbound: count not kept",
+      "find": "        g.count++;\n        loose.set(key, g);",
+      "replace": "        loose.set(key, g);"
+    },
+    {
+      "name": "colour-unbound: SVG fills not read",
+      "find": "          if (cs.fill !== 'none' && !clear(cs.fill)) out.push(['fill', cs.fill]);",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: borders not read",
+      "find": "      for (const c of sides) out.push(['border', c]);",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: shadows not read",
+      "find": "      if (cs.boxShadow !== 'none') out.push(['shadow', cs.boxShadow]);",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: backgrounds not read",
+      "find": "      if (!clear(cs.backgroundColor)) out.push(['background', cs.backgroundColor]);",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: paints not counted",
+      "find": "        checked.paints++;\n",
+      "replace": ""
+    },
+    {
+      "name": "colour-unbound: level raised to ERROR",
+      "find": "add('colour-unbound', 'WARN', g.first",
+      "replace": "add('colour-unbound', 'ERROR', g.first"
+    },
+    {
+      "name": "colour-unbound: a moved colour reported as unbound",
+      "find": "        if (!now.has(`${kind} ${value}`)) continue;",
+      "replace": "        if (now.has(`${kind} ${value}`)) continue;"
     }
   ]
 };

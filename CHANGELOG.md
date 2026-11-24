@@ -21,6 +21,25 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Layout audit: a painted colour that follows no token** (`scripts/layout-audit-core.mjs`, rule
+  `colour-unbound`, WARN; class: additive). The rendered twin of the lint's raw-colour rule. The
+  lint reads source, so it sees a hex in a stylesheet and misses a colour set by script, written
+  in a notation it does not parse, or arriving from a stylesheet outside the scanned tree. This
+  rule asks the page itself: every custom property on the root or on a `[data-theme]` scope that
+  is a colour, or holds one (a shadow, a gradient, a whole border, a bare channel triple), is
+  forced to one sentinel on every element; a painted colour that did not move is connected to
+  no token. One finding per colour, with the number of elements and the first of them. Absolute
+  white and black go to `manual[]`, as the lint carves them out. A page that declares no colour
+  token is not judged and says so. The page is put back as it was found. It cannot see a colour
+  wired to the wrong token: that needs ground truth.
+  **Proof:** `colour-unbound.bad.html` (a keyword, `oklch()`, a colour set by script, an SVG
+  attribute, a border, a shadow: six findings) and `.good.html` in `fixtures/layout/`; 17 planted
+  breaks in the layout list (38 of 38 caught). One was found by the test before any break: the
+  transparency test read `rgb(204, 0, 0)` as transparent because it ends in ", 0)". MEASURED
+  read-only on 660 real pages: 955 findings on 344 pages, by kind border 505, background 101,
+  text-shadow 95, gradient 92, text 73, shadow 45, fill 38, stroke 6; the commonest is a
+  hand-written `rgba(0, 0, 0, 0.1)` hairline (273). Those sampled were real. The idea of asking
+  what is connected, rather than what looks right, is claude2figma's (NOTICE).
 - **Layout audit: cut-off words and overlapping controls** (`scripts/layout-audit-core.mjs`,
   rules `text-clipped` and `control-overlap`, both WARN; class: additive, no verdict changes
   without `--strict`). `text-clipped`: a box that hides part of its own words (overflow hidden or

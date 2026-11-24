@@ -28,7 +28,7 @@ async function audit(file, opts = {}) {
 const rulesOf = (r) => r.findings.map((f) => f.rule);
 
 const RULES = ['control-box-fit', 'control-edge-inset', 'container-bottom-inset', 'text-inset', 'small-text',
-  'unit-wrapped', 'fat-row', 'empty-pane', 'mixed-icons', 'emoji-icon', 'text-clipped', 'control-overlap'];
+  'unit-wrapped', 'fat-row', 'empty-pane', 'mixed-icons', 'emoji-icon', 'text-clipped', 'control-overlap', 'colour-unbound'];
 
 for (const rule of RULES) {
   test(`${rule}: fires on the bad page, named with the element and a measured number`, async () => {
@@ -86,6 +86,44 @@ test('levels: clipped text and overlapping controls are warnings until a screen 
   assert.equal(clip.findings.find((f) => f.rule === 'text-clipped').level, 'WARN');
   const over = await audit('control-overlap.bad.html');
   assert.equal(over.findings.find((f) => f.rule === 'control-overlap').level, 'WARN');
+});
+
+test('colour-unbound: every route to a raw colour is found, one finding per colour with its count', async () => {
+  const r = await audit('colour-unbound.bad.html');
+  const hits = r.findings.filter((f) => f.rule === 'colour-unbound');
+  const seen = hits.map((f) => `${f.evidence.kind} ${f.evidence.value}`).sort();
+  assert.deepEqual(seen, [
+    'background oklch(0.4 0.1 150)',
+    'border rgb(204, 0, 0)',
+    'fill rgb(255, 99, 71)',
+    'shadow rgba(0, 0, 0, 0.5) 0px 2px 6px 0px',
+    'text rgb(0, 0, 128)',
+    'text rgb(10, 20, 30)',
+  ], JSON.stringify(hits.map((f) => f.evidence)));
+  const navy = hits.find((f) => f.evidence.value === 'rgb(0, 0, 128)');
+  assert.equal(navy.evidence.count, 2, 'two paragraphs share the keyword');
+  assert.ok(navy.element.includes('#keyword'), 'the finding names the first element');
+  assert.ok(hits.every((f) => f.level === 'WARN'));
+  assert.ok(r.checked.paints >= 8, JSON.stringify(r.checked));
+});
+
+test('colour-unbound: absolute white on a token fill is a note, not a finding', async () => {
+  const r = await audit('colour-unbound.good.html');
+  assert.deepEqual(r.findings.filter((f) => f.rule === 'colour-unbound'), []);
+  assert.ok(r.manual.some((m) => /absolute white or black/.test(m)), JSON.stringify(r.manual));
+});
+
+test('colour-unbound: a page that declares no colour token has nothing to be bound to, and says so', async () => {
+  const r = await audit('control-box-fit.good.html');
+  assert.deepEqual(r.findings.filter((f) => f.rule === 'colour-unbound'), []);
+  assert.equal(r.checked.paints, 0);
+  assert.ok(r.manual.some((m) => /declares no colour token/.test(m)), JSON.stringify(r.manual));
+});
+
+test('colour-unbound: the page is left as it was found', async () => {
+  await audit('colour-unbound.bad.html');
+  const left = await page_.page.evaluate(() => ({ styles: document.querySelectorAll('style').length, ink: getComputedStyle(document.body).color }));
+  assert.deepEqual(left, { styles: 1, ink: 'rgb(34, 34, 34)' });
 });
 
 test('data-layout-ignore opts a subtree out', async () => {

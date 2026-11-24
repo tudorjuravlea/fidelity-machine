@@ -25,6 +25,7 @@
 //   emoji-icon              WARN   a lone emoji in a <= 56 px seat beside words
 //   text-clipped            WARN   a box that cuts its own words (overflow hidden/clip) with no ellipsis or clamp
 //   control-overlap         WARN   two controls in one layer sharing more than 25 % of the smaller one's area
+//   colour-unbound          WARN   a painted colour that did not move when every colour token on the page was changed
 // Opt-outs: `data-layout-ignore` on an element skips it and everything under it. Anything whose
 // geometry is animating when the audit runs is DEFERRED (reported, not judged): a deferred item
 // makes the run inconclusive (exit 6), never a pass.
@@ -36,7 +37,7 @@ export function auditLayout(opts = {}) {
   const findings = [];
   const deferred = [];
   const manual = [];
-  const checked = { controls: 0, paddedContainers: 0, textLeaves: 0, panes: 0, lists: 0, iconGroups: 0, interactive: 0 };
+  const checked = { controls: 0, paddedContainers: 0, textLeaves: 0, panes: 0, lists: 0, iconGroups: 0, interactive: 0, paints: 0 };
   const root = document.body;
   if (!root) return { findings, deferred, manual: ['no <body> to audit'], checked };
 
@@ -388,6 +389,90 @@ export function auditLayout(opts = {}) {
     const row = el.parentElement;
     const words = row && /\p{L}{3,}/u.test((row.textContent || '').replace(t, ''));
     if (words) add('emoji-icon', 'WARN', el, `stands where an icon belongs (a ${Math.round(r.width)}px seat beside words) — emoji are content (a reaction, a message); icons are drawn, one family`, { seat: Math.round(r.width) });
+  }
+
+  // ---- colour-unbound -------------------------------------------------------------------------
+  // The rendered twin of the lint's raw-colour rule. Every colour token the page declares (a
+  // custom property on the root or on a [data-theme] scope whose value is or holds a colour: a
+  // shadow, a gradient, a border, a bare channel triple) is forced to one sentinel on every element; a painted
+  // colour that did not move follows no token, whatever notation or route put it there: a
+  // keyword, oklch(), a script, an SVG attribute, a stylesheet the lint never read. Absolute
+  // white and black are a note, as in the lint. Read after everything else: it restyles the page
+  // for an instant and puts it back.
+  const SENTINEL = 'rgb(1, 2, 3)';
+  const forced = new Map();
+  for (const host of [document.documentElement, ...document.querySelectorAll('[data-theme]')]) {
+    if (typeof host.computedStyleMap !== 'function') break;
+    const hostStyle = getComputedStyle(host);
+    for (const [prop] of host.computedStyleMap()) {
+      if (!prop.startsWith('--') || forced.has(prop)) continue;
+      const v = hostStyle.getPropertyValue(prop).trim();
+      if (!v) continue;
+      // A token that is a colour is replaced whole (a keyword included). A bare channel triple
+      // ("15 81 50", read as rgb(var(--x) / a)) becomes another triple. Any other token keeps its
+      // shape and has each colour literal inside it replaced: a shadow, a gradient, a border.
+      if (CSS.supports('color', v)) forced.set(prop, SENTINEL);
+      else if (/^[\d.]+%?(?:\s*[, ]\s*[\d.]+%?){2}$/.test(v)) forced.set(prop, v.includes(',') ? '1, 2, 3' : '1 2 3');
+      else {
+        const swapped = v.replace(/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)/gi, SENTINEL);
+        if (swapped !== v) forced.set(prop, swapped);
+      }
+    }
+  }
+  if (forced.size === 0) {
+    manual.push('This page declares no colour token (no custom property holding a colour on the root or a [data-theme] scope), so whether its colours follow tokens was not judged.');
+  } else {
+    // Fully transparent only: rgba() with a fourth channel of 0, or `/ 0`. rgb(204, 0, 0) also ends
+    // in ", 0)" and is a solid red.
+    const clear = (c) => c === 'transparent' || /^rgba\((?:[^,]+,){3}\s*0\)$/.test(c) || /\/\s*0%?\)$/.test(c);
+    const paintsOf = (el) => {
+      const cs = getComputedStyle(el);
+      const out = [];
+      if (el instanceof SVGElement && el.tagName !== 'svg') {
+        if (el instanceof SVGGeometryElement || el.tagName === 'text') {
+          if (cs.fill !== 'none' && !clear(cs.fill)) out.push(['fill', cs.fill]);
+          if (cs.stroke !== 'none' && px(cs.strokeWidth) > 0 && !clear(cs.stroke)) out.push(['stroke', cs.stroke]);
+        }
+        return out;
+      }
+      if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) out.push(['text', cs.color]);
+      if (!clear(cs.backgroundColor)) out.push(['background', cs.backgroundColor]);
+      if (cs.backgroundImage.includes('gradient(')) out.push(['gradient', cs.backgroundImage]);
+      const sides = new Set();
+      for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+        if (px(cs[`border${side}Width`]) > 0 && !['none', 'hidden'].includes(cs[`border${side}Style`]) && !clear(cs[`border${side}Color`])) sides.add(cs[`border${side}Color`]);
+      }
+      for (const c of sides) out.push(['border', c]);
+      if (cs.outlineStyle !== 'none' && px(cs.outlineWidth) > 0 && !clear(cs.outlineColor)) out.push(['outline', cs.outlineColor]);
+      if (cs.boxShadow !== 'none') out.push(['shadow', cs.boxShadow]);
+      if (cs.textShadow !== 'none') out.push(['text-shadow', cs.textShadow]);
+      return out;
+    };
+    const painted = [root, ...all].filter((el) => visible(el));
+    const before = painted.map(paintsOf);
+    const style = document.createElement('style');
+    style.textContent = `*, *::before, *::after { ${[...forced].map(([prop, v]) => `${prop}: ${v} !important;`).join(' ')} transition: none !important; }`;
+    document.head.appendChild(style);
+    const after = painted.map(paintsOf);
+    style.remove();
+    const loose = new Map();
+    let anchors = 0;
+    painted.forEach((el, i) => {
+      const now = new Set(after[i].map(([kind, value]) => `${kind} ${value}`));
+      for (const [kind, value] of before[i]) {
+        checked.paints++;
+        if (!now.has(`${kind} ${value}`)) continue;
+        if (value === 'rgb(255, 255, 255)' || value === 'rgb(0, 0, 0)') { anchors++; continue; }
+        const key = `${kind} ${value}`;
+        const g = loose.get(key) || { kind, value, count: 0, first: el };
+        g.count++;
+        loose.set(key, g);
+      }
+    });
+    for (const g of loose.values()) {
+      add('colour-unbound', 'WARN', g.first, `paints ${g.kind} ${g.value} on ${g.count} element(s) and no colour token reaches it: it did not move when all ${forced.size} tokens on the page were changed — read it from a token var`, { kind: g.kind, value: g.value, count: g.count, tokens: forced.size });
+    }
+    if (anchors) manual.push(`${anchors} paint(s) are absolute white or black that no token reaches; the lint carves those out too, so check each is meant (text on a filled control usually is).`);
   }
 
   manual.push('This audit checks box fit, authored insets, cut-off words and overlapping controls from live geometry; optical centring, contrast, interaction states and motion are not judged here.');

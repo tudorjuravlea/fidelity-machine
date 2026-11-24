@@ -1,0 +1,12 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>layout fixture</title><style>:root{--ink:#222;--surface:#f3f2ee;--accent:#0f5132;--accent-rgb:15 81 50;--hairline:#d9d6cf;--shadow-1:0 1px 2px rgba(0,0,0,.2);--wash:linear-gradient(#f3f2ee,#e4e1da)}body{margin:24px;font:14px/20px Arial,sans-serif;color:var(--ink);background:var(--surface)}p{margin:8px 0}</style></head><body>
+<p>Words in the ink token.</p>
+<!-- each of these looks right and follows no token -->
+<p id="keyword" style="color:navy">A colour keyword.</p>
+<p id="twin" style="color:navy">The same keyword again.</p>
+<div id="modern" style="background:oklch(40% 0.1 150);width:120px;height:24px"></div>
+<p id="scripted">Set by script.</p>
+<svg width="24" height="24"><rect id="shape" width="24" height="24" fill="tomato"/></svg>
+<div id="edge" style="border:1px solid #cc0000;width:120px;height:24px;margin-top:8px"></div>
+<div id="lifted" style="box-shadow:0 2px 6px rgba(0,0,0,.5);width:120px;height:24px;margin-top:8px"></div>
+<script>document.getElementById("scripted").style.color="rgb(10, 20, 30)";</script>
+</body></html>
