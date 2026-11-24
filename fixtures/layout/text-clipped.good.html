@@ -1,0 +1,19 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>layout fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button{font:inherit;border:0;border-radius:6px;background:#0f5132;color:#fff}.card{background:#f3f2ee;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.08);width:320px}ul{list-style:none;margin:0;padding:0}svg{width:16px;height:16px;vertical-align:middle}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}</style></head><body>
+<!-- an ellipsis says more exists -->
+<div style="width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Quarterly revenue by sales region</div>
+<!-- a line clamp says so too -->
+<div style="width:200px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1">Two lines of copy that a clamp cuts after the first line, with an ellipsis the browser draws</div>
+<!-- a scroller can be scrolled -->
+<div style="width:120px;overflow:auto;white-space:nowrap">Quarterly revenue by sales region</div>
+<!-- text for a screen reader only -->
+<span class="sr">Opens the quarterly revenue report in a new tab</span>
+<!-- a clipping box whose words fit -->
+<div style="width:260px;overflow:hidden;white-space:nowrap">Quarterly revenue</div>
+<!-- overflow does not apply to an inline box: it cuts nothing (MEASURED on a real mail-list page) -->
+<p style="margin:8px 0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Your trip receipt</span></p>
+<p style="margin:8px 0"><span style="overflow:hidden;white-space:nowrap">Lunch on Thursday?</span></p>
+<!-- a carousel clips its cards; its own word fits -->
+<div style="width:200px;overflow:hidden">Latest<div style="white-space:nowrap">A long row of cards that runs out of the box on purpose, to be scrolled</div></div>
+<!-- a rounded card clips its children, not its own words -->
+<div class="card" style="overflow:hidden;padding:12px"><p style="margin:0">Quarterly revenue by sales region, in full, on as many lines as it needs.</p></div>
+</body></html>

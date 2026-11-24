@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>layout fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button{font:inherit;border:0;border-radius:6px;background:#0f5132;color:#fff}.card{background:#f3f2ee;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.08);width:320px}ul{list-style:none;margin:0;padding:0}svg{width:16px;height:16px;vertical-align:middle}.seg button{border-radius:0;border:1px solid #0a3;margin-left:-1px;height:32px;padding:0 12px}</style></head><body>
+<!-- a clear button sits inside its field on purpose -->
+<div style="position:relative;width:240px"><input aria-label="Search" style="width:240px;height:36px;box-sizing:border-box"><button aria-label="Clear" style="position:absolute;right:4px;top:4px;width:28px;height:28px">x</button></div>
+<!-- segments share a hairline -->
+<div class="seg" style="display:flex;margin-top:16px;padding-left:1px"><button>Day</button><button>Week</button><button>Month</button></div>
+<!-- a wrapped link is its lines, not the rectangle around them -->
+<p style="width:200px">Read the <a href="#t">terms of service and the privacy policy for this product</a> or <a href="#a">ask</a>.</p>
+<!-- a control inside a control is one target with a part -->
+<a href="#card" style="display:block;width:240px;padding:12px;background:#f3f2ee"><span role="button" tabindex="0">Inner action</span> Card link</a>
+<!-- a collapsed panel shows nothing -->
+<div style="height:0;overflow:hidden"><button style="height:36px">Hidden action</button></div><button style="height:36px">Next section</button>
+<!-- a dialog lies over the page on purpose -->
+<div style="position:absolute;left:300px;top:300px"><button style="width:120px;height:36px">Under</button></div>
+<div role="dialog" aria-label="Confirm" style="position:fixed;left:280px;top:280px;width:200px;padding:20px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.3)"><button style="width:120px;height:36px">Confirm</button></div>
+</body></html>

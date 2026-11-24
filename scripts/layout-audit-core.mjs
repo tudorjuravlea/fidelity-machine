@@ -23,6 +23,8 @@
 //   empty-pane              WARN   [data-pane]: content stops more than max(100 px, 65 %) above the pane's bottom
 //   mixed-icons             WARN   one nav/list/toolbar with filled-only and stroke-only svg glyphs side by side
 //   emoji-icon              WARN   a lone emoji in a <= 56 px seat beside words
+//   text-clipped            WARN   a box that cuts its own words (overflow hidden/clip) with no ellipsis or clamp
+//   control-overlap         WARN   two controls in one layer sharing more than 25 % of the smaller one's area
 // Opt-outs: `data-layout-ignore` on an element skips it and everything under it. Anything whose
 // geometry is animating when the audit runs is DEFERRED (reported, not judged): a deferred item
 // makes the run inconclusive (exit 6), never a pass.
@@ -34,7 +36,7 @@ export function auditLayout(opts = {}) {
   const findings = [];
   const deferred = [];
   const manual = [];
-  const checked = { controls: 0, paddedContainers: 0, textLeaves: 0, panes: 0, lists: 0, iconGroups: 0 };
+  const checked = { controls: 0, paddedContainers: 0, textLeaves: 0, panes: 0, lists: 0, iconGroups: 0, interactive: 0 };
   const root = document.body;
   if (!root) return { findings, deferred, manual: ['no <body> to audit'], checked };
 
@@ -190,6 +192,34 @@ export function auditLayout(opts = {}) {
       add('small-text', 'WARN', el, `renders at ${round(size)}px — nothing under 10px reads; size it from the type scale`, { fontSize: round(size) });
     }
     const text = own.map((n) => n.textContent).join('').trim();
+    // text-clipped: the box hides part of its OWN words and shows no sign of it. Measured on the
+    // words themselves (the rects of the element's own text nodes against its clip edge), so a
+    // wide child, a scroller, an ellipsis and a line clamp are not findings. An inline box is
+    // skipped: overflow does not apply to it, so it cuts nothing.
+    const clipsX = ['hidden', 'clip'].includes(cs.overflowX), clipsY = ['hidden', 'clip'].includes(cs.overflowY);
+    if ((clipsX || clipsY) && text.length > 2 && cs.display !== 'inline' && !el.matches('input, textarea, select, option')) {
+      if (moving(el)) defer(el, 'a clipping text box is animating');
+      else {
+        const edgeL = r.left + px(cs.borderLeftWidth), edgeT = r.top + px(cs.borderTopWidth);
+        const edgeR = edgeL + el.clientWidth, edgeB = edgeT + el.clientHeight;
+        let overX = 0, overY = 0;
+        for (const n of own) {
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const b of range.getClientRects()) {
+            if (b.width < 0.5) continue;
+            overX = Math.max(overX, b.right - edgeR, edgeL - b.left);
+            overY = Math.max(overY, b.bottom - edgeB);
+          }
+        }
+        const clamped = cs.webkitLineClamp && cs.webkitLineClamp !== 'none';
+        if (clipsX && cs.textOverflow !== 'ellipsis' && overX > 2) {
+          add('text-clipped', 'WARN', el, `cuts ${round(overX)}px of its own words at its side edge and shows no ellipsis — let the box grow, let the line wrap, or end it with an ellipsis`, { axis: 'x', hidden: round(overX), width: round(r.width) });
+        } else if (clipsY && !clamped && overY > px(cs.fontSize) * 0.5) {
+          add('text-clipped', 'WARN', el, `hides ${round(overY)}px of its own words under its bottom edge and shows no sign of it — let the box grow, or clamp the lines so the last one ends in an ellipsis`, { axis: 'y', hidden: round(overY), height: round(r.height) });
+        }
+      }
+    }
     if (unitRe.test(text) && !el.children.length) {
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -206,6 +236,64 @@ export function auditLayout(opts = {}) {
           if (ownsEdge(left) && r.width < or.width - 16) add('text-inset', 'WARN', el, `sits ${round(left)}px from the left edge of ${name(o)} — words keep the surface's inset (12px; 8 is the floor)`, { left: round(left), owner: name(o) });
           else if (ownsEdge(right) && r.width < or.width - 16) add('text-inset', 'WARN', el, `sits ${round(right)}px from the right edge of ${name(o)} — words keep the surface's inset (12px; 8 is the floor)`, { right: round(right), owner: name(o) });
         }
+      }
+    }
+  }
+
+  // ---- control-overlap ------------------------------------------------------------------------
+  // Two controls that share pixels cannot both be pressed. Judged on what is actually shown: each
+  // control's per-line rects (a wrapped link is its lines, not the rectangle around them), clipped
+  // by every ancestor that hides overflow (a collapsed panel shows nothing). Not judged: a control
+  // inside another, a positioned control lying wholly inside another (a clear button in a field),
+  // and two controls in different layers (a dialog, a menu, a fixed bar over the page).
+  const interactive = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"], [role="radio"]';
+  const shownRects = (el) => {
+    const out = [];
+    for (const b of el.getClientRects()) {
+      let left = b.left, right = b.right, top = b.top, bottom = b.bottom;
+      for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        const ar = a.getBoundingClientRect();
+        if (ac.overflowX !== 'visible') { left = Math.max(left, ar.left); right = Math.min(right, ar.right); }
+        if (ac.overflowY !== 'visible') { top = Math.max(top, ar.top); bottom = Math.min(bottom, ar.bottom); }
+      }
+      if (right - left >= 1 && bottom - top >= 1) out.push({ left, right, top, bottom });
+    }
+    return out;
+  };
+  const layerOf = (el) => {
+    for (let a = el; a && a !== document.documentElement; a = a.parentElement) {
+      if (a.matches('dialog, [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [role="tooltip"], [popover]')) return a;
+      const ac = getComputedStyle(a);
+      if (ac.position === 'fixed' || ac.position === 'sticky' || (ac.position === 'absolute' && ac.zIndex !== 'auto' && a !== el)) return a;
+    }
+    return root;
+  };
+  const area = (rects) => rects.reduce((n, b) => n + (b.right - b.left) * (b.bottom - b.top), 0);
+  const within = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+  const pressable = all.filter((el) => el.matches(interactive) && !el.closest('svg') && visible(el) && !el.disabled
+    && el.getAttribute('aria-disabled') !== 'true' && getComputedStyle(el).pointerEvents !== 'none')
+    .map((el) => ({ el, rects: shownRects(el), box: el.getBoundingClientRect(), layer: layerOf(el), positioned: ['absolute', 'fixed'].includes(getComputedStyle(el).position) }))
+    .filter((c) => c.rects.length);
+  if (pressable.length > 800) manual.push(`${pressable.length} controls on one page: overlap between controls was not judged (limit 800).`);
+  else if (pressable.length >= 2) {
+    checked.interactive = pressable.length;
+    for (let i = 0; i < pressable.length; i++) {
+      for (let j = i + 1; j < pressable.length; j++) {
+        const a = pressable[i], b = pressable[j];
+        if (b.box.top >= a.box.bottom || a.box.top >= b.box.bottom || b.box.left >= a.box.right || a.box.left >= b.box.right) continue;
+        if (a.el.contains(b.el) || b.el.contains(a.el) || a.layer !== b.layer) continue;
+        if ((b.positioned && within(b.box, a.box)) || (a.positioned && within(a.box, b.box))) continue;
+        let shared = 0;
+        for (const x of a.rects) for (const y of b.rects) {
+          const w = Math.min(x.right, y.right) - Math.max(x.left, y.left), h = Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top);
+          if (w > 0 && h > 0) shared += w * h;
+        }
+        const [small, big] = area(a.rects) <= area(b.rects) ? [a, b] : [b, a];
+        const share = shared / area(small.rects);
+        if (share <= 0.25) continue;
+        if (moving(a.el) || moving(b.el)) { defer(small.el, 'an overlapping control is animating'); continue; }
+        add('control-overlap', 'WARN', small.el, `has ${Math.round(share * 100)}% of its area under or over ${name(big.el)} — two controls that share pixels cannot both be pressed; move one, or give the row room`, { share: round(share), other: name(big.el) });
       }
     }
   }
@@ -302,7 +390,7 @@ export function auditLayout(opts = {}) {
     if (words) add('emoji-icon', 'WARN', el, `stands where an icon belongs (a ${Math.round(r.width)}px seat beside words) — emoji are content (a reaction, a message); icons are drawn, one family`, { seat: Math.round(r.width) });
   }
 
-  manual.push('This audit checks box fit and authored insets from live geometry; optical centring, contrast, interaction states and motion are not judged here.');
+  manual.push('This audit checks box fit, authored insets, cut-off words and overlapping controls from live geometry; optical centring, contrast, interaction states and motion are not judged here.');
   const frames = all.filter((e) => e.tagName === 'IFRAME' && visible(e)).length;
   if (frames) manual.push(`${frames} visible iframe(s) were not inspected; audit their documents separately.`);
   return { findings, deferred, manual, checked, opts: { ...opts } };

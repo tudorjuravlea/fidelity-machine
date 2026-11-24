@@ -7,6 +7,37 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 
 ### Added
 
+- **Planted breaks, kept and run** (`scripts/mutation-run.mjs`, `fixtures/mutation/`, CONTRACT
+  §Invocation contract). A test that has never failed has not been tested, and the lists of
+  deliberate breaks that proved earlier suites were written in a scratch folder and thrown away.
+  A list now lives beside the tests it proves (`fixtures/<area>/<suite>.mutations.mjs`: a target
+  file, what to copy, the suite to run, one string replacement per break). The runner plants each
+  break in a copy and requires the suite to fail: exit 0 every break caught, 1 a break survived,
+  2 could not look. A break whose text has drifted out of the file is NOT APPLIED and fails the
+  run, so a list cannot quietly prove less than it says; a break that leaves the file
+  unparseable and a suite already red are refused the same way. First lists: 37 breaks for the
+  raw-colour scanners, 21 for the two layout rules below; both run in CI. One trap found building
+  it: a nested `node --test` inherits `NODE_TEST_CONTEXT` from a parent runner and exits 0
+  whatever happened, so every break "survived" until the variable was dropped. The practice of
+  setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
+  NOTICE).
+- **Layout audit: cut-off words and overlapping controls** (`scripts/layout-audit-core.mjs`,
+  rules `text-clipped` and `control-overlap`, both WARN; class: additive, no verdict changes
+  without `--strict`). `text-clipped`: a box that hides part of its own words (overflow hidden or
+  clip) and shows no ellipsis or line clamp, measured on the rects of the element's own text
+  nodes against its clip edge: more than 2 px sideways, or more than half a line downwards. Not
+  findings: a scroller, an ellipsis, a clamp, a carousel clipping its cards, and an inline box
+  (overflow does not apply to one; MEASURED: the only findings on 660 real pages were six inline
+  labels, all false, before that case was excluded). A box whose words are moving is deferred.
+  `control-overlap`: two enabled, visible controls in one layer whose per-line rects, clipped by
+  every ancestor that hides overflow, share more than 25 % of the smaller one's area. Not judged:
+  a control inside another, a positioned control lying wholly inside another (a clear button in
+  a field), a wrapped link's bounding rectangle, a collapsed panel, and controls in different
+  layers (a dialog, a menu, a fixed bar over the page). Zero findings on the same 660 pages.
+  **Proof:** one bad and one good page per rule plus a moving ticker in `fixtures/layout/`;
+  `fixtures/layout/layout-rules.mutations.mjs`, 21 of 21 planted breaks caught. Both checks
+  follow ux-ui-agent-skills' overflow gate (NOTICE), rebuilt on the engine's audit with the
+  layer and clipping rules its version lacks.
 - **Plugin-sandbox capture scripts** (`runtime/figma/inventory.js`, `components.js`,
   `binding-census.js`, `runtime/figma/README.md`; CONTRACT.md §Plugin-sandbox scripts). The
   model pastes a file into the Figma MCP's `use_figma` and gets back a `capture.json` fragment.

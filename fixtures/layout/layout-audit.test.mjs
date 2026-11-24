@@ -28,7 +28,7 @@ async function audit(file, opts = {}) {
 const rulesOf = (r) => r.findings.map((f) => f.rule);
 
 const RULES = ['control-box-fit', 'control-edge-inset', 'container-bottom-inset', 'text-inset', 'small-text',
-  'unit-wrapped', 'fat-row', 'empty-pane', 'mixed-icons', 'emoji-icon'];
+  'unit-wrapped', 'fat-row', 'empty-pane', 'mixed-icons', 'emoji-icon', 'text-clipped', 'control-overlap'];
 
 for (const rule of RULES) {
   test(`${rule}: fires on the bad page, named with the element and a measured number`, async () => {
@@ -52,6 +52,40 @@ test('levels: box fit and bottom inset are ERROR, the rest WARN', async () => {
   assert.equal(inset.findings.find((f) => f.rule === 'container-bottom-inset').level, 'ERROR');
   const small = await audit('small-text.bad.html');
   assert.equal(small.findings.find((f) => f.rule === 'small-text').level, 'WARN');
+});
+
+test('text-clipped: both directions are found, each with the pixels cut and the element that cuts', async () => {
+  const r = await audit('text-clipped.bad.html');
+  const hits = r.findings.filter((f) => f.rule === 'text-clipped');
+  assert.equal(hits.length, 2, JSON.stringify(hits));
+  const x = hits.find((f) => f.element.includes('#cut-x'));
+  const y = hits.find((f) => f.element.includes('#cut-y'));
+  assert.ok(x && x.evidence.axis === 'x' && x.evidence.hidden > 20, JSON.stringify(x));
+  assert.ok(y && y.evidence.axis === 'y' && y.evidence.hidden >= 20, JSON.stringify(y));
+  assert.ok(r.checked.textLeaves >= 2);
+});
+
+test('text-clipped: a box whose words are moving is deferred, not judged', async () => {
+  const r = await audit('text-clipped.animating.html');
+  assert.deepEqual(r.findings.filter((f) => f.rule === 'text-clipped'), []);
+  assert.ok(r.deferred.some((d) => d.includes('clipping text box')), JSON.stringify(r.deferred));
+});
+
+test('control-overlap: one finding for the pair, with the share of the smaller control that is covered', async () => {
+  const r = await audit('control-overlap.bad.html');
+  const hits = r.findings.filter((f) => f.rule === 'control-overlap');
+  assert.equal(hits.length, 1, JSON.stringify(hits));
+  // 70 of the 80px button lie under the 120px one: 0.875 of the smaller, 0.58 of the larger.
+  assert.ok(hits[0].evidence.share > 0.85 && hits[0].evidence.share < 0.9, JSON.stringify(hits[0].evidence));
+  assert.ok(hits[0].element.includes('#b') && hits[0].evidence.other.includes('#a'), JSON.stringify(hits[0]));
+  assert.ok(r.checked.interactive >= 2);
+});
+
+test('levels: clipped text and overlapping controls are warnings until a screen declares otherwise', async () => {
+  const clip = await audit('text-clipped.bad.html');
+  assert.equal(clip.findings.find((f) => f.rule === 'text-clipped').level, 'WARN');
+  const over = await audit('control-overlap.bad.html');
+  assert.equal(over.findings.find((f) => f.rule === 'control-overlap').level, 'WARN');
 });
 
 test('data-layout-ignore opts a subtree out', async () => {
