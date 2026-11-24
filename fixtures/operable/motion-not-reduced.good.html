@@ -1,0 +1,13 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}p{margin:10px 0}button{font:inherit;padding:6px 10px;border:1px solid #666;border-radius:6px;background:#fff;color:#222}:focus-visible{outline:3px solid #06c;outline-offset:2px}@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@keyframes drift{to{transform:translateX(40px)}}@keyframes turn{to{transform:rotate(360deg)}}@keyframes glow{50%{opacity:.5}}.box{width:120px;height:24px;background:#dde}#drifter{animation:drift 1s ease-in-out infinite alternate}#slide{transition:transform .3s}#slide:hover{transform:translateX(4px)}#tint{transition:background-color .3s,color .3s}#all{transition:all .2s}#pulse{animation:glow 1.2s ease-in-out infinite}#spin{animation:turn .8s linear infinite;width:16px;height:16px;border:2px solid #666;border-top-color:transparent;border-radius:50%}@media (prefers-reduced-motion: reduce){#drifter{animation:none}#slide{transition:none}}</style></head><body>
+<p>Words that are always here.</p>
+<!-- stopped for a reader who asked -->
+<div id="drifter" class="box"></div>
+<button id="slide">Slides on hover</button>
+<!-- a colour change is not motion; neither is `all`, which cannot be told apart from one -->
+<button id="tint">Tints on hover</button>
+<button id="all">Eases everything</button>
+<!-- a fade is the sanctioned replacement -->
+<div id="pulse" class="box"></div>
+<!-- a spinner inside something busy says the page is working -->
+<div aria-busy="true" role="status" aria-label="Loading"><div id="spin"></div></div>
+</body></html>

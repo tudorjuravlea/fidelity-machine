@@ -21,6 +21,30 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Operability audit: what a reader who asked for less motion gets** (`scripts/operability-core.mjs`,
+  rules `reduced-motion-loss` ERROR and `motion-not-reduced` WARN; class: verdict-changing for a
+  screen that declares `"operable": true` and loses content under the preference). The lint
+  warns when a source has motion and no `prefers-reduced-motion` block; whether the block does
+  the right thing was never looked at, and the audit opened every page with `reduce`, so it only
+  ever saw one side. The pass reads the live page twice, flipping the media query with no
+  reload, and hands the page back as it was opened. `reduced-motion-loss`: an element visible
+  with no preference and gone under `reduce`, which is what happens when an entrance animation
+  was the only thing taking it from opacity 0 and the reduced-motion rule switches animations
+  off without setting the end state; reported once, at the outermost element that vanished.
+  `motion-not-reduced`: under `reduce`, a running CSS animation whose keyframes move geometry
+  or a declared transition on a geometry property, 100 ms or longer; one finding per motion.
+  Not motion here: a fade, a colour transition, `all` (it cannot be told apart from a colour
+  change), and whatever sits inside `aria-busy`, a status, a progress bar or an alert. Said in
+  `manual[]`: motion driven by script and a script that reads the preference once at load are
+  not judged. `motion: false` leaves the pass out of `auditPage`.
+  **Proof:** `fixtures/operable/motion.test.mjs` (7 cases, four pages, opened both ways) and
+  `motion.mutations.mjs`, 20 of 20 planted breaks caught. One fault found on the way: a
+  keyframe's own `offset` key (its position in time) read as the `offset-path` family, so a
+  fade counted as movement. MEASURED read-only on 110 real pages: 6,660 elements read, median
+  0.2 s a page, no content lost anywhere, and 85 elements on five pages sharing two utility
+  transitions that list `transform`, which is why findings are grouped. The double read follows
+  ux-ui-agent-skills' reduced-motion gate (NOTICE); its property test matched `line-height` and
+  `border-top-color` as motion, and its `transition: all` rule failed pages that only change colour.
 - **Operability audit: text contrast, measured on what is painted** (`scripts/operability-core.mjs`,
   rule `text-contrast`, WARN; class: additive). The lint judges contrast on the lock's token
   pairs; nothing judged the screen. A colour-against-colour reading cannot: it scores white text

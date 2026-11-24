@@ -19,6 +19,8 @@
 //   judgeOperability()     pure: facts in, findings out. Unit tested without a browser.
 //
 // Rules and levels (ERROR fails the audit, WARN is listed):
+//   reduced-motion-loss     ERROR  visible with no motion preference, gone under prefers-reduced-motion
+//   motion-not-reduced      WARN   a moving animation or transition that carries on under that preference
 //   text-contrast           WARN   text under 4.5:1 (3:1 when large) against what is painted behind it,
 //                                  at rest, and on hover and focus for a control
 //   dead-state              ERROR  a control that declares a two-state attribute and keeps it when clicked
@@ -68,6 +70,10 @@ const DEFAULT_MAX_STATES = 80;
 // WCAG 1.4.3: 4.5:1, or 3:1 for large text (24 px, or 18.66 px bold).
 const CONTRAST_TEXT = 4.5;
 const CONTRAST_LARGE = 3;
+// A CSS animation or transition shorter than this is a flicker, not motion (WCAG 2.3.3 reads on
+// motion a person can follow).
+const MOTION_MIN_MS = 100;
+const MOTION_SETTLE_MS = 2000;
 
 // Roles a person operates. An element carrying one is a control whatever its tag.
 const CONTROL_ROLES = ['button', 'link', 'checkbox', 'switch', 'radio', 'tab', 'menuitem', 'menuitemcheckbox',
@@ -103,6 +109,8 @@ const MANUAL_NOT_CLICKED = 'no control was clicked: whether a toggle changes its
 const MANUAL_CLICKED = 'clicks were driven only on two-state toggles (aria-pressed, aria-expanded on a button, aria-checked on a custom switch or checkbox, an unselected tab); what any other button does was not tried';
 const MANUAL_NO_CONTRAST = 'the contrast of text was not judged (the pass was left out)';
 const MANUAL_CONTRAST = 'contrast was judged for text only, on one frame, inside the page as rendered: the focus indicator, icons, control borders, placeholder text, text in an SVG and text filled with a gradient are not judged';
+const MANUAL_NO_MOTION = 'the reduced-motion preference was not tried (the pass was left out)';
+const MANUAL_MOTION = 'reduced motion was read from CSS animations and declared transitions on the live page: motion driven by script, a transition written as `all`, and a script that reads the preference only once at load are not judged';
 const MANUAL = [
   'where focus lands when something opens, and where it returns when it closes, is not judged',
   'what a screen reader announces is not judged, only that each control has a name',
@@ -210,6 +218,27 @@ function judgeOperability(facts) {
       { state: t.state, ratio: Math.round(t.ratio * 100) / 100, needed: t.needed, size: t.size, bold: t.bold, text: t.fg, behind: t.behind });
   }
 
+  // The reduced-motion pass.
+  for (const lost of facts.motion?.lost ?? []) {
+    add('reduced-motion-loss', 'ERROR', lost.desc,
+      `is on the page for a reader with no motion preference and gone for one who asked for less motion (${lost.lost} element(s) with it): an entrance animation was the only thing making it visible, and the reduced-motion rule switched the animation off without setting the end state. Under prefers-reduced-motion, give it its final opacity and position`,
+      { lost: lost.lost });
+  }
+  // One finding per motion, not per element: a utility class puts the same transition on every
+  // control of a page (MEASURED: 85 elements on five real pages shared two transitions).
+  const motions = new Map();
+  for (const m of facts.motion?.moving ?? []) {
+    const key = `${m.kind} ${m.name ?? ''} ${m.ms} ${m.props}`;
+    const g = motions.get(key) ?? { ...m, count: 0 };
+    g.count++;
+    motions.set(key, g);
+  }
+  for (const m of motions.values()) {
+    add('motion-not-reduced', 'WARN', m.desc,
+      `still ${m.kind === 'animation' ? `runs the animation "${m.name}" (${m.ms} ms, moving ${m.props})` : `declares a ${m.ms} ms transition on ${m.props}`} for a reader who asked for less motion, as ${m.count} element(s) do (WCAG 2.3.3). Under prefers-reduced-motion, stop it or replace it with a fade`,
+      { kind: m.kind, ms: m.ms, props: m.props, count: m.count });
+  }
+
   // The click pass: a control that declares a state must change it when pressed, and the change
   // must show. Whether it shows is read from two photographs, so a page that repaints by itself
   // (a clock, a spinner) cannot be judged on that point and says so.
@@ -234,6 +263,7 @@ function judgeOperability(facts) {
     manual: [
       facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, facts.clicks ? MANUAL_CLICKED : MANUAL_NOT_CLICKED,
       facts.contrast ? MANUAL_CONTRAST : MANUAL_NO_CONTRAST,
+      facts.motion ? MANUAL_MOTION : MANUAL_NO_MOTION,
       ...(facts.contrast?.offscreen ? [`${facts.contrast.offscreen} text(s) are painted outside the frame that was rendered and were not judged for contrast`] : []),
       ...MANUAL,
     ],
@@ -242,6 +272,7 @@ function judgeOperability(facts) {
       patterns: facts.patterns?.results.length ?? 0,
       clicks: facts.clicks?.results.length ?? 0,
       texts: textsJudged, textStates: statesJudged,
+      motionElements: facts.motion?.elements ?? 0,
     },
   };
 }
@@ -716,6 +747,78 @@ async function measureContrast(page, maxStates) {
   return { texts: out, offscreen: rest.offscreen, unread: rest.unread, statesSkipped: Math.max(0, controls.length - maxStates) };
 }
 
+// page.evaluate: which elements are visible, and which are in motion, under the preference the
+// page is emulating right now. An element is keyed by its place in the document, which the two
+// reads share. "In motion": a running CSS animation whose keyframes move geometry (a fade is the
+// sanctioned replacement and is not motion), or a declared transition on a geometry property;
+// `all` is left out, since it cannot be told apart from a colour change. Whatever sits in
+// something busy (aria-busy, a status, a progress bar) is working, not decorating. Self-contained.
+function snapshotMotion({ minMs }) {
+  // `offset` alone is a keyframe's own position in time, not a property; offset-path and its kin are motion.
+  const GEOMETRY = /^(?:transform|translate|rotate|scale|top|left|right|bottom|inset|width|height|margin|offset[A-Z-])/;
+  const describe = (el) => {
+    const id = el.id ? `#${el.id}` : '';
+    const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    const text = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    return `${el.tagName.toLowerCase()}${id}${cls}${text ? ` "${text}"` : ''}`;
+  };
+  const ms = (list) => Math.max(0, ...String(list).split(',').map((t) => (t.trim().endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000) || 0));
+  const all = [...document.body.querySelectorAll('*')].filter((el) => !el.closest('script, style, noscript, template, [data-operable-ignore]'));
+  const visible = [];
+  const moving = [];
+  all.forEach((el, key) => {
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0 && el.checkVisibility({ visibilityProperty: true, opacityProperty: true }))) return;
+    visible.push(key);
+    if (el.closest('[aria-busy="true"], [role="status"], [role="progressbar"], [role="alert"]')) return;
+    for (const a of el.getAnimations()) {
+      if (!(a instanceof CSSAnimation) || a.playState !== 'running') continue;
+      const duration = Number(a.effect?.getComputedTiming().duration) || 0;
+      let props = [];
+      try { props = [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k)))].filter((prop) => GEOMETRY.test(prop)); } catch { props = []; }
+      if (duration >= minMs && props.length) { moving.push({ key, desc: describe(el), kind: 'animation', name: a.animationName, ms: Math.round(duration), props: props.join(', ') }); return; }
+    }
+    const cs = getComputedStyle(el);
+    const props = cs.transitionProperty.split(',').map((t) => t.trim()).filter((prop) => GEOMETRY.test(prop));
+    if (props.length && ms(cs.transitionDuration) >= minMs) moving.push({ key, desc: describe(el), kind: 'transition', ms: Math.round(ms(cs.transitionDuration)), props: props.join(', ') });
+  });
+  const parents = Object.fromEntries(all.map((el, key) => [key, all.indexOf(el.parentElement)]));
+  return { visible, moving, parents, descs: Object.fromEntries(visible.map((key) => [key, describe(all[key])])) };
+}
+
+// Reads the page with no motion preference and again with "reduce", on the live page (the media
+// query flips, the document stays), and hands it back with the preference it was opened with.
+// Each read waits for the entrance animations that have an end to reach it.
+async function measureReducedMotion(page) {
+  const opened = await page.evaluate(() => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference'));
+  const read = async (preference) => {
+    await page.emulateMedia({ reducedMotion: preference });
+    await page.evaluate((limit) => new Promise((resolve) => {
+      const started = performance.now();
+      const look = () => {
+        const busy = document.getAnimations().some((a) => a.playState === 'running' && Number.isFinite(Number(a.effect?.getComputedTiming().endTime)));
+        if (!busy || performance.now() - started >= limit) requestAnimationFrame(() => requestAnimationFrame(resolve));
+        else setTimeout(look, 50);
+      };
+      requestAnimationFrame(look);
+    }), MOTION_SETTLE_MS);
+    return page.evaluate(snapshotMotion, { minMs: MOTION_MIN_MS });
+  };
+  try {
+    const normal = await read('no-preference');
+    const reduced = await read('reduce');
+    const still = new Set(reduced.visible);
+    const gone = normal.visible.filter((key) => !still.has(key));
+    const goneSet = new Set(gone);
+    // The outermost element that vanished stands for everything inside it.
+    const lost = gone.filter((key) => !goneSet.has(normal.parents[key]))
+      .map((key) => ({ desc: normal.descs[key], lost: gone.filter((k) => { for (let a = k; a !== -1 && a !== undefined; a = normal.parents[a]) if (a === key) return true; return false; }).length }));
+    return { elements: normal.visible.length, lost, moving: reduced.moving.map(({ key, ...rest }) => rest) };
+  } finally {
+    await page.emulateMedia({ reducedMotion: opened }).catch(() => {});
+  }
+}
+
 // Which state attribute a control must change when it is pressed, or null when a click proves
 // nothing about it: aria-pressed and aria-expanded on a button, aria-checked on a custom switch or
 // checkbox, aria-selected on a tab. Whether the value it holds at that moment can be pressed (a
@@ -792,8 +895,8 @@ async function driveClicks(page, controls, maxClicks) {
 // with addInitScript before it loaded (without it, only inline onclick handlers are seen).
 // `patterns: false` skips the key-driving pass (the borrowed checker), for a page that is still markup.
 // `clicks` (the click pass on two-state toggles) follows `patterns` unless it is set on its own.
-// `contrast: false` leaves the contrast pass out.
-async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
+// `contrast: false` leaves the contrast pass out; `motion: false` the reduced-motion pass.
+async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, motion = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
   const style = await page.addStyleTag({
     content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; animation-play-state: paused !important; }',
   });
@@ -809,6 +912,9 @@ async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, 
     } finally {
       await style.evaluate((el) => el.remove()).catch(() => {});
     }
+    // Once the audit's stylesheet is gone (it holds every animation still, and this pass is about
+    // which ones run), and before anything is pressed.
+    if (motion) facts.motion = await measureReducedMotion(page);
     // Last, because it presses keys and may leave a tab, a switch or a menu in another state. The
     // audit's own stylesheet is gone by now: a paused animation would stall a widget that waits
     // for its exit to finish.
