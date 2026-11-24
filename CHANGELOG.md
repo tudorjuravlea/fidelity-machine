@@ -21,6 +21,25 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Operability audit: target size** (`scripts/operability-core.mjs`, rule `target-size`, WARN;
+  class: additive). WCAG 2.5.8 as written, not as a width check: a native control or control
+  role, measured together with its label, under 24x24 px is a finding only when another target
+  lies inside the 24 px circle centred on it: a full-size neighbour's box, or a small
+  neighbour's own circle (the criterion's spacing exception, which a centre-to-centre test gets
+  wrong for a small target hard against a large one). A page whose `<html>` carries
+  `data-phone-runnable` is held to 44, as `references/surface-classes.md` rules: the floor
+  follows the input, never the width. Not judged: a link that is part of a line of text, a form
+  control the browser draws, a disabled control, an input of two pixels or less, an element
+  that merely answers a click (a backdrop, a label), anything under `data-operable-ignore`. One
+  finding per size with the count, since a toolbar repeats one size. `targets: false` leaves
+  the pass out of `auditPage`.
+  **Proof:** `fixtures/operable/targets.test.mjs` (4 cases, four pages) and
+  `targets.mutations.mjs`, 20 of 20 planted breaks caught. The first full run failed two of the
+  engine's own older "good" pages: a click-only backdrop and a label were being measured as
+  targets, and one page really did stack 20 px rows (fixed in the fixture). MEASURED read-only
+  on 110 real pages: 274 targets, and the one finding of the first run was false, a one-pixel
+  hidden input carrying a custom dropdown's value; none after. The check follows
+  ux-ui-agent-skills' target-size gate (NOTICE).
 - **Operability audit: what a reader who asked for less motion gets** (`scripts/operability-core.mjs`,
   rules `reduced-motion-loss` ERROR and `motion-not-reduced` WARN; class: verdict-changing for a
   screen that declares `"operable": true` and loses content under the preference). The lint

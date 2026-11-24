@@ -195,7 +195,7 @@ async function main() {
       await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
 
       const head = status === 'pass' ? 'PASS' : status === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
-      console.log(`${tag} ${head} — ${errors.length} error(s), ${warns.length} warning(s), ${result.checked.controls} control(s), ${result.checked.references} reference(s), ${result.checked.tabStops} tab stop(s), ${result.checked.focusJudged} focus indicator(s) photographed, ${result.checked.texts} text(s) judged for contrast, ${args.patterns ? `${result.checked.patterns} widget(s) driven, ${result.checked.clicks} toggle(s) clicked` : 'no widget driven, no toggle clicked (--no-patterns)'}`);
+      console.log(`${tag} ${head} — ${errors.length} error(s), ${warns.length} warning(s), ${result.checked.controls} control(s), ${result.checked.references} reference(s), ${result.checked.tabStops} tab stop(s), ${result.checked.focusJudged} focus indicator(s) photographed, ${result.checked.texts} text(s) judged for contrast, ${result.checked.targets} target(s) measured, ${args.patterns ? `${result.checked.patterns} widget(s) driven, ${result.checked.clicks} toggle(s) clicked` : 'no widget driven, no toggle clicked (--no-patterns)'}`);
       for (const f of errors) console.log(`${tag}   ERROR ${f.message}`);
       for (const f of warns) console.log(`${tag}   WARN  ${f.message}`);
       for (const r of reasons) console.log(`${tag}   inconclusive: ${r}`);

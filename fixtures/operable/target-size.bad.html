@@ -1,0 +1,9 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}p{margin:10px 0}button,[role=button]{font:inherit;border:1px solid #666;border-radius:4px;background:#fff;color:#222;padding:0;box-sizing:border-box}:focus-visible{outline:3px solid #06c;outline-offset:2px}.row{display:flex;gap:2px;margin:12px 0}.ic{width:16px;height:16px}.ok{width:24px;height:24px}</style></head><body>
+<div class="row"><button id="a" class="ic" aria-label="Bold"></button><button id="b" class="ic" aria-label="Italic"></button><button id="c" class="ic" aria-label="Underline"></button></div>
+<!-- boxes the author drew: no longer the browser's size, and no label to widen them -->
+<div class="row" style="gap:4px"><input id="m" type="checkbox" aria-label="Mon" style="appearance:none;width:14px;height:14px;margin:0;border:1px solid #666"><input id="t" type="checkbox" aria-label="Tue" style="appearance:none;width:14px;height:14px;margin:0;border:1px solid #666"></div>
+<!-- a button beside words is still a button: only a link that is part of the line takes the line's height -->
+<p>Format <button id="i1" style="width:17px;height:17px" aria-label="Subscript"></button><button id="i2" style="width:17px;height:17px" aria-label="Superscript"></button> as needed.</p>
+<!-- a small target hard against a full-size one: its 24px circle reaches into the neighbour -->
+<div class="row" style="gap:0"><button id="big" style="width:80px;height:32px">Save</button><button id="x" style="width:18px;height:32px" aria-label="More"></button></div>
+</body></html>

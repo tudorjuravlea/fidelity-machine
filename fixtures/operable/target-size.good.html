@@ -1,0 +1,20 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}p{margin:10px 0}button,[role=button]{font:inherit;border:1px solid #666;border-radius:4px;background:#fff;color:#222;padding:0;box-sizing:border-box}:focus-visible{outline:3px solid #06c;outline-offset:2px}.row{display:flex;gap:2px;margin:12px 0}.ic{width:16px;height:16px}.ok{width:24px;height:24px}</style></head><body>
+<div class="row"><button class="ok" aria-label="Bold"></button><button class="ok" aria-label="Italic"></button></div>
+<!-- small, with room around it: nothing else lies inside its 24px circle -->
+<div style="margin:40px"><button id="alone" class="ic" aria-label="Help"></button></div>
+<!-- a link in a sentence is as tall as its line -->
+<p style="line-height:16px;font-size:12px;width:56px">See <a id="inline" href="#t">terms</a> <a href="#p">notes</a> <a href="#r">rules</a> first.</p>
+<!-- a small box with a label: the label is part of the target -->
+<div class="row"><button class="ok" aria-label="Info"></button><label style="display:flex;gap:8px;align-items:center;height:28px"><input type="checkbox" style="appearance:none;border:1px solid #666;width:14px;height:14px;margin:0"> Remember this device</label></div>
+<!-- two native checkboxes side by side: their size is the browser's, not the author's -->
+<div class="row" style="gap:4px"><input type="checkbox" aria-label="Mon" style="margin:0"><input type="checkbox" aria-label="Tue" style="margin:0"></div>
+<!-- a strip that only answers a click to dismiss is not a control -->
+<button style="width:100%;height:28px;display:block">Close the panel</button><div onclick="void 0" style="height:8px;background:#eee"></div>
+<!-- a one-pixel input that carries a custom widget's value cannot be pressed at all (MEASURED on a real page) -->
+<div class="row"><button class="ok" aria-label="Period"></button><input aria-label="Period value" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:.01;border:0;padding:0;margin:0;appearance:none"></div>
+<!-- an inactive control and an opted-out picture are exempt -->
+<div class="row"><button class="ic" aria-label="Undo" disabled></button><button class="ic" aria-label="Redo" disabled></button></div>
+<div class="row" data-operable-ignore><button class="ic" aria-label="A"></button><button class="ic" aria-label="B"></button></div>
+<!-- 20px wide beside a full-size button, 8px apart: its circle stops 6px short of the neighbour -->
+<div class="row" style="gap:8px"><button style="width:80px;height:32px">Save</button><button style="width:20px;height:32px" aria-label="More"></button></div>
+</body></html>

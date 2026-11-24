@@ -19,6 +19,8 @@
 //   judgeOperability()     pure: facts in, findings out. Unit tested without a browser.
 //
 // Rules and levels (ERROR fails the audit, WARN is listed):
+//   target-size             WARN   a target under 24x24 px (44 on a phone-runnable page) with another
+//                                  target inside the circle of that diameter around it
 //   reduced-motion-loss     ERROR  visible with no motion preference, gone under prefers-reduced-motion
 //   motion-not-reduced      WARN   a moving animation or transition that carries on under that preference
 //   text-contrast           WARN   text under 4.5:1 (3:1 when large) against what is painted behind it,
@@ -74,6 +76,10 @@ const CONTRAST_LARGE = 3;
 // motion a person can follow).
 const MOTION_MIN_MS = 100;
 const MOTION_SETTLE_MS = 2000;
+// WCAG 2.5.8 (AA): 24x24 CSS px. A page that declares itself phone-runnable is operated by a
+// finger and is held to 44 (references/surface-classes.md: the floor follows the input, never the width).
+const TARGET_FLOOR = 24;
+const TARGET_FLOOR_TOUCH = 44;
 
 // Roles a person operates. An element carrying one is a control whatever its tag.
 const CONTROL_ROLES = ['button', 'link', 'checkbox', 'switch', 'radio', 'tab', 'menuitem', 'menuitemcheckbox',
@@ -111,6 +117,7 @@ const MANUAL_NO_CONTRAST = 'the contrast of text was not judged (the pass was le
 const MANUAL_CONTRAST = 'contrast was judged for text only, on one frame, inside the page as rendered: the focus indicator, icons, control borders, placeholder text, text in an SVG and text filled with a gradient are not judged';
 const MANUAL_NO_MOTION = 'the reduced-motion preference was not tried (the pass was left out)';
 const MANUAL_MOTION = 'reduced motion was read from CSS animations and declared transitions on the live page: motion driven by script, a transition written as `all`, and a script that reads the preference only once at load are not judged';
+const MANUAL_NO_TARGETS = 'the size of targets was not judged (the pass was left out)';
 const MANUAL = [
   'where focus lands when something opens, and where it returns when it closes, is not judged',
   'what a screen reader announces is not judged, only that each control has a name',
@@ -218,6 +225,21 @@ function judgeOperability(facts) {
       { state: t.state, ratio: Math.round(t.ratio * 100) / 100, needed: t.needed, size: t.size, bold: t.bold, text: t.fg, behind: t.behind });
   }
 
+  // The target-size pass: one finding per size, since a toolbar repeats one size many times.
+  const sizes = new Map();
+  for (const t of facts.targets?.small ?? []) {
+    const key = `${t.width}x${t.height}`;
+    const g = sizes.get(key) ?? { ...t, count: 0 };
+    g.count++;
+    sizes.set(key, g);
+  }
+  for (const t of sizes.values()) {
+    const floor = facts.targets.floor;
+    add('target-size', 'WARN', t.desc,
+      `is ${t.width}x${t.height} px, under the ${floor}x${floor} floor${floor === TARGET_FLOOR_TOUCH ? ' for a page that declares itself phone-runnable' : ''}, with ${t.near} inside the ${floor} px circle around it, as ${t.count} control(s) of that size are (WCAG 2.5.8). Grow the control or its padding, or give it room`,
+      { width: t.width, height: t.height, floor, count: t.count, near: t.near });
+  }
+
   // The reduced-motion pass.
   for (const lost of facts.motion?.lost ?? []) {
     add('reduced-motion-loss', 'ERROR', lost.desc,
@@ -264,6 +286,7 @@ function judgeOperability(facts) {
       facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, facts.clicks ? MANUAL_CLICKED : MANUAL_NOT_CLICKED,
       facts.contrast ? MANUAL_CONTRAST : MANUAL_NO_CONTRAST,
       facts.motion ? MANUAL_MOTION : MANUAL_NO_MOTION,
+      ...(facts.targets ? [] : [MANUAL_NO_TARGETS]),
       ...(facts.contrast?.offscreen ? [`${facts.contrast.offscreen} text(s) are painted outside the frame that was rendered and were not judged for contrast`] : []),
       ...MANUAL,
     ],
@@ -273,6 +296,7 @@ function judgeOperability(facts) {
       clicks: facts.clicks?.results.length ?? 0,
       texts: textsJudged, textStates: statesJudged,
       motionElements: facts.motion?.elements ?? 0,
+      targets: facts.targets?.judged ?? 0,
     },
   };
 }
@@ -747,6 +771,60 @@ async function measureContrast(page, maxStates) {
   return { texts: out, offscreen: rest.offscreen, unread: rest.unread, statesSkipped: Math.max(0, controls.length - maxStates) };
 }
 
+// page.evaluate, while the controls still carry their markers: every control a pointer can press,
+// measured as a target: a native control or one with a control role (`controls`, by marker). An
+// element that merely answers a click, a backdrop or a label, is not one. A target is the control
+// together with its label (pressing the label presses it). Under the floor in either dimension it is still fine when it sits in a line of
+// text (display inline, with words beside it), or when a circle of the floor's diameter centred
+// on it touches no other target: a full-size neighbour's box, or a small neighbour's own circle.
+// Returns only the ones with no excuse, each with what lies inside its circle. Self-contained.
+function measureTargets({ floor, controls }) {
+  const isControl = new Set(controls.map(String));
+  const describe = (el) => {
+    const id = el.id ? `#${el.id}` : '';
+    const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    const text = (el.textContent || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    return `${el.tagName.toLowerCase()}${id}${cls}${text ? ` "${text}"` : ''}`;
+  };
+  const targets = [];
+  for (const el of document.querySelectorAll('[data-operable-n]')) {
+    if (!isControl.has(el.getAttribute('data-operable-n'))) continue;
+    const r = el.getBoundingClientRect();
+    // Two pixels or less cannot be pressed: it is a hidden input carrying a custom widget's value.
+    if (!(r.width > 2 && r.height > 2) || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+    // A form control the browser draws is the browser's size (the criterion's user-agent exception).
+    if (el.matches('input, select') && getComputedStyle(el).appearance !== 'none') continue;
+    if (el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true' || getComputedStyle(el).pointerEvents === 'none') continue;
+    let left = r.left, top = r.top, right = r.right, bottom = r.bottom;
+    for (const label of [...(el.labels ?? []), el.closest('label')].filter(Boolean)) {
+      const lr = label.getBoundingClientRect();
+      if (lr.width > 0 && lr.height > 0) { left = Math.min(left, lr.left); top = Math.min(top, lr.top); right = Math.max(right, lr.right); bottom = Math.max(bottom, lr.bottom); }
+    }
+    const inline = getComputedStyle(el).display === 'inline'
+      && [...(el.parentElement?.childNodes ?? [])].some((n) => n.nodeType === 3 && n.textContent.trim());
+    targets.push({ el, left, top, right, bottom, width: right - left, height: bottom - top, inline });
+  }
+  const small = (t) => t.width < floor - 0.5 || t.height < floor - 0.5;
+  const radius = floor / 2;
+  const out = [];
+  for (const t of targets) {
+    if (!small(t) || t.inline) continue;
+    const cx = (t.left + t.right) / 2, cy = (t.top + t.bottom) / 2;
+    let near = null;
+    for (const o of targets) {
+      if (o === t || o.el.contains(t.el) || t.el.contains(o.el)) continue;
+      if (small(o)) {
+        if (Math.hypot((o.left + o.right) / 2 - cx, (o.top + o.bottom) / 2 - cy) < floor) { near = o; break; }
+      } else {
+        const dx = Math.max(o.left - cx, 0, cx - o.right), dy = Math.max(o.top - cy, 0, cy - o.bottom);
+        if (Math.hypot(dx, dy) < radius) { near = o; break; }
+      }
+    }
+    if (near) out.push({ desc: describe(t.el), width: Math.round(t.width), height: Math.round(t.height), near: describe(near.el) });
+  }
+  return { floor, judged: targets.length, small: out };
+}
+
 // page.evaluate: which elements are visible, and which are in motion, under the preference the
 // page is emulating right now. An element is keyed by its place in the document, which the two
 // reads share. "In motion": a running CSS animation whose keyframes move geometry (a fade is the
@@ -895,8 +973,9 @@ async function driveClicks(page, controls, maxClicks) {
 // with addInitScript before it loaded (without it, only inline onclick handlers are seen).
 // `patterns: false` skips the key-driving pass (the borrowed checker), for a page that is still markup.
 // `clicks` (the click pass on two-state toggles) follows `patterns` unless it is set on its own.
-// `contrast: false` leaves the contrast pass out; `motion: false` the reduced-motion pass.
-async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, motion = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
+// `contrast: false` leaves the contrast pass out; `motion: false` the reduced-motion pass;
+// `targets: false` the target-size pass.
+async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, motion = true, targets = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
   const style = await page.addStyleTag({
     content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; animation-play-state: paused !important; }',
   });
@@ -909,6 +988,11 @@ async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, 
       // While the audit's own stylesheet still holds transitions at zero and animations still:
       // a hover colour is read at its end, and two photographs show the same frame.
       if (contrast) facts.contrast = await measureContrast(page, maxStates);
+      if (targets) {
+        const floor = await page.evaluate(() => document.documentElement.hasAttribute('data-phone-runnable')) ? TARGET_FLOOR_TOUCH : TARGET_FLOOR;
+        const controls = facts.controls.filter((c) => c.native !== null || CONTROL_ROLES.includes(c.role)).map((c) => c.n);
+        facts.targets = await page.evaluate(measureTargets, { floor, controls });
+      }
     } finally {
       await style.evaluate((el) => el.remove()).catch(() => {});
     }

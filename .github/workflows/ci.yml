@@ -52,6 +52,7 @@ jobs:
       - run: node scripts/mutation-run.mjs fixtures/operable/clicks.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/contrast.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/motion.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/operable/targets.mutations.mjs
       - run: node --test "fixtures/operable/*.test.mjs"
       - run: node scripts/ui-sdk.mjs verify
       - run: node --test "fixtures/ui-sdk/*.test.mjs"
