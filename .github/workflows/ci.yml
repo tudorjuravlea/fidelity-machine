@@ -47,6 +47,8 @@ jobs:
       - run: node --test "fixtures/lint/*.test.mjs"
       - run: node --test "fixtures/layout/*.test.mjs"
       - run: node --test "fixtures/mutation/*.test.mjs"
+      - run: node --test "fixtures/verify/*.test.mjs"
+      - run: node scripts/mutation-run.mjs fixtures/verify/verify-check.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/lint/raw-colour-notations.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/layout/layout-rules.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/clicks.mutations.mjs

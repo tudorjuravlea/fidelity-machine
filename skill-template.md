@@ -165,6 +165,10 @@ unverified, stated plainly. A screen that didn't converge ships as "not converge
 "Passed" is never a complete report at any tier below Screen, because a proportionate gate set
 verified proportionately. Name what ran (`ENGINE/references/scope-contract.md` §5).
 
+A verdict is about the files it was reached on. Before saying a screen from an earlier turn
+still passes, run `ENGINE/scripts/verify.mjs --lock LOCK --check`: only `FRESH` may be reported as
+passing; `STALE` means it was edited since and has to be verified again.
+
 Every shipped screen also reports a production status: **`production-ready`** (every input
 verified), **`concept-ready`** naming the remaining clearances (draft disclosure, unlicensed
 font, unconfirmed inferred signature), or **`blocked`** naming the missing input. "Converged"

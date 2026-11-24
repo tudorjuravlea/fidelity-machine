@@ -25,6 +25,7 @@
  *
  * Outputs (next to the lock):
  *   .report/verify-report.json          — aggregate report
+ *   .report/<screenId>.verify.json      — the screen's verdict with the hashes it was reached on (--check)
  *   .report/<screenId>.history.json     — loop-control memory, appended per measured run
  *
  * Loop control (CONTRACT §Loop control): <=4 rounds per screen; keep best-so-far; a fix
@@ -50,6 +51,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,19 +130,24 @@ function num(v) {
 function printUsage() {
   process.stdout.write(
 `Usage: node verify.mjs --lock <design-lock.json> [--screen <id>] [--calibrate] [--src <dir>]
+       node verify.mjs --lock <design-lock.json> --check [--screen <id>]
 
   --lock       path to design-lock.json (the SSOT); .render/ and .report/ are created next to it
   --screen     verify a single screen id (default: every screen in the lock)
   --calibrate  measure the render noise floor (two renders, inline masked pixelmatch) and
                write meta.noiseFloorPct into the lock in place (the one sanctioned lock write)
   --src        generated-source directory, passed through to adherence-lint.mjs
+  --check      run nothing: say whether each screen's last verdict still stands, by hashing what it
+               was reached on (the screen, every other file in the lock's tree, the lock, the
+               reference image, the gate scripts). FRESH · STALE · FAILING · INCONCLUSIVE · UNMEASURED.
+               exit 0 every screen FRESH · 1 a standing verdict is a fail · 6 anything else
 
 Exit codes: 0 pass · 1 fidelity/lint failure · 2 setup/usage · 3 DIMENSION_MISMATCH · 4 FONT_PARITY · 5 render failure/timeout
 `);
 }
 
 function parseArgs(argv) {
-  const args = { lock: null, screen: null, calibrate: false, src: null };
+  const args = { lock: null, screen: null, calibrate: false, src: null, check: false };
   const takeValue = (i, flag) => {
     const v = argv[i];
     if (v === undefined || v.startsWith('--')) die(2, `flag ${flag} needs a value`);
@@ -151,11 +158,13 @@ function parseArgs(argv) {
     if (a === '--lock') args.lock = takeValue(++i, '--lock');
     else if (a === '--screen') args.screen = takeValue(++i, '--screen');
     else if (a === '--calibrate') args.calibrate = true;
+    else if (a === '--check') args.check = true;
     else if (a === '--src') args.src = takeValue(++i, '--src');
     else if (a === '--help' || a === '-h') { printUsage(); process.exit(0); }
     else die(2, `unknown argument '${a}' — run with --help for usage`);
   }
   if (!args.lock) die(2, 'missing required --lock <path/to/design-lock.json> — run with --help for usage');
+  if (args.check && args.calibrate) die(2, '--check reads the last verdict and --calibrate writes the lock: one at a time');
   return args;
 }
 
@@ -284,6 +293,100 @@ function updateHistory(reportDir, screenId, globalPct, worstTile, screenPassed, 
 
 // ---------------------------------------------------------------- verify mode
 
+// ---------------------------------------------------------------- evidence (what a verdict stands on)
+//
+// A report says what was true when it was written. To let anyone ask later whether it still
+// stands, each screen's verdict is stored with the hashes of what it was reached on, taken BEFORE
+// the gates run (so a file edited during the run already reads as changed):
+//   lock       the lock file
+//   reference  this screen's reference image (null when it has none or the file is missing)
+//   engine     the gate scripts' own source (a new gate, or a fixed one, is a new judge)
+//   tree       every other file under the lock's directory the screen can load: its own page,
+//              stylesheets, scripts, images, fonts, derived tokens. Left out: other screens' pages
+//              and reference images, dot directories (.render, .report, .motion, .git),
+//              node_modules, and a symlinked directory (the vendored runtime is hashed by its own
+//              verify). Short hashes per file, so a changed file can be named.
+// Nothing here is a signature: it catches the honest mistake (a screen edited after it passed),
+// not a forged report.
+const hashFile = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+function engineHash() {
+  const h = crypto.createHash('sha256');
+  for (const name of fs.readdirSync(SCRIPTS_DIR).filter((f) => f.endsWith('.mjs')).sort()) {
+    h.update(name).update('\0').update(fs.readFileSync(path.join(SCRIPTS_DIR, name))).update('\0');
+  }
+  return h.digest('hex');
+}
+function evidenceFor({ lockPath, lockDir, lock, screen, engine }) {
+  const rel = (abs) => path.relative(lockDir, abs).split(path.sep).join('/');
+  const others = new Set();
+  for (const s of lock.screens) {
+    if (s.id !== screen.id && typeof s.url === 'string') others.add(rel(path.resolve(lockDir, s.url.split(/[?#]/)[0])));
+    if (typeof s.referenceImage === 'string') others.add(rel(path.resolve(lockDir, s.referenceImage)));
+  }
+  others.add(rel(lockPath));
+  const tree = {};
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (entry.isFile() && !others.has(rel(abs))) tree[rel(abs)] = hashFile(abs).slice(0, 16);
+    }
+  };
+  walk(lockDir);
+  const ref = typeof screen.referenceImage === 'string' ? path.resolve(lockDir, screen.referenceImage) : null;
+  return { lock: hashFile(lockPath), reference: ref && fs.existsSync(ref) ? hashFile(ref) : null, engine, tree };
+}
+const verdictPath = (reportDir, id) => path.join(reportDir, `${id}.verify.json`);
+
+// --check: no gate runs and nothing is written. Each screen's stored verdict is set against the
+// hashes of the same things as they are now.
+function checkScreens({ lockPath, lockDir, lock, screens }) {
+  const reportDir = path.join(lockDir, '.report');
+  const engine = engineHash();
+  const some = (label, list) => (list.length ? [`${label}: ${list.slice(0, 5).join(', ')}${list.length > 5 ? ` and ${list.length - 5} more` : ''}`] : []);
+  let failing = 0, open = 0;
+  console.log(`verify --check — lock: ${lockPath}`);
+  for (const screen of screens) {
+    const stored = readJsonSafe(verdictPath(reportDir, screen.id));
+    if (!stored || !stored.evidence || typeof stored.status !== 'string') {
+      open++;
+      console.log(`UNMEASURED    ${screen.id} — no verdict on record; run verify`);
+      continue;
+    }
+    const now = evidenceFor({ lockPath, lockDir, lock, screen, engine });
+    const was = stored.evidence;
+    const names = new Set([...Object.keys(was.tree ?? {}), ...Object.keys(now.tree)]);
+    const changed = [], added = [], removed = [];
+    for (const name of [...names].sort()) {
+      if (!(name in now.tree)) removed.push(name);
+      else if (!(name in (was.tree ?? {}))) added.push(name);
+      else if (was.tree[name] !== now.tree[name]) changed.push(name);
+    }
+    const why = [
+      ...(was.lock !== now.lock ? ['the lock'] : []),
+      ...(was.reference !== now.reference ? ['the reference image'] : []),
+      ...(was.engine !== now.engine ? ['the gate scripts'] : []),
+      ...some('changed', changed), ...some('added', added), ...some('removed', removed),
+    ];
+    if (why.length) {
+      open++;
+      console.log(`STALE         ${screen.id} — its last verdict (${stored.status}) no longer stands; since then: ${why.join('; ')}`);
+    } else if (stored.status === 'pass') {
+      console.log(`FRESH         ${screen.id} — its last verdict (pass) stands: nothing it was reached on has changed`);
+    } else if (stored.status === 'inconclusive') {
+      open++;
+      console.log(`INCONCLUSIVE  ${screen.id} — its last verdict stands and it judged nothing; see the report`);
+    } else {
+      failing++;
+      console.log(`FAILING       ${screen.id} — its last verdict stands and it was a fail; run verify to see why`);
+    }
+  }
+  const code = failing ? 1 : open ? 6 : 0;
+  console.log(`RESULT: ${code === 0 ? 'every verdict stands and passes' : code === 1 ? `${failing} standing verdict(s) are a fail` : `${open} screen(s) have no standing pass`} (exit ${code})`);
+  process.exit(code);
+}
+
 function writeVerifyReport(reportDir, report) {
   fs.mkdirSync(reportDir, { recursive: true });
   fs.writeFileSync(path.join(reportDir, 'verify-report.json'), JSON.stringify(report, null, 2) + '\n');
@@ -334,6 +437,9 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
   };
 
   const screenReports = {};
+  const lockObj = readLock(lockPath).lock;
+  const engine = engineHash();
+  const evidence = Object.fromEntries(screens.map((screen) => [screen.id, evidenceFor({ lockPath, lockDir, lock: lockObj, screen, engine })]));
 
   for (const screen of screens) {
     const id = screen.id;
@@ -631,6 +737,10 @@ function verifyScreens({ lockPath, lockDir, screens, screenFilter, srcDir }) {
     exitMeaning: meaning(exitCode),
   };
   writeVerifyReport(reportDir, report);
+  // One verdict file per screen, so verifying one screen leaves the others' standing.
+  for (const [id, sr] of Object.entries(screenReports)) {
+    fs.writeFileSync(verdictPath(reportDir, id), JSON.stringify({ tool: 'verify.mjs', screen: id, status: sr.status, evidence: evidence[id] }, null, 2) + '\n');
+  }
 
   // ------------------------------------------------ human summary (stdout)
   const cell = (g) => {
@@ -834,7 +944,9 @@ if (args.screen) {
   }
 }
 
-if (args.calibrate) {
+if (args.check) {
+  checkScreens({ lockPath, lockDir, lock, screens });
+} else if (args.calibrate) {
   // Calibration runs on one screen: --screen if given, else the first screen in the lock
   // (the calibration control screen by convention).
   await calibrate({ lockPath, lockDir, rawLock: raw, screen: screens[0] });

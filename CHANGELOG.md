@@ -21,6 +21,27 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **verify --check: does the last verdict still stand?** (`scripts/verify.mjs`,
+  `.report/<screen>.verify.json`, CONTRACT §Invocation contract; class: additive). A report says
+  what was true when it was written, and nothing said whether the screen had been edited since.
+  Every verify run now stores, per screen, its verdict with the hashes of what the verdict was
+  reached on, taken before the gates ran: the lock, the screen's reference image, the gate
+  scripts, and every file under the lock's directory the screen can load (its page,
+  stylesheets, scripts, images, fonts, derived tokens; not other screens' pages or references,
+  dot directories, `node_modules`, a symlinked directory). `verify.mjs --lock L --check` runs
+  no gate and writes nothing; it hashes the same things now and prints one line per screen:
+  `FRESH`, `STALE` (naming the lock, the reference, the gate scripts, or the files changed,
+  added and removed), `FAILING`, `INCONCLUSIVE`, `UNMEASURED`. Exit 0 every screen FRESH, 1 a
+  standing fail, 6 anything else. One file per screen, so verifying one screen leaves the
+  others' verdicts standing. It catches the honest mistake, a screen edited after it passed;
+  it is not a signature.
+  **Proof:** `fixtures/verify/verify-check.test.mjs` (12 cases on a two-screen project with
+  stub gates) and `verify-check.mutations.mjs`, 19 of 19 planted breaks caught; on the golden
+  screen, FRESH after a run and UNMEASURED once the report folder is gone. The idea of binding a
+  result to the bytes it was measured on is ux-ui-agent-skills' receipt (NOTICE); two holes its
+  readers found there are closed here: only the page was hashed, so a changed stylesheet left a
+  pass standing, and a pass from any one gate cleared the page, where here the stored verdict
+  is verify's own for the screen.
 - **Operability audit: target size** (`scripts/operability-core.mjs`, rule `target-size`, WARN;
   class: additive). WCAG 2.5.8 as written, not as a width check: a native control or control
   role, measured together with its label, under 24x24 px is a finding only when another target
