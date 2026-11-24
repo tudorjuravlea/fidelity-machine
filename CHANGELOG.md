@@ -21,6 +21,32 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Operability audit: text contrast, measured on what is painted** (`scripts/operability-core.mjs`,
+  rule `text-contrast`, WARN; class: additive). The lint judges contrast on the lock's token
+  pairs; nothing judged the screen. A colour-against-colour reading cannot: it scores white text
+  on a gradient against nothing, and misses a translucent colour and a faded group. This pass
+  photographs the page once with every glyph made transparent (the plate), reads each text's
+  fill colour through a one-pixel canvas (a computed colour comes back in the syntax it was
+  written in, so `oklch(0.82 0.02 250)` cannot be read as three numbers), multiplies its alpha
+  by every opacity above it, lays it over the plate's pixels under each line, and keeps the
+  palest tenth: 4.5:1, or 3:1 at 24 px or 18.66 px bold. Each enabled control's text is judged
+  again on hover and on focus; a state is reported only where the text passes at rest. Exempt:
+  a disabled control, text cut away by hidden overflow (screen-reader-only text), anything
+  under `data-operable-ignore`. Said in `manual[]`, not judged: the focus indicator, icons,
+  borders, placeholders, SVG text, gradient-filled text, text outside the rendered frame.
+  `contrast: false` leaves the pass out of `auditPage`.
+  **Proof:** `fixtures/operable/contrast.test.mjs` (5 cases, two pages: pale grey at 2.07:1,
+  white across a gradient, 30 % black, a faded group, pale `oklch()`, pale on hover, pale on
+  focus) and `contrast.mutations.mjs`, 24 of 24 planted breaks caught. MEASURED read-only on
+  110 real pages: 949 texts and 272 states judged, median 0.28 s a page, 125 findings on 16
+  pages, all at rest (white on bright cyan at 1.89:1, status labels on their own tint near
+  2.9:1). The first run also reported a button's text at 1.05:1 on hover, and that was the
+  audit's fault: the page forces its transitions with `!important` inside a cascade layer,
+  which beats any rule added later, so the colour was read part-way back from the transparent
+  plate. Transitions are now ended through the animation API (`CSSTransition.finish()`), in
+  this pass and after a click, instead of trusting a stylesheet to stop them. The plate
+  follows ux-ui-agent-skills' render-contrast and state gates (NOTICE), with the background
+  read from pixels instead of `background-color`, which is what its readers found it missing.
 - **Operability audit: a toggle that does nothing, and a state nobody can see**
   (`scripts/operability-core.mjs`, rules `dead-state` and `invisible-state`, both ERROR; class:
   verdict-changing for a screen that declares `"operable": true` and holds a toggle that is a

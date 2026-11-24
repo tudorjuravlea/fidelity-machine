@@ -1,0 +1,20 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}p{margin:10px 0}button,a{font:inherit;padding:6px 10px;border:1px solid #666;border-radius:6px;background:#fff;color:#222;display:inline-block}:focus-visible{outline:3px solid #06c;outline-offset:2px}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}#dim:hover{background:#222;color:#fff}@layer kit{#slow{transition:all 0s linear 5s !important;font:900 22px/1.2 Arial,sans-serif}}#slow:hover{color:#000}</style></head><body>
+<p>Dark words on a white page.</p>
+<!-- 4.48:1 is enough for large text (24px, or 18.66px bold) -->
+<p style="color:#777;font-size:28px;line-height:1.2">Large grey words</p>
+<p style="color:#777;font-size:19px;font-weight:700;line-height:1.3">Large bold grey words</p>
+<!-- white on a gradient that stays dark from end to end -->
+<p style="color:#fff;padding:8px;width:480px;background:linear-gradient(90deg,#111,#3a3a3a)">White words across a dark gradient</p>
+<p style="color:rgba(0,0,0,.8)">Mostly opaque words.</p>
+<!-- an inactive control is exempt -->
+<button disabled style="color:#bbb">Unavailable</button>
+<!-- text for a screen reader only paints nothing -->
+<span class="sr" style="color:#eee">Opens in a new tab</span>
+<!-- a picture of a faded state, opted out -->
+<div data-operable-ignore><p style="color:#ccc">A greyed-out sample row.</p></div>
+<button id="dim">Inverts on hover</button>
+<!-- a transition the audit cannot switch off from outside: an !important one in a cascade layer wins over
+     any later rule, so the glyphs would still be in the plate five seconds after they were hidden, and heavy
+     text would be judged against its own ink (MEASURED on a real page: a button read at 1.05:1 this way) -->
+<button id="slow">WWW MMM WWW MMM</button>
+</body></html>

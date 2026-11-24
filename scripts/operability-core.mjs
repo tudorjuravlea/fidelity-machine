@@ -19,6 +19,8 @@
 //   judgeOperability()     pure: facts in, findings out. Unit tested without a browser.
 //
 // Rules and levels (ERROR fails the audit, WARN is listed):
+//   text-contrast           WARN   text under 4.5:1 (3:1 when large) against what is painted behind it,
+//                                  at rest, and on hover and focus for a control
 //   dead-state              ERROR  a control that declares a two-state attribute and keeps it when clicked
 //   invisible-state         ERROR  a click moved the state and fewer than 24 px of the page changed
 //   unnamed-control         ERROR  an exposed control whose computed accessible name is empty
@@ -62,6 +64,10 @@ const DEFAULT_MAX_WIDGETS = 40;
 const PATTERN_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_CLICKS = 40;
 const CLICK_SETTLE_MS = 300;
+const DEFAULT_MAX_STATES = 80;
+// WCAG 1.4.3: 4.5:1, or 3:1 for large text (24 px, or 18.66 px bold).
+const CONTRAST_TEXT = 4.5;
+const CONTRAST_LARGE = 3;
 
 // Roles a person operates. An element carrying one is a control whatever its tag.
 const CONTROL_ROLES = ['button', 'link', 'checkbox', 'switch', 'radio', 'tab', 'menuitem', 'menuitemcheckbox',
@@ -95,10 +101,11 @@ const MANUAL_KEYS_NOT_DRIVEN = 'what the arrow keys, Home, End and typing do ins
 const MANUAL_KEYS_DRIVEN = 'keys were driven only inside the widgets the borrowed checker knows (tabs, radio group, toolbar, tree, listbox, combobox, slider, switch, checkbox, a menubar, an open menu, an open dialog), in the state each was rendered in; a disclosure, an accordion and a grid are not driven';
 const MANUAL_NOT_CLICKED = 'no control was clicked: whether a toggle changes its state, and whether the change shows, was not judged';
 const MANUAL_CLICKED = 'clicks were driven only on two-state toggles (aria-pressed, aria-expanded on a button, aria-checked on a custom switch or checkbox, an unselected tab); what any other button does was not tried';
+const MANUAL_NO_CONTRAST = 'the contrast of text was not judged (the pass was left out)';
+const MANUAL_CONTRAST = 'contrast was judged for text only, on one frame, inside the page as rendered: the focus indicator, icons, control borders, placeholder text, text in an SVG and text filled with a gradient are not judged';
 const MANUAL = [
   'where focus lands when something opens, and where it returns when it closes, is not judged',
   'what a screen reader announces is not judged, only that each control has a name',
-  'colour contrast, of text and of the focus indicator itself, is not judged here',
   'only the rendered state is audited: a menu, dialog or panel that is closed was not opened',
   'click listeners attached by delegation on a container are not attributed to its children',
   'a text caret is not counted as a focus indicator: it is hidden so that two runs photograph the same page',
@@ -188,6 +195,21 @@ function judgeOperability(facts) {
   }
   deferred.push(...(facts.patterns?.skipped ?? []));
 
+  // The contrast pass: each text against what is painted behind it. A state is reported only when
+  // it is where the text goes pale: text that already fails at rest is said once, at rest.
+  const contrast = facts.contrast?.texts ?? [];
+  const atRest = new Map(contrast.filter((t) => t.state === 'rest').map((t) => [t.key, t]));
+  let textsJudged = 0, statesJudged = 0;
+  for (const t of contrast) {
+    if (t.state === 'rest') textsJudged++; else statesJudged++;
+    if (t.ratio >= t.needed) continue;
+    const rest = atRest.get(t.key);
+    if (t.state !== 'rest' && rest && rest.ratio < rest.needed) continue;
+    add('text-contrast', 'WARN', t.desc,
+      `reads at ${t.ratio.toFixed(2)}:1 against what is painted behind it${t.state === 'rest' ? '' : ` on ${t.state}`} (${t.needed}:1 needed for ${t.size}px${t.bold ? ' bold' : ''} text, WCAG 1.4.3). Darken or lighten the text, or the surface under it, in the lock's tokens`,
+      { state: t.state, ratio: Math.round(t.ratio * 100) / 100, needed: t.needed, size: t.size, bold: t.bold, text: t.fg, behind: t.behind });
+  }
+
   // The click pass: a control that declares a state must change it when pressed, and the change
   // must show. Whether it shows is read from two photographs, so a page that repaints by itself
   // (a clock, a spinner) cannot be judged on that point and says so.
@@ -209,11 +231,17 @@ function judgeOperability(facts) {
   return {
     findings,
     deferred,
-    manual: [facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, facts.clicks ? MANUAL_CLICKED : MANUAL_NOT_CLICKED, ...MANUAL],
+    manual: [
+      facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, facts.clicks ? MANUAL_CLICKED : MANUAL_NOT_CLICKED,
+      facts.contrast ? MANUAL_CONTRAST : MANUAL_NO_CONTRAST,
+      ...(facts.contrast?.offscreen ? [`${facts.contrast.offscreen} text(s) are painted outside the frame that was rendered and were not judged for contrast`] : []),
+      ...MANUAL,
+    ],
     checked: {
       controls: facts.controls.length, groups: groups.length, references: facts.referenceCount, tabStops: facts.walk.stops, focusJudged,
       patterns: facts.patterns?.results.length ?? 0,
       clicks: facts.clicks?.results.length ?? 0,
+      texts: textsJudged, textStates: statesJudged,
     },
   };
 }
@@ -524,6 +552,170 @@ async function walkTabOrder(page, maxStops) {
   return { stops, walk: { stops: stops.length, truncated } };
 }
 
+// page.evaluate: every element that owns visible text, with the colour its glyphs are painted in
+// and where its lines lie. `within` narrows the read to one control (for its hover and focus
+// states). The colour is the text fill, in any CSS syntax, turned into sRGB numbers by painting it
+// on a one-pixel canvas (a computed colour comes back in the syntax it was written in, so
+// `oklch(0.82 0.02 250)` cannot be read as three numbers); its alpha is multiplied by every
+// opacity on the way up, since a faded group fades its words. Lines are clipped by any ancestor
+// that hides overflow and by the viewport: what is not painted is not judged. Self-contained.
+function collectTexts({ within }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const rgba = (css) => {
+    const plain = /^rgba?\(([^)]+)\)$/.exec(css);
+    if (plain) { const c = plain[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [c[0], c[1], c[2], c[3] ?? 1]; }
+    const alpha = /\/\s*([\d.]+)(%?)\s*\)$/.exec(css);
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = '#000';
+    ctx.fillStyle = css.replace(/\s*\/\s*[\d.]+%?\s*\)$/, ')');
+    ctx.fillRect(0, 0, 1, 1);
+    const d = ctx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2], alpha ? Number(alpha[1]) / (alpha[2] ? 100 : 1) : 1];
+  };
+  const describe = (el) => {
+    const id = el.id ? `#${el.id}` : '';
+    const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    const text = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    return `${el.tagName.toLowerCase()}${id}${cls}${text ? ` "${text}"` : ''}`;
+  };
+  const scope = within === null ? document.body : document.querySelector(`[data-operable-n="${within}"]`);
+  const texts = [];
+  let offscreen = 0, unread = 0;
+  if (!scope) return { texts, offscreen, unread };
+  const all = [...document.body.querySelectorAll('*')];
+  for (const el of [scope, ...scope.querySelectorAll('*')]) {
+    if (el.closest('svg, script, style, noscript, template, option, [data-operable-ignore]')) continue;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
+    if (!own.length || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+    const cs = getComputedStyle(el);
+    const fill = rgba(cs.webkitTextFillColor || cs.color);
+    if (fill[3] === 0 || cs.backgroundClip === 'text') { unread++; continue; }
+    let left = -Infinity, top = -Infinity, right = Infinity, bottom = Infinity, opacity = 1;
+    for (let a = el; a && a !== document.documentElement; a = a.parentElement) {
+      const ac = getComputedStyle(a);
+      opacity *= Number(ac.opacity);
+      if (ac.display === 'inline') continue;   // overflow does not apply to an inline box
+      const ar = a.getBoundingClientRect();
+      if (ac.overflowX !== 'visible') { left = Math.max(left, ar.left); right = Math.min(right, ar.right); }
+      if (ac.overflowY !== 'visible') { top = Math.max(top, ar.top); bottom = Math.min(bottom, ar.bottom); }
+    }
+    // Two ways for a line not to be judged, kept apart: cut away by a box that hides overflow
+    // (text for a screen reader, a collapsed panel: nothing is painted, nothing to say), or
+    // painted outside the frame that was rendered (counted, and said).
+    const rects = [];
+    let shown = 0;
+    for (const n of own) {
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const b of range.getClientRects()) {
+        const l = Math.max(b.left, left), t = Math.max(b.top, top), r = Math.min(b.right, right), bt = Math.min(b.bottom, bottom);
+        if (r - l < 2 || bt - t < 2) continue;
+        shown++;
+        const x0 = Math.ceil(Math.max(l, 0)), y0 = Math.ceil(Math.max(t, 0)), x1 = Math.floor(Math.min(r, innerWidth)), y1 = Math.floor(Math.min(bt, innerHeight));
+        if (x1 - x0 >= 2 && y1 - y0 >= 2) rects.push([x0, y0, x1, y1]);
+      }
+    }
+    if (!rects.length) { if (shown) offscreen++; continue; }
+    const control = el.closest('[data-operable-n]');
+    texts.push({
+      key: all.indexOf(el), desc: describe(el), n: control ? Number(control.getAttribute('data-operable-n')) : null,
+      disabled: !!el.closest(':disabled, [aria-disabled="true"]'),
+      fg: [fill[0], fill[1], fill[2], Math.round(fill[3] * opacity * 1000) / 1000],
+      size: Math.round(parseFloat(cs.fontSize) * 100) / 100, bold: Number(cs.fontWeight) >= 700, rects,
+    });
+  }
+  return { texts, offscreen, unread };
+}
+
+// The contrast of one text against a plate (the page photographed with every glyph transparent):
+// its colour is laid over each sampled pixel under its lines by its own alpha, and the ratio kept
+// is the tenth percentile, so the palest stretch of a gradient decides and one stray pixel does not.
+function paintedContrast(fg, plate, rects) {
+  const lum = (r, g, b) => {
+    const f = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const ratios = [];
+  let behind = null;
+  for (const [x0, y0, x1, y1] of rects) {
+    const step = Math.max(1, Math.floor(Math.sqrt(((x1 - x0) * (y1 - y0)) / 600)));
+    for (let y = y0; y < Math.min(y1, plate.height); y += step) {
+      for (let x = x0; x < Math.min(x1, plate.width); x += step) {
+        const i = (y * plate.width + x) * 4;
+        const [r, g, b] = [plate.data[i], plate.data[i + 1], plate.data[i + 2]];
+        const a = fg[3];
+        const text = lum(fg[0] * a + r * (1 - a), fg[1] * a + g * (1 - a), fg[2] * a + b * (1 - a));
+        const back = lum(r, g, b);
+        ratios.push([(Math.max(text, back) + 0.05) / (Math.min(text, back) + 0.05), r, g, b]);
+      }
+    }
+  }
+  if (!ratios.length) return null;
+  ratios.sort((p, q) => p[0] - q[0]);
+  const pick = ratios[Math.floor(ratios.length * 0.1)];
+  behind = `rgb(${pick[1]}, ${pick[2]}, ${pick[3]})`;
+  return { ratio: pick[0], behind };
+}
+
+// Photographs the plate, reads every text at rest, then each enabled control's text again with the
+// pointer over it and with focus on it. The page is put back: pointer away, nothing focused.
+// Ends every CSS transition where it is heading. A stylesheet cannot be trusted to do it: a rule
+// that sets a duration with !important inside a cascade layer wins over any rule added later, and
+// a colour is then read part-way through (MEASURED: a real button's text came back at 4 % alpha,
+// on its way back from the transparent plate). Animations are left alone: an endless one has no end.
+const finishTransitions = (page) => page.evaluate(() => {
+  for (const a of document.getAnimations()) if (a instanceof CSSTransition) a.finish();
+});
+
+async function measureContrast(page, maxStates) {
+  const HIDE = '*, *::before, *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; }';
+  const plate = async () => {
+    const style = await page.addStyleTag({ content: HIDE });
+    try {
+      await finishTransitions(page);
+      const png = PNG.sync.read(await page.screenshot({ type: 'png' }));
+      return { data: png.data, width: png.width, height: png.height };
+    } finally {
+      await style.evaluate((el) => el.remove()).catch(() => {});
+      await finishTransitions(page).catch(() => {});
+    }
+  };
+  const out = [];
+  const judge = (read, photo, state) => {
+    for (const t of read.texts) {
+      if (t.disabled) continue;
+      const m = paintedContrast(t.fg, photo, t.rects);
+      if (!m) continue;
+      out.push({ key: t.key, desc: t.desc, state, ratio: m.ratio, behind: m.behind, fg: `rgba(${t.fg.join(', ')})`, size: t.size, bold: t.bold,
+        needed: t.size >= 24 || (t.size >= 18.66 && t.bold) ? CONTRAST_LARGE : CONTRAST_TEXT });
+    }
+  };
+  await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
+  await page.mouse.move(0, 0);
+  const rest = await page.evaluate(collectTexts, { within: null });
+  judge(rest, await plate(), 'rest');
+  const controls = [...new Set(rest.texts.filter((t) => t.n !== null && !t.disabled).map((t) => t.n))];
+  for (const n of controls.slice(0, maxStates)) {
+    const at = await page.evaluate((n) => {
+      const r = document.querySelector(`[data-operable-n="${n}"]`)?.getBoundingClientRect();
+      return r ? [r.left + r.width / 2, r.top + r.height / 2] : null;
+    }, n);
+    if (!at) continue;
+    await page.mouse.move(at[0], at[1]);
+    await finishTransitions(page);
+    judge(await page.evaluate(collectTexts, { within: n }), await plate(), 'hover');
+    await page.mouse.move(0, 0);
+    await page.evaluate((n) => document.querySelector(`[data-operable-n="${n}"]`)?.focus({ preventScroll: true }), n);
+    await finishTransitions(page);
+    judge(await page.evaluate(collectTexts, { within: n }), await plate(), 'focus');
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await finishTransitions(page);
+  }
+  return { texts: out, offscreen: rest.offscreen, unread: rest.unread, statesSkipped: Math.max(0, controls.length - maxStates) };
+}
+
 // Which state attribute a control must change when it is pressed, or null when a click proves
 // nothing about it: aria-pressed and aria-expanded on a button, aria-checked on a custom switch or
 // checkbox, aria-selected on a tab. Whether the value it holds at that moment can be pressed (a
@@ -576,7 +768,12 @@ async function driveClicks(page, controls, maxClicks) {
       const started = performance.now();
       const look = () => {
         const now = el.isConnected ? el.getAttribute(attr) : null;
-        if (now !== was || performance.now() - started >= settle) requestAnimationFrame(() => requestAnimationFrame(() => resolve(now)));
+        if (now !== was || performance.now() - started >= settle) {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            for (const a of document.getAnimations()) if (a instanceof CSSTransition) a.finish();
+            resolve(now);
+          }));
+        }
         else setTimeout(look, 20);
       };
       look();
@@ -595,7 +792,8 @@ async function driveClicks(page, controls, maxClicks) {
 // with addInitScript before it loaded (without it, only inline onclick handlers are seen).
 // `patterns: false` skips the key-driving pass (the borrowed checker), for a page that is still markup.
 // `clicks` (the click pass on two-state toggles) follows `patterns` unless it is set on its own.
-async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS } = {}) {
+// `contrast: false` leaves the contrast pass out.
+async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
   const style = await page.addStyleTag({
     content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; animation-play-state: paused !important; }',
   });
@@ -605,6 +803,9 @@ async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, 
       await readNames(page, facts);
       Object.assign(facts, await walkTabOrder(page, maxStops));
       for (const stop of facts.stops) if (stop.n !== null) stop.desc = facts.controls[stop.n].desc;
+      // While the audit's own stylesheet still holds transitions at zero and animations still:
+      // a hover colour is read at its end, and two photographs show the same frame.
+      if (contrast) facts.contrast = await measureContrast(page, maxStates);
     } finally {
       await style.evaluate((el) => el.remove()).catch(() => {});
     }

@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}p{margin:10px 0}button,a{font:inherit;padding:6px 10px;border:1px solid #666;border-radius:6px;background:#fff;color:#222;display:inline-block}:focus-visible{outline:3px solid #06c;outline-offset:2px}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}#hover:hover{background:#eef;color:#dde}#focus:focus-visible{background:#ff0;color:#ffe}</style></head><body>
+<!-- 2.07:1 -->
+<p id="grey" style="color:#b4b4b8">Light grey words on a white page.</p>
+<!-- white words run off the dark end of a gradient into its light end: a colour-only reading scores this against nothing -->
+<p id="grad" style="color:#fff;padding:8px;width:240px;background:linear-gradient(90deg,#111,#f5f5f5)">White words across a gradient that ends almost white, on two full lines</p>
+<!-- a third-black is light grey once it is painted -->
+<p id="alpha" style="color:rgba(0,0,0,.3)">Translucent words on a white page.</p>
+<!-- so is dark text inside a faded group -->
+<div style="opacity:.3"><p id="faded">Dark words in a faded group.</p></div>
+<!-- a colour written in another syntax is the same colour -->
+<p id="modern" style="color:oklch(82% 0.02 250)">Pale words written in oklch.</p>
+<!-- pale in every state: said once, at rest -->
+<button id="pale" style="color:#bbb">Always pale</button>
+<!-- fine at rest, pale on hover -->
+<button id="hover">Hover me</button>
+<!-- fine at rest, pale on focus -->
+<a id="focus" href="#grey">Focus me</a>
+</body></html>
