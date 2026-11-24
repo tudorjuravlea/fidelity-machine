@@ -120,7 +120,11 @@ rendered page, then hands every tab list, radio group, toolbar, tree, listbox, c
 checkbox, menubar, open menu and open dialog to the checker, which presses the pattern's keys and
 reports where focus and state did not follow. The checker reads only roles, ARIA, tabindex and
 focus, so it judges hand-written markup the same way. A picture of a widget fails it, by design;
-`--no-patterns` is for a screen that is meant to be a picture, and the report says it was used.
+It then clicks every two-state toggle (a pressed button, a disclosure, a custom switch, an
+unselected tab): the state must change, and the page must look different once it has. A toggle
+that flips `aria-checked` and nothing else is announced to a screen reader and invisible to
+everyone else. `--no-patterns` leaves the keys and the clicks out, for a screen that is meant to be
+a picture, and the report says it was used.
 
 ## What the kit does not cover here
 

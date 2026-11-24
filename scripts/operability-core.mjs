@@ -19,6 +19,8 @@
 //   judgeOperability()     pure: facts in, findings out. Unit tested without a browser.
 //
 // Rules and levels (ERROR fails the audit, WARN is listed):
+//   dead-state              ERROR  a control that declares a two-state attribute and keeps it when clicked
+//   invisible-state         ERROR  a click moved the state and fewer than 24 px of the page changed
 //   unnamed-control         ERROR  an exposed control whose computed accessible name is empty
 //   unnamed-group           ERROR  a radiogroup, tablist, listbox, tree, grid or dialog role the
 //                                  browser exposes with no name (the name its accessibility tree
@@ -58,6 +60,8 @@ const PATTERN_KIT = new URL('../runtime/ui-sdk/testing.js', import.meta.url);
 const PATTERN_KIT_GLOBAL = '__uiSdkTesting';
 const DEFAULT_MAX_WIDGETS = 40;
 const PATTERN_TIMEOUT_MS = 15000;
+const DEFAULT_MAX_CLICKS = 40;
+const CLICK_SETTLE_MS = 300;
 
 // Roles a person operates. An element carrying one is a control whatever its tag.
 const CONTROL_ROLES = ['button', 'link', 'checkbox', 'switch', 'radio', 'tab', 'menuitem', 'menuitemcheckbox',
@@ -89,6 +93,8 @@ const REFERENCE_WARN = ['aria-describedby', 'aria-details'];
 
 const MANUAL_KEYS_NOT_DRIVEN = 'what the arrow keys, Home, End and typing do inside a tab list, menu, listbox or grid is not driven here';
 const MANUAL_KEYS_DRIVEN = 'keys were driven only inside the widgets the borrowed checker knows (tabs, radio group, toolbar, tree, listbox, combobox, slider, switch, checkbox, a menubar, an open menu, an open dialog), in the state each was rendered in; a disclosure, an accordion and a grid are not driven';
+const MANUAL_NOT_CLICKED = 'no control was clicked: whether a toggle changes its state, and whether the change shows, was not judged';
+const MANUAL_CLICKED = 'clicks were driven only on two-state toggles (aria-pressed, aria-expanded on a button, aria-checked on a custom switch or checkbox, an unselected tab); what any other button does was not tried';
 const MANUAL = [
   'where focus lands when something opens, and where it returns when it closes, is not judged',
   'what a screen reader announces is not judged, only that each control has a name',
@@ -182,13 +188,32 @@ function judgeOperability(facts) {
   }
   deferred.push(...(facts.patterns?.skipped ?? []));
 
+  // The click pass: a control that declares a state must change it when pressed, and the change
+  // must show. Whether it shows is read from two photographs, so a page that repaints by itself
+  // (a clock, a spinner) cannot be judged on that point and says so.
+  for (const run of facts.clicks?.results ?? []) {
+    if (run.after === run.before) {
+      add('dead-state', 'ERROR', run.desc,
+        `declares ${run.attr}="${run.before}" and a click leaves it there: it says it has a state and pressing it changes nothing a program can read. Change ${run.attr} when it is pressed; a picture of a control takes data-operable-ignore`,
+        { attr: run.attr, before: run.before });
+    } else if (run.ambient >= MIN_FOCUS_PIXELS) {
+      deferred.push(`${run.desc}: the page was changing by itself (${run.ambient} px between two photographs with nothing pressed), so whether its new state shows could not be judged`);
+    } else if (run.changed < MIN_FOCUS_PIXELS) {
+      add('invisible-state', 'ERROR', run.desc,
+        `went from ${run.attr}="${run.before}" to "${run.after}" on a click and only ${run.changed} px of the page changed (${MIN_FOCUS_PIXELS} needed): assistive technology is told of a change nobody can see. Style the new state on the control, or on what it opens`,
+        { attr: run.attr, before: run.before, after: run.after, changed: run.changed, needed: MIN_FOCUS_PIXELS });
+    }
+  }
+  deferred.push(...(facts.clicks?.skipped ?? []));
+
   return {
     findings,
     deferred,
-    manual: [facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, ...MANUAL],
+    manual: [facts.patterns ? MANUAL_KEYS_DRIVEN : MANUAL_KEYS_NOT_DRIVEN, facts.clicks ? MANUAL_CLICKED : MANUAL_NOT_CLICKED, ...MANUAL],
     checked: {
       controls: facts.controls.length, groups: groups.length, references: facts.referenceCount, tabStops: facts.walk.stops, focusJudged,
       patterns: facts.patterns?.results.length ?? 0,
+      clicks: facts.clicks?.results.length ?? 0,
     },
   };
 }
@@ -499,10 +524,78 @@ async function walkTabOrder(page, maxStops) {
   return { stops, walk: { stops: stops.length, truncated } };
 }
 
+// Which state attribute a control must change when it is pressed, or null when a click proves
+// nothing about it: aria-pressed and aria-expanded on a button, aria-checked on a custom switch or
+// checkbox, aria-selected on a tab. Whether the value it holds at that moment can be pressed (a
+// selected tab and "mixed" cannot) is decided when the press is due. Left alone: a native
+// checkbox or radio (the browser keeps those), a real link (a click navigates), a submit or reset
+// button, a combobox, a menu item, a tree item (the key pass owns those), anything disabled or
+// not rendered.
+function stateToPress(c) {
+  if (!c.visible || c.disabled) return null;
+  const two = (attr) => (c.aria[attr] !== undefined ? attr : null);
+  if (c.role === 'tab') return two('aria-selected');
+  if (['switch', 'checkbox', 'menuitemcheckbox'].includes(c.role)) return c.native === null || c.native === 'button' ? two('aria-checked') : null;
+  const isButton = c.role === 'button' || (c.role === null && c.native === 'button' && c.tag !== 'input');
+  if (!isButton) return null;
+  return two('aria-pressed') ?? two('aria-expanded');
+}
+
+// Presses each such control once with a DOM click (no pointer travels, so nothing is hovered and
+// focus stays where it was: the two photographs differ only by what the click did), reads the
+// attribute again, photographs the page, and presses a toggle a second time to put it back. A
+// control that something else lies over at its centre is not pressed: a person could not press it
+// either, and a run that counted it would be judging a click that cannot happen.
+async function driveClicks(page, controls, maxClicks) {
+  const results = [];
+  const skipped = [];
+  const candidates = controls.filter((c) => stateToPress(c) !== null);
+  for (const c of candidates.slice(0, maxClicks)) {
+    const attr = stateToPress(c);
+    const ready = await page.evaluate(({ n, attr }) => {
+      const el = document.querySelector(`[data-operable-n="${n}"]`);
+      if (!el) return null;
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const over = !top || top === el || el.contains(top) ? null
+        : `${top.tagName.toLowerCase()}${top.id ? `#${top.id}` : ''}${typeof top.className === 'string' && top.className.trim() ? `.${top.className.trim().split(/\s+/)[0]}` : ''}`;
+      return { value: el.getAttribute(attr), over, offscreen: !top };
+    }, { n: c.n, attr });
+    if (ready === null) continue;
+    if (ready.offscreen) { skipped.push(`${c.desc} could not be clicked: its centre is outside the page as rendered`); continue; }
+    if (ready.over !== null) { skipped.push(`${c.desc} could not be clicked: ${ready.over} lies over its centre`); continue; }
+    // Read now, not when the controls were collected: the key pass may have moved a state since.
+    // A selected tab stays selected when pressed, and "mixed" has no single next value.
+    if (attr === 'aria-selected' ? ready.value !== 'false' : !['true', 'false'].includes(ready.value)) continue;
+    const still = decode(await page.screenshot({ type: 'png' }));
+    const before = decode(await page.screenshot({ type: 'png' }));
+    const press = ({ n, attr, was, settle }) => new Promise((resolve) => {
+      const el = document.querySelector(`[data-operable-n="${n}"]`);
+      el.click();
+      const started = performance.now();
+      const look = () => {
+        const now = el.isConnected ? el.getAttribute(attr) : null;
+        if (now !== was || performance.now() - started >= settle) requestAnimationFrame(() => requestAnimationFrame(() => resolve(now)));
+        else setTimeout(look, 20);
+      };
+      look();
+    });
+    const after = await page.evaluate(press, { n: c.n, attr, was: ready.value, settle: CLICK_SETTLE_MS });
+    const pressed = decode(await page.screenshot({ type: 'png' }));
+    results.push({ n: c.n, desc: c.desc, attr, before: ready.value, after, ambient: countChangedPixels(still, before), changed: countChangedPixels(before, pressed) });
+    // A toggle goes back with a second press. A tab stays: the next tab's own press moves it.
+    if (after !== ready.value && after !== null && attr !== 'aria-selected') await page.evaluate(press, { n: c.n, attr, was: after, settle: CLICK_SETTLE_MS });
+  }
+  if (candidates.length > maxClicks) skipped.push(`${candidates.length - maxClicks} control(s) that declare a state were not clicked: the limit is ${maxClicks}`);
+  return { results, skipped };
+}
+
 // The page must already be loaded and settled, and `probeClickListeners` must have been installed
 // with addInitScript before it loaded (without it, only inline onclick handlers are seen).
 // `patterns: false` skips the key-driving pass (the borrowed checker), for a page that is still markup.
-async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, maxWidgets = DEFAULT_MAX_WIDGETS } = {}) {
+// `clicks` (the click pass on two-state toggles) follows `patterns` unless it is set on its own.
+async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS } = {}) {
   const style = await page.addStyleTag({
     content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; animation-play-state: paused !important; }',
   });
@@ -526,6 +619,16 @@ async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, 
       } else {
         await page.evaluate(kit);
         facts.patterns = await page.evaluate(checkPatterns, { kitGlobal: PATTERN_KIT_GLOBAL, maxWidgets, timeoutMs: PATTERN_TIMEOUT_MS });
+      }
+    }
+    // After the keys, for the same reason. Transitions are cut so the second photograph shows the
+    // state the click ended in, not a frame on the way there; animations are left to run.
+    if (clicks) {
+      const calm = await page.addStyleTag({ content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; }' });
+      try {
+        facts.clicks = await driveClicks(page, facts.controls, maxClicks);
+      } finally {
+        await calm.evaluate((el) => el.remove()).catch(() => {});
       }
     }
   } finally {

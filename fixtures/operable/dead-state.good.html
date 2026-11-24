@@ -1,0 +1,22 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button,[role=switch],a{font:inherit;padding:6px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#222;cursor:pointer;display:inline-block}:focus-visible{outline:3px solid #06c;outline-offset:2px}[role=tablist]{display:flex;gap:4px;margin-top:12px}[aria-selected=true]{background:#222;color:#fff}[aria-pressed=true],[aria-checked=true]{background:#0a5c36;color:#fff}</style></head><body>
+<button id="star" aria-pressed="false">Star</button>
+<div id="sw" role="switch" tabindex="0" aria-checked="false" aria-label="Notifications">Off</div>
+<button id="more" aria-expanded="false" aria-controls="panel">Details</button>
+<div id="panel" hidden>More about this.</div>
+<div role="tablist" aria-label="Views"><button role="tab" id="t1" aria-selected="true" aria-controls="p1">Day</button><button role="tab" id="t2" aria-selected="false" aria-controls="p1" tabindex="-1">Week</button></div>
+<div role="tabpanel" id="p1" aria-labelledby="t1" tabindex="0">Panel</div>
+<!-- none of these is a live two-state toggle, so none is clicked -->
+<button id="mixed" aria-pressed="mixed">Some selected</button>
+<button id="off" aria-pressed="false" disabled>Unavailable</button>
+<a id="jump" href="#panel" aria-expanded="false">Jump to details</a>
+<label><input type="checkbox"> A native checkbox</label>
+<div data-operable-ignore><button id="pic" aria-pressed="false">A picture of a toggle</button></div>
+<script>
+const flip = (el, attr) => el.setAttribute(attr, String(el.getAttribute(attr) !== 'true'));
+star.addEventListener('click', () => flip(star, 'aria-pressed'));
+sw.addEventListener('click', () => { flip(sw, 'aria-checked'); sw.textContent = sw.getAttribute('aria-checked') === 'true' ? 'On' : 'Off'; });
+sw.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); sw.click(); } });
+more.addEventListener('click', () => { flip(more, 'aria-expanded'); panel.hidden = more.getAttribute('aria-expanded') !== 'true'; });
+for (const tab of [t1, t2]) tab.addEventListener('click', () => { for (const t of [t1, t2]) { t.setAttribute('aria-selected', String(t === tab)); t.tabIndex = t === tab ? 0 : -1; } p1.setAttribute('aria-labelledby', tab.id); });
+</script>
+</body></html>

@@ -1,0 +1,10 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button,[role=switch],a{font:inherit;padding:6px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#222;cursor:pointer;display:inline-block}:focus-visible{outline:3px solid #06c;outline-offset:2px}[role=tablist]{display:flex;gap:4px;margin-top:12px}[aria-selected=true]{background:#222;color:#fff}</style></head><body>
+<button id="mode" aria-pressed="false">Dark mode</button>
+<div id="sync" role="switch" tabindex="0" aria-checked="false" aria-label="Sync">Sync</div>
+<script>
+const flip = (el, attr) => el.setAttribute(attr, String(el.getAttribute(attr) !== 'true'));
+mode.addEventListener('click', () => flip(mode, 'aria-pressed'));
+sync.addEventListener('click', () => flip(sync, 'aria-checked'));
+sync.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); sync.click(); } });
+</script>
+</body></html>

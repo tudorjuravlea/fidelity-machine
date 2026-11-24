@@ -21,6 +21,27 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Operability audit: a toggle that does nothing, and a state nobody can see**
+  (`scripts/operability-core.mjs`, rules `dead-state` and `invisible-state`, both ERROR; class:
+  verdict-changing for a screen that declares `"operable": true` and holds a toggle that is a
+  picture). After the key pass, every control that declares a two-state attribute is pressed
+  once: `aria-pressed` or `aria-expanded` on a button, `aria-checked` on a custom switch or
+  checkbox, an unselected tab. `dead-state`: the attribute is the same after the click.
+  `invisible-state`: the attribute changed and fewer than 24 px of the page did, read from two
+  photographs (the number the focus rule already uses). The press is a DOM click, so no pointer
+  travels: nothing is hovered and focus stays put, and the photographs differ only by what the
+  click did. Not pressed: `mixed`, a native checkbox or radio, a real link, a submit button, a
+  disabled control, anything under `data-operable-ignore`. A control something else lies over
+  at its centre is deferred, never counted. A page that repaints by itself (two photographs
+  with nothing pressed differ) cannot be judged on visibility and says so; a dead control there
+  is still dead. A toggle is pressed twice, to put it back; at most 40. `--no-patterns` leaves
+  this pass out with the keys.
+  **Proof:** `fixtures/operable/clicks.test.mjs` (9 cases, six pages) and
+  `clicks.mutations.mjs`, 20 of 20 planted breaks caught. Read-only on 32 real pages that
+  declare such states: 156 toggles pressed, no error, 156 dead, all in one static capture of a
+  third-party application, which is what a capture is. The check follows ux-ui-agent-skills'
+  interactive gate (NOTICE) with its two holes closed: there, any mutation anywhere on the page
+  counted as an effect, and a control that could not be clicked was counted as clicked.
 - **Layout audit: a painted colour that follows no token** (`scripts/layout-audit-core.mjs`, rule
   `colour-unbound`, WARN; class: additive). The rendered twin of the lint's raw-colour rule. The
   lint reads source, so it sees a hex in a stylesheet and misses a colour set by script, written

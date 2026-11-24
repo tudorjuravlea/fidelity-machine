@@ -1,0 +1,9 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button,[role=switch],a{font:inherit;padding:6px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#222;cursor:pointer;display:inline-block}:focus-visible{outline:3px solid #06c;outline-offset:2px}[role=tablist]{display:flex;gap:4px;margin-top:12px}[aria-selected=true]{background:#222;color:#fff}#clock{display:block;margin-top:16px;font:20px/1 monospace;width:300px;height:24px;background:#222;color:#fff}</style></head><body>
+<button id="dead" aria-pressed="false">Dead toggle</button>
+<button id="quiet" aria-pressed="false">Quiet toggle</button>
+<span id="clock" aria-hidden="true">0</span>
+<script>
+quiet.addEventListener('click', () => quiet.setAttribute('aria-pressed', String(quiet.getAttribute('aria-pressed') !== 'true')));
+let n = 0; setInterval(() => { n += 1; clock.textContent = String(n).repeat(6); clock.style.background = n % 2 ? '#222' : '#555'; }, 16);
+</script>
+</body></html>
