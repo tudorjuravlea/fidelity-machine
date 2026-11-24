@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button{font:inherit;padding:6px 12px;border:1px solid #666;border-radius:6px;background:#fff;color:#222}:focus-visible{outline:3px solid #06c;outline-offset:2px}.dlg{position:fixed;left:200px;top:120px;width:300px;padding:16px;background:#fff;border:1px solid #666;box-shadow:0 8px 30px rgba(0,0,0,.3)}.dlg[hidden]{display:none}.row{margin:10px 0}dialog{padding:16px;border:1px solid #666}</style></head><body>
+<div class="row"><button id="open-ok" data-dialog aria-haspopup="dialog" aria-controls="ok">Open a well-behaved dialog</button></div>
+<!-- the browser's own modal dialog keeps focus inside by making the rest inert; its trigger says what it opens by naming it -->
+<div class="row"><button id="open-native" aria-controls="native">Open the native dialog</button></div>
+<!-- a non-modal panel may let Tab leave: only its opening, Escape and the way back are judged -->
+<div class="row"><button id="open-side" data-dialog aria-haspopup="dialog" aria-controls="side">Open the side panel</button></div>
+<!-- a picture of a trigger, opted out -->
+<div data-operable-ignore class="row"><button aria-haspopup="dialog" aria-controls="nowhere-here">Not wired</button></div>
+<p><a href="#after">A link after everything</a></p>
+<div id="ok" class="dlg" role="dialog" aria-modal="true" aria-labelledby="ok-t" hidden ><h2 id="ok-t" style="margin:0 0 8px;font-size:16px">a well-behaved dialog</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<dialog id="native" aria-labelledby="native-t"><h2 id="native-t" style="margin:0 0 8px;font-size:16px">A native dialog</h2><form method="dialog"><button>Close</button></form></dialog>
+<div id="side" class="dlg" role="dialog" aria-labelledby="side-t" hidden  data-leak data-leakback style="left:auto;right:16px;top:16px;width:160px"><h2 id="side-t" style="margin:0 0 8px;font-size:16px">Side panel</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<script>
+const focusables = (d) => [...d.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')];
+for (const trigger of document.querySelectorAll('[data-dialog]')) {
+  const d = document.getElementById(trigger.getAttribute('aria-controls'));
+  const close = () => { d.hidden = true; if (!('noreturn' in d.dataset)) trigger.focus(); };
+  trigger.addEventListener('click', () => { if ('dead' in d.dataset) return; d.hidden = false; if (!('nofocus' in d.dataset)) focusables(d)[0].focus(); });
+  d.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !('noescape' in d.dataset)) close();
+    if (e.key === 'Tab' && !('leak' in d.dataset)) {
+      const f = focusables(d), first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first && !('leakback' in d.dataset)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  d.querySelector('[data-close]').addEventListener('click', close);
+}
+const native = document.getElementById('native'); document.getElementById('open-native').addEventListener('click', () => native.showModal());</script>
+</body></html>

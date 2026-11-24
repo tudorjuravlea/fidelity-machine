@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>operable fixture</title><style>body{margin:24px;font:14px/20px Arial,sans-serif;color:#222;background:#fff}button{font:inherit;padding:6px 12px;border:1px solid #666;border-radius:6px;background:#fff;color:#222}:focus-visible{outline:3px solid #06c;outline-offset:2px}.dlg{position:fixed;left:200px;top:120px;width:300px;padding:16px;background:#fff;border:1px solid #666;box-shadow:0 8px 30px rgba(0,0,0,.3)}.dlg[hidden]{display:none}.row{margin:10px 0}dialog{padding:16px;border:1px solid #666}</style></head><body>
+<div class="row"><button id="open-dead" data-dialog aria-haspopup="dialog" aria-controls="dead">Open a dialog that never opens</button></div>
+<div class="row"><button id="open-nofocus" data-dialog aria-haspopup="dialog" aria-controls="nofocus">Open a dialog focus never enters</button></div>
+<div class="row"><button id="open-leak" data-dialog aria-haspopup="dialog" aria-controls="leak">Open a dialog Tab walks out of</button></div>
+<div class="row"><button id="open-leakback" data-dialog aria-haspopup="dialog" aria-controls="leakback">Open a dialog Shift+Tab walks out of</button></div>
+<div class="row"><button id="open-noescape" data-dialog aria-haspopup="dialog" aria-controls="noescape">Open a dialog Escape does not close</button></div>
+<div class="row"><button id="open-noreturn" data-dialog aria-haspopup="dialog" aria-controls="noreturn">Open a dialog that drops focus on closing</button></div>
+<p><a href="#after">A link after everything</a></p>
+<div id="dead" class="dlg" role="dialog" aria-modal="true" aria-labelledby="dead-t" hidden data-dead><h2 id="dead-t" style="margin:0 0 8px;font-size:16px">a dialog that never opens</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<div id="nofocus" class="dlg" role="dialog" aria-modal="true" aria-labelledby="nofocus-t" hidden data-nofocus><h2 id="nofocus-t" style="margin:0 0 8px;font-size:16px">a dialog focus never enters</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<div id="leak" class="dlg" role="dialog" aria-modal="true" aria-labelledby="leak-t" hidden data-leak><h2 id="leak-t" style="margin:0 0 8px;font-size:16px">a dialog Tab walks out of</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<div id="leakback" class="dlg" role="dialog" aria-modal="true" aria-labelledby="leakback-t" hidden data-leakback><h2 id="leakback-t" style="margin:0 0 8px;font-size:16px">a dialog Shift+Tab walks out of</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<div id="noescape" class="dlg" role="dialog" aria-modal="true" aria-labelledby="noescape-t" hidden data-noescape><h2 id="noescape-t" style="margin:0 0 8px;font-size:16px">a dialog Escape does not close</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<div id="noreturn" class="dlg" role="dialog" aria-modal="true" aria-labelledby="noreturn-t" hidden data-noreturn><h2 id="noreturn-t" style="margin:0 0 8px;font-size:16px">a dialog that drops focus on closing</h2><button data-close>Cancel</button> <button>Confirm</button></div>
+<script>
+const focusables = (d) => [...d.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')];
+for (const trigger of document.querySelectorAll('[data-dialog]')) {
+  const d = document.getElementById(trigger.getAttribute('aria-controls'));
+  const close = () => { d.hidden = true; if (!('noreturn' in d.dataset)) trigger.focus(); };
+  trigger.addEventListener('click', () => { if ('dead' in d.dataset) return; d.hidden = false; if (!('nofocus' in d.dataset)) focusables(d)[0].focus(); });
+  d.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !('noescape' in d.dataset)) close();
+    if (e.key === 'Tab' && !('leak' in d.dataset)) {
+      const f = focusables(d), first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first && !('leakback' in d.dataset)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  d.querySelector('[data-close]').addEventListener('click', close);
+}
+</script>
+</body></html>

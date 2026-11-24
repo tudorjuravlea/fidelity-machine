@@ -18,8 +18,8 @@
 //                                   [--no-patterns] [--max-stops <n>] [--ready-timeout <ms>]
 //   --screen omitted → every screen in the lock.
 //   --strict         → WARN findings fail the audit too (default: only ERROR fails).
-//   --no-patterns    → leave the two driving passes out (the keys the borrowed checker presses and
-//                      the clicks on two-state toggles), for a screen that is still markup (a
+//   --no-patterns    → leave the driving passes out (the keys the borrowed checker presses, the
+//                      clicks on two-state toggles, the dialogs opened), for a screen that is still markup (a
 //                      picture of a switch): only the rules that read the page as it stands run.
 //   --max-stops      → how many Tab stops to walk and photograph (default 80).
 //   --ready-timeout  → how long to wait for [data-render-ready] (default 15000 ms, as render.mjs).
@@ -195,7 +195,7 @@ async function main() {
       await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
 
       const head = status === 'pass' ? 'PASS' : status === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
-      console.log(`${tag} ${head} — ${errors.length} error(s), ${warns.length} warning(s), ${result.checked.controls} control(s), ${result.checked.references} reference(s), ${result.checked.tabStops} tab stop(s), ${result.checked.focusJudged} focus indicator(s) photographed, ${result.checked.texts} text(s) judged for contrast, ${result.checked.targets} target(s) measured, ${args.patterns ? `${result.checked.patterns} widget(s) driven, ${result.checked.clicks} toggle(s) clicked` : 'no widget driven, no toggle clicked (--no-patterns)'}`);
+      console.log(`${tag} ${head} — ${errors.length} error(s), ${warns.length} warning(s), ${result.checked.controls} control(s), ${result.checked.references} reference(s), ${result.checked.tabStops} tab stop(s), ${result.checked.focusJudged} focus indicator(s) photographed, ${result.checked.texts} text(s) judged for contrast, ${result.checked.targets} target(s) measured, ${args.patterns ? `${result.checked.patterns} widget(s) driven, ${result.checked.clicks} toggle(s) clicked, ${result.checked.dialogs} dialog(s) opened` : 'no widget driven, no toggle clicked, no dialog opened (--no-patterns)'}`);
       for (const f of errors) console.log(`${tag}   ERROR ${f.message}`);
       for (const f of warns) console.log(`${tag}   WARN  ${f.message}`);
       for (const r of reasons) console.log(`${tag}   inconclusive: ${r}`);

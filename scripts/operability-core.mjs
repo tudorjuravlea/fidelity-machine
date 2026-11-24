@@ -19,6 +19,8 @@
 //   judgeOperability()     pure: facts in, findings out. Unit tested without a browser.
 //
 // Rules and levels (ERROR fails the audit, WARN is listed):
+//   dialog-focus            ERROR  a declared dialog that does not open, leaves focus outside, lets Tab out
+//                                  of a modal, ignores Escape, or does not hand focus back to its trigger
 //   target-size             WARN   a target under 24x24 px (44 on a phone-runnable page) with another
 //                                  target inside the circle of that diameter around it
 //   reduced-motion-loss     ERROR  visible with no motion preference, gone under prefers-reduced-motion
@@ -69,6 +71,8 @@ const PATTERN_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_CLICKS = 40;
 const CLICK_SETTLE_MS = 300;
 const DEFAULT_MAX_STATES = 80;
+const DEFAULT_MAX_DIALOGS = 12;
+const DIALOG_SETTLE_MS = 500;
 // WCAG 1.4.3: 4.5:1, or 3:1 for large text (24 px, or 18.66 px bold).
 const CONTRAST_TEXT = 4.5;
 const CONTRAST_LARGE = 3;
@@ -118,8 +122,9 @@ const MANUAL_CONTRAST = 'contrast was judged for text only, on one frame, inside
 const MANUAL_NO_MOTION = 'the reduced-motion preference was not tried (the pass was left out)';
 const MANUAL_MOTION = 'reduced motion was read from CSS animations and declared transitions on the live page: motion driven by script, a transition written as `all`, and a script that reads the preference only once at load are not judged';
 const MANUAL_NO_TARGETS = 'the size of targets was not judged (the pass was left out)';
+const MANUAL_NO_DIALOGS = 'no dialog was opened: where focus goes when one opens, whether Tab stays inside it, and where focus returns when it closes, were not judged';
+const MANUAL_DIALOGS = 'dialogs were opened only from triggers that declare one (aria-haspopup="dialog", or aria-controls / popovertarget naming a dialog); a dialog opened any other way, a menu and a popover were not opened';
 const MANUAL = [
-  'where focus lands when something opens, and where it returns when it closes, is not judged',
   'what a screen reader announces is not judged, only that each control has a name',
   'only the rendered state is audited: a menu, dialog or panel that is closed was not opened',
   'click listeners attached by delegation on a container are not attributed to its children',
@@ -240,6 +245,19 @@ function judgeOperability(facts) {
       { width: t.width, height: t.height, floor, count: t.count, near: t.near });
   }
 
+  // The dialog pass: one finding per fault, at the trigger.
+  const DIALOG_FAULTS = {
+    'did-not-open': (d) => `declares that it opens a dialog (${d.how}) and a click opens none. Open the dialog it names, or drop the claim`,
+    'focus-stayed-outside': (d) => `opens ${d.dialog} and focus stays on ${d.where}: a keyboard user is left behind the dialog (WAI-ARIA dialog pattern). Move focus into the dialog when it opens`,
+    'tab-left': (d) => `opens ${d.dialog}, which says it is modal, and ${d.key} takes focus out of it to ${d.where} after ${d.presses} press(es). Keep focus inside while it is open: wrap it, or use <dialog> with showModal()`,
+    'escape-ignored': (d) => `opens ${d.dialog} and Escape does not close it. Close on Escape`,
+    'focus-not-returned': (d) => `opens ${d.dialog}, and when it closes focus lands on ${d.where} instead of coming back to the control that opened it. Return focus to the trigger`,
+  };
+  for (const run of facts.dialogs?.results ?? []) {
+    for (const f of run.faults) add('dialog-focus', 'ERROR', run.desc, DIALOG_FAULTS[f.fault]({ ...f, how: run.how }), { fault: f.fault, dialog: f.dialog ?? null });
+  }
+  deferred.push(...(facts.dialogs?.skipped ?? []));
+
   // The reduced-motion pass.
   for (const lost of facts.motion?.lost ?? []) {
     add('reduced-motion-loss', 'ERROR', lost.desc,
@@ -287,6 +305,7 @@ function judgeOperability(facts) {
       facts.contrast ? MANUAL_CONTRAST : MANUAL_NO_CONTRAST,
       facts.motion ? MANUAL_MOTION : MANUAL_NO_MOTION,
       ...(facts.targets ? [] : [MANUAL_NO_TARGETS]),
+      facts.dialogs ? MANUAL_DIALOGS : MANUAL_NO_DIALOGS,
       ...(facts.contrast?.offscreen ? [`${facts.contrast.offscreen} text(s) are painted outside the frame that was rendered and were not judged for contrast`] : []),
       ...MANUAL,
     ],
@@ -297,6 +316,7 @@ function judgeOperability(facts) {
       texts: textsJudged, textStates: statesJudged,
       motionElements: facts.motion?.elements ?? 0,
       targets: facts.targets?.judged ?? 0,
+      dialogs: facts.dialogs?.results.length ?? 0,
     },
   };
 }
@@ -969,13 +989,129 @@ async function driveClicks(page, controls, maxClicks) {
   return { results, skipped };
 }
 
+// page.evaluate helpers for the dialog pass, installed once as window.__operabilityDialogs.
+function installDialogHelpers() {
+  const DIALOG = 'dialog, [role="dialog"], [role="alertdialog"]';
+  const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && el.checkVisibility({ visibilityProperty: true }); };
+  const describe = (el) => {
+    if (!el || el === document.body) return 'the page body';
+    const id = el.id ? `#${el.id}` : '';
+    const role = el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : '';
+    const text = (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    return `${el.tagName.toLowerCase()}${id}${role}${text ? ` "${text}"` : ''}`;
+  };
+  const byMarker = (n) => document.querySelector(`[data-operable-n="${n}"]`);
+  const wait = (test, ms) => new Promise((resolve) => {
+    const started = performance.now();
+    const look = () => { const v = test(); if (v || performance.now() - started >= ms) requestAnimationFrame(() => resolve(v)); else setTimeout(look, 20); };
+    look();
+  });
+  window.__operabilityDialogs = {
+    open: () => [...document.querySelectorAll(DIALOG)].filter(shown),
+    // Triggers: a rendered, enabled control that says it opens a dialog.
+    triggers: () => [...document.querySelectorAll('[data-operable-n]')].filter((el) => shown(el) && !el.matches(':disabled') && el.getAttribute('aria-disabled') !== 'true').map((el) => {
+      const named = ['aria-controls', 'popovertarget', 'commandfor'].map((a) => [a, el.getAttribute(a)]).find(([, id]) => id && document.getElementById(id)?.matches(DIALOG));
+      if (el.getAttribute('aria-haspopup') !== 'dialog' && !named) return null;
+      return { n: Number(el.getAttribute('data-operable-n')), desc: describe(el), how: named ? `${named[0]}="${named[1]}"` : 'aria-haspopup="dialog"' };
+    }).filter(Boolean),
+    // Focus the trigger, press it, and say what opened and where focus went.
+    press: async (n, settle) => {
+      const el = byMarker(n);
+      const r = el.getBoundingClientRect();
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!top || !(top === el || el.contains(top))) return { covered: describe(top) };
+      const before = new Set(window.__operabilityDialogs.open());
+      el.focus({ preventScroll: true });
+      el.click();
+      const dialog = await wait(() => window.__operabilityDialogs.open().find((d) => !before.has(d)) ?? null, settle);
+      if (!dialog) return { opened: false };
+      dialog.setAttribute('data-operable-dialog', '');
+      const inside = await wait(() => dialog.contains(document.activeElement), 300);
+      const where = describe(document.activeElement);
+      if (!inside) (dialog.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? dialog).focus?.();
+      return {
+        opened: true, dialog: describe(dialog), inside, where,
+        modal: dialog.matches(':modal') ? 'native' : dialog.getAttribute('aria-modal') === 'true' ? 'declared' : 'no',
+        focusables: dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])').length,
+      };
+    },
+    state: (n) => {
+      const dialog = document.querySelector('[data-operable-dialog]');
+      const active = document.activeElement;
+      return { open: !!dialog && shown(dialog), inside: !!dialog && dialog.contains(active), where: describe(active), onTrigger: active === byMarker(n) };
+    },
+    refocus: () => { const d = document.querySelector('[data-operable-dialog]'); (d?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? d)?.focus?.(); },
+    closed: (n, settle) => wait(() => { const d = document.querySelector('[data-operable-dialog]'); return !d || !shown(d); }, settle),
+    returned: (n) => wait(() => document.activeElement === byMarker(n), 300),
+    // Last resort, so one stuck dialog does not hide the page from the rest of the pass.
+    forceClose: async (settle) => {
+      const d = document.querySelector('[data-operable-dialog]');
+      if (!d) return true;
+      const closer = [...d.querySelectorAll('button, [role="button"]')].find((b) => /close|cancel|dismiss|done|ok/i.test(b.getAttribute('aria-label') || b.textContent || ''));
+      if (closer) closer.click(); else if (typeof d.close === 'function' && d.open) d.close();
+      return wait(() => !shown(d), settle);
+    },
+    forget: () => { for (const d of document.querySelectorAll('[data-operable-dialog]')) d.removeAttribute('data-operable-dialog'); document.activeElement?.blur?.(); },
+  };
+}
+
+// Opens each declared dialog with a click on its focused trigger and drives the keyboard a person
+// would: focus must be inside, Tab and Shift+Tab must keep it inside a modal one (a native modal
+// is the browser's to keep; a dialog that does not say it is modal may let focus leave), Escape
+// must close it, focus must come back to the trigger. After a fault the pass repairs what it can
+// (puts focus in, closes by a Close button) so that each dialog is judged on every point.
+async function driveDialogs(page, maxDialogs) {
+  await page.evaluate(installDialogHelpers);
+  const triggers = await page.evaluate(() => window.__operabilityDialogs.triggers());
+  const results = [];
+  const skipped = [];
+  try {
+    for (const t of triggers.slice(0, maxDialogs)) {
+      const opened = await page.evaluate(({ n, settle }) => window.__operabilityDialogs.press(n, settle), { n: t.n, settle: DIALOG_SETTLE_MS });
+      if (opened.covered) { skipped.push(`${t.desc} could not be clicked to open its dialog: ${opened.covered} lies over its centre`); continue; }
+      const faults = [];
+      if (!opened.opened) { results.push({ ...t, faults: [{ fault: 'did-not-open' }] }); continue; }
+      if (!opened.inside) faults.push({ fault: 'focus-stayed-outside', dialog: opened.dialog, where: opened.where });
+      if (opened.modal === 'declared') {
+        const walk = async (key, presses) => {
+          for (let i = 1; i <= presses; i++) {
+            await page.keyboard.press(key);
+            const s = await page.evaluate((n) => window.__operabilityDialogs.state(n), t.n);
+            if (!s.inside) { faults.push({ fault: 'tab-left', dialog: opened.dialog, key, presses: i, where: s.where }); await page.evaluate(() => window.__operabilityDialogs.refocus()); return false; }
+          }
+          return true;
+        };
+        if (await walk('Tab', Math.max(6, opened.focusables * 2 + 2))) await walk('Shift+Tab', 3);
+      }
+      await page.keyboard.press('Escape');
+      let closed = await page.evaluate(({ n, settle }) => window.__operabilityDialogs.closed(n, settle), { n: t.n, settle: DIALOG_SETTLE_MS });
+      if (!closed) {
+        faults.push({ fault: 'escape-ignored', dialog: opened.dialog });
+        closed = await page.evaluate((settle) => window.__operabilityDialogs.forceClose(settle), DIALOG_SETTLE_MS);
+      }
+      if (closed && !(await page.evaluate((n) => window.__operabilityDialogs.returned(n), t.n))) {
+        const s = await page.evaluate((n) => window.__operabilityDialogs.state(n), t.n);
+        faults.push({ fault: 'focus-not-returned', dialog: opened.dialog, where: s.where });
+      }
+      results.push({ ...t, faults });
+      await page.evaluate(() => window.__operabilityDialogs.forget());
+      if (!closed) { skipped.push(`${opened.dialog} could not be closed, so the triggers after ${t.desc} were not tried`); break; }
+    }
+    if (triggers.length > maxDialogs) skipped.push(`${triggers.length - maxDialogs} dialog trigger(s) were not tried: the limit is ${maxDialogs}`);
+  } finally {
+    await page.evaluate(() => { window.__operabilityDialogs?.forget(); delete window.__operabilityDialogs; }).catch(() => {});
+  }
+  return { results, skipped };
+}
+
 // The page must already be loaded and settled, and `probeClickListeners` must have been installed
 // with addInitScript before it loaded (without it, only inline onclick handlers are seen).
 // `patterns: false` skips the key-driving pass (the borrowed checker), for a page that is still markup.
 // `clicks` (the click pass on two-state toggles) follows `patterns` unless it is set on its own.
 // `contrast: false` leaves the contrast pass out; `motion: false` the reduced-motion pass;
-// `targets: false` the target-size pass.
-async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, contrast = true, motion = true, targets = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
+// `targets: false` the target-size pass. `dialogs` (opening each declared dialog) follows `patterns`.
+async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, clicks = patterns, dialogs = patterns, maxDialogs = DEFAULT_MAX_DIALOGS, contrast = true, motion = true, targets = true, maxWidgets = DEFAULT_MAX_WIDGETS, maxClicks = DEFAULT_MAX_CLICKS, maxStates = DEFAULT_MAX_STATES } = {}) {
   const style = await page.addStyleTag({
     content: '*, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; transition-delay: 0s !important; animation-play-state: paused !important; }',
   });
@@ -1022,6 +1158,7 @@ async function auditPage(page, { maxStops = DEFAULT_MAX_STOPS, patterns = true, 
         await calm.evaluate((el) => el.remove()).catch(() => {});
       }
     }
+    if (dialogs) facts.dialogs = await driveDialogs(page, maxDialogs);
   } finally {
     await page.evaluate(() => {
       for (const marker of ['data-operable-n', 'data-operable-g']) {

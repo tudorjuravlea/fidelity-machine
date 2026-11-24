@@ -21,6 +21,25 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   whatever happened, so every break "survived" until the variable was dropped. The practice of
   setup assertions on automated mutations follows ux-ui-agent-skills (Thientan Soparat, MIT;
   NOTICE).
+- **Operability audit: dialogs opened and driven** (`scripts/operability-core.mjs`, rule
+  `dialog-focus`, ERROR; class: verdict-changing for a screen that declares `"operable": true`
+  and a dialog trigger). The audit's manual list said where focus goes when something opens was
+  not judged, because a page cannot say how to open itself. A trigger can: `aria-haspopup="dialog"`,
+  or `aria-controls` / `popovertarget` / `commandfor` naming a dialog. Each such trigger is
+  focused and clicked, and the keyboard a person would use is driven. One finding per fault:
+  nothing opens; focus stays outside what opened; Tab or Shift+Tab leaves a dialog that says it
+  is modal; Escape does not close it; focus does not come back to the trigger. A native modal's
+  trap is the browser's, and a dialog that does not say `aria-modal="true"` may let focus
+  leave. After a fault the pass puts focus in or closes by a Close button, so each dialog is
+  judged on every point; one that will not close ends the pass and is deferred. It follows
+  `--no-patterns`, with the keys and the clicks. No lock field was needed.
+  **Proof:** `fixtures/operable/dialogs.test.mjs` (4 cases; six dialogs each broken one way, a
+  correct custom modal, the native one, a non-modal panel) and `dialogs.mutations.mjs`, 21 of 21
+  planted breaks caught. The first fixture let three breaks through because each dialog sat
+  next to its trigger in the page, so Tab walked into it by accident; they now sit at the end,
+  as a portal would put them. NOT YET SEEN ON REAL WORK: none of 110 real pages sampled declares
+  a dialog trigger. The check follows ux-ui-agent-skills' focus-trap gate (NOTICE), which needed
+  a selector typed per page and did not test Shift+Tab or where focus was on opening.
 - **verify --check: does the last verdict still stand?** (`scripts/verify.mjs`,
   `.report/<screen>.verify.json`, CONTRACT §Invocation contract; class: additive). A report says
   what was true when it was written, and nothing said whether the screen had been edited since.
