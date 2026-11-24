@@ -37,6 +37,15 @@
 //     channel read from var()/calc(), and alpha 0, which is the `transparent` keyword. In .html
 //     both scans read CSS contexts only (htmlColorContexts): a hex in prose or in a non-colour
 //     attribute is copy.
+//     A colour keyword (`navy`, the 148 CSS named colours) is the same colour again: judged by the
+//     hex it paints (`white`/`black` WARN like #fff/#000), and read only where a keyword can only
+//     be a colour: a paint declaration, a paint attribute whose whole value is the keyword, a
+//     quoted value on a paint key in script or JSX. Never prose, a class name, an unquoted script
+//     identifier (a variable) or an @supports/@media/@container condition (a question, not a
+//     paint). An oklch()/oklab()/lab()/lch()/hwb()/color() literal is a raw colour this file does
+//     not convert to sRGB: always an ERROR, with no nearest token named. Still unread, by name: a
+//     keyword inside a CSS-in-JS template or a style string built in script, a custom property
+//     whose value holds a keyword among other words, and a framework's own palette class.
 //   * em-dash: "visible text" excludes <head> (title/meta are browser chrome, not page copy)
 //     in addition to <style>/<script>. Entities (&mdash; &#8212; &#x2014;) are decoded first.
 //     The text attributes of body tags count as copy too (alt, title, placeholder and the aria
@@ -700,6 +709,115 @@ function colorFunctionHex(fn, args) {
   return rgb.map(hex2).join('') + (a < 1 ? hex2(a * 255) : '');
 }
 
+// The CSS named colours (CSS Color 4 <named-color>), keyword → the hex it paints. `transparent`,
+// `currentColor` and the system colours (Canvas, ButtonText, …) are not here: none is a literal
+// colour. The table was read back from Chromium (canvas fillStyle), not typed from memory.
+const NAMED_COLOURS = new Map(('aliceblue f0f8ff antiquewhite faebd7 aqua 00ffff aquamarine 7fffd4 azure f0ffff beige f5f5dc '
+  + 'bisque ffe4c4 black 000000 blanchedalmond ffebcd blue 0000ff blueviolet 8a2be2 brown a52a2a burlywood deb887 '
+  + 'cadetblue 5f9ea0 chartreuse 7fff00 chocolate d2691e coral ff7f50 cornflowerblue 6495ed cornsilk fff8dc '
+  + 'crimson dc143c cyan 00ffff darkblue 00008b darkcyan 008b8b darkgoldenrod b8860b darkgray a9a9a9 darkgreen 006400 '
+  + 'darkgrey a9a9a9 darkkhaki bdb76b darkmagenta 8b008b darkolivegreen 556b2f darkorange ff8c00 darkorchid 9932cc '
+  + 'darkred 8b0000 darksalmon e9967a darkseagreen 8fbc8f darkslateblue 483d8b darkslategray 2f4f4f darkslategrey 2f4f4f '
+  + 'darkturquoise 00ced1 darkviolet 9400d3 deeppink ff1493 deepskyblue 00bfff dimgray 696969 dimgrey 696969 '
+  + 'dodgerblue 1e90ff firebrick b22222 floralwhite fffaf0 forestgreen 228b22 fuchsia ff00ff gainsboro dcdcdc '
+  + 'ghostwhite f8f8ff gold ffd700 goldenrod daa520 gray 808080 green 008000 greenyellow adff2f grey 808080 '
+  + 'honeydew f0fff0 hotpink ff69b4 indianred cd5c5c indigo 4b0082 ivory fffff0 khaki f0e68c lavender e6e6fa '
+  + 'lavenderblush fff0f5 lawngreen 7cfc00 lemonchiffon fffacd lightblue add8e6 lightcoral f08080 lightcyan e0ffff '
+  + 'lightgoldenrodyellow fafad2 lightgray d3d3d3 lightgreen 90ee90 lightgrey d3d3d3 lightpink ffb6c1 lightsalmon ffa07a '
+  + 'lightseagreen 20b2aa lightskyblue 87cefa lightslategray 778899 lightslategrey 778899 lightsteelblue b0c4de '
+  + 'lightyellow ffffe0 lime 00ff00 limegreen 32cd32 linen faf0e6 magenta ff00ff maroon 800000 mediumaquamarine 66cdaa '
+  + 'mediumblue 0000cd mediumorchid ba55d3 mediumpurple 9370db mediumseagreen 3cb371 mediumslateblue 7b68ee '
+  + 'mediumspringgreen 00fa9a mediumturquoise 48d1cc mediumvioletred c71585 midnightblue 191970 mintcream f5fffa '
+  + 'mistyrose ffe4e1 moccasin ffe4b5 navajowhite ffdead navy 000080 oldlace fdf5e6 olive 808000 olivedrab 6b8e23 '
+  + 'orange ffa500 orangered ff4500 orchid da70d6 palegoldenrod eee8aa palegreen 98fb98 paleturquoise afeeee '
+  + 'palevioletred db7093 papayawhip ffefd5 peachpuff ffdab9 peru cd853f pink ffc0cb plum dda0dd powderblue b0e0e6 '
+  + 'purple 800080 rebeccapurple 663399 red ff0000 rosybrown bc8f8f royalblue 4169e1 saddlebrown 8b4513 salmon fa8072 '
+  + 'sandybrown f4a460 seagreen 2e8b57 seashell fff5ee sienna a0522d silver c0c0c0 skyblue 87ceeb slateblue 6a5acd '
+  + 'slategray 708090 slategrey 708090 snow fffafa springgreen 00ff7f steelblue 4682b4 tan d2b48c teal 008080 '
+  + 'thistle d8bfd8 tomato ff6347 turquoise 40e0d0 violet ee82ee wheat f5deb3 white ffffff whitesmoke f5f5f5 '
+  + 'yellow ffff00 yellowgreen 9acd32').match(/\S+ \S+/g).map((pair) => pair.split(' ')));
+const NAMED_ALT = [...NAMED_COLOURS.keys()].join('|');
+// A keyword standing as a value of its own: not the tail of an identifier (--brand-red, .red,
+// #red, darkred) and not a function or the head of a longer word (red-500, tan()).
+const NAMED_IN_VALUE = new RegExp(`(?<![\\w.#@$-])(?:${NAMED_ALT})(?![\\w-]|\\s*\\()`, 'gi');
+// A declaration: property, then a value that runs to the next `;`, `{` or `}` (or to the end of a
+// style attribute). PAINT_PROP says whether the value can hold a colour: any property that ends
+// in `color`, the paint shorthands and their longhands, with or without a vendor prefix. A custom
+// property is read only when its whole value is one keyword: `--state: on` is nobody's colour.
+// The (?<![\w-]) pin is a performance guard, as in stripTokenScopes: a property cannot start in the
+// middle of a word, and without the pin every character of a long run (an embedded base64 font) is
+// tried as a start, which is quadratic (MEASURED: 200,000 characters, 20.6 s without, 1 ms with).
+const CSS_DECL = /(?<![\w-])(-{0,2}[a-z][\w-]*)\s*:([^;{}]*)/gi;
+const PAINT_PROP = /^(?:-(?:webkit|moz|ms|o)-)?(?:(?:[a-z-]+-)?color|(?:background|border|outline|text-decoration|text-emphasis|column-rule|text-stroke)(?:-[a-z-]+)?|fill|stroke|box-shadow|text-shadow|filter)$/i;
+// In script and JSX a colour is a quoted value on a paint key: `style.color = "navy"`,
+// `{ backgroundColor: 'navy' }`, `fill="navy"`. An unquoted `color: navy` there is a variable.
+const JS_COLOUR_VALUE = new RegExp(
+  `(?<![\\w$-])(?:color|background|backgroundColor|border(?:Top|Right|Bottom|Left)?Color|outlineColor|caretColor|accentColor|textDecorationColor|fill|stroke|stopColor|floodColor|stop-color|flood-color|bgcolor)["']?\\s*[:=]\\s*(["'\`])\\s*(${NAMED_ALT})\\s*\\1`, 'gi');
+const blankStringsAndUrls = (v) => v.replace(/url\([^)]*\)|"[^"]*"|'[^']*'/gi, spaceFill);
+// The condition of @supports / @media / @container, blanked: `@supports (color: color-mix(in lab,
+// red, red))` asks the browser a question and paints nothing. The block it opens is still read.
+const blankAtRuleConditions = (css) => css.replace(/@(?:supports|media|container)\b[^{};]*(?=\{)/gi, spaceFill);
+
+// Colour keywords used as a paint, outside token scopes: [{ index, raw, hex }], the shape
+// scanColorFunctionHits returns, so the hex bands and the white/black carve-out apply unchanged.
+// Read where a keyword can only be a colour: a paint declaration (stylesheet, <style>, style
+// attribute), a paint attribute whose whole value is the keyword (fill="navy"), and a quoted value
+// on a paint key in script or JSX. Never in prose, a class name or any other attribute.
+function scanNamedColourHits(f) {
+  const hits = [];
+  const hit = (index, word) => hits.push({ index, raw: word.toLowerCase(), hex: NAMED_COLOURS.get(word.toLowerCase()) });
+  const inJs = (js, base) => {
+    for (const m of js.matchAll(JS_COLOUR_VALUE)) hit(base + m.index, m[2]);
+  };
+  for (const { css, offset } of declarationTexts(f)) {
+    for (const d of blankAtRuleConditions(css).matchAll(CSS_DECL)) {
+      const valueAt = offset + d.index + d[0].length - d[2].length;
+      if (d[1].startsWith('--')) {
+        const whole = d[2].replace(/!important\s*$/i, '').trim();
+        if (NAMED_COLOURS.has(whole.toLowerCase())) hit(valueAt + d[2].indexOf(whole), whole);
+      } else if (PAINT_PROP.test(d[1])) {
+        for (const m of blankStringsAndUrls(d[2]).matchAll(NAMED_IN_VALUE)) hit(valueAt + m.index, m[0]);
+      }
+    }
+  }
+  if (f.ext === '.html') {
+    const scripts = [];
+    styleBlocks(f.content, scripts);
+    for (const b of scripts) inJs(stripJsComments(b.js), b.offset);
+    for (const a of tagAttributeValues(f.content, COLOR_ATTRS, false)) {
+      if (a.name !== 'style' && a.name !== 'class' && NAMED_COLOURS.has(a.value.trim().toLowerCase())) hit(a.index, a.value.trim());
+    }
+  } else if (JSY_EXTS.has(f.ext)) {
+    inJs(stripJsComments(f.content), 0);
+  }
+  return hits;
+}
+
+// oklch()/oklab()/lab()/lch()/hwb()/color(): a raw colour in a notation this file does not convert
+// to sRGB. [{ index, raw }]. Only an all-literal argument list counts, by the same [^()]* rule as
+// rgb(): a channel from var() or calc(), or a relative colour (`from var(--x) …`), holds a '(' and
+// never matches. The arguments must read as a colour (three channels, optional `/ alpha`, and for
+// color() a colour space or profile name first), so a script's own `color(d)` or `lab(a, b)`
+// call is not one.
+function scanModernColourHits(buf) {
+  const hits = [];
+  const channel = /^(?:none|[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:%|deg|grad|rad|turn)?)$/;
+  for (const m of buf.matchAll(/(?<![\w$.-])(oklch|oklab|lab|lch|hwb|color)\(([^()]*)\)/gi)) {
+    const slash = m[2].toLowerCase().split('/');
+    if (slash.length > 2) continue;
+    const parts = slash[0].trim().split(/\s+/);
+    if (m[1].toLowerCase() === 'color') parts.shift();
+    if (parts.length !== 3 || !parts.every((p) => channel.test(p))) continue;
+    if (slash.length === 2) {
+      const alpha = slash[1].trim();
+      if (!channel.test(alpha)) continue;
+      if (parseFloat(alpha) === 0) continue; // fully transparent, as in colorFunctionHex
+    }
+    hits.push({ index: m.index, raw: m[0].replace(/\s+/g, ' ') });
+  }
+  return hits;
+}
+
 // Every lock color, both modes, resolved to a comparable hex. Values that aren't parseable
 // hex (var(...), rgba(...), etc.) are skipped silently — the goal is a suggestion, not a
 // second schema check.
@@ -798,6 +916,25 @@ function checkRawHex(lock, files, rel, tokensCssDesc) {
       const g = grouped.get(key) || { count: 0, firstIdx: h.index, raw: h.hex, fn: h.raw };
       g.count += 1;
       grouped.set(key, g);
+    }
+    // A keyword groups by its own name (`black` and rgb(0 0 0) are reported as written).
+    for (const h of scanNamedColourHits(f)) {
+      const key = `name:${h.raw}`;
+      const g = grouped.get(key) || { count: 0, firstIdx: h.index, raw: h.hex, fn: h.raw };
+      g.count += 1;
+      grouped.set(key, g);
+    }
+    // A notation this file does not convert has no hex: no band, no carve-out, always an ERROR.
+    const unconverted = new Map(); // raw → { count, firstIdx }
+    for (const h of scanModernColourHits(f.ext === '.css' || f.ext === '.html' ? blankAtRuleConditions(buf) : buf)) {
+      const g = unconverted.get(h.raw.toLowerCase()) || { count: 0, firstIdx: h.index, raw: h.raw };
+      g.count += 1;
+      unconverted.set(h.raw.toLowerCase(), g);
+    }
+    for (const g of unconverted.values()) {
+      add('ERROR', 'raw-hex', rel(f.abs),
+        `raw colour ${g.raw} (${g.count}x) outside :root/[data-theme] — all colors must come from tokens.css vars`, lineOf(buf, g.firstIdx),
+        `define it once as a token ${tokensCssDesc} and use the var — this notation is not compared with the lock's colours, so no nearest token is named`);
     }
     for (const [key, g] of grouped) {
       const valueLc = g.fn ? g.raw : key;
