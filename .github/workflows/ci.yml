@@ -49,6 +49,9 @@ jobs:
       - run: node --test "fixtures/mutation/*.test.mjs"
       - run: node --test "fixtures/verify/*.test.mjs"
       - run: node --test "fixtures/harness/*.test.mjs"
+      - run: node --test "fixtures/docs/*.test.mjs"
+      - run: node scripts/mutation-run.mjs fixtures/docs/readme.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/docs/contract.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/harness/no-browser.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/harness/missing-input.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/verify/verify-check.mutations.mjs

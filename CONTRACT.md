@@ -18,7 +18,11 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── skill-scaffold/                  # the project tree around a SKILL.md (durable docs, evals, capture ledgers, media formats, tool contracts) — instantiated by new-system.mjs; see its README.md
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally); @ui-sdk/react and @ui-sdk/core at one exact version, bundled into React component fixtures and held to runtime/ui-sdk's version by ui-sdk.mjs verify
+├── docs/                            # the recording the README shows
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
+├── fixtures/lint/                   # one negative fixture per lint section with manifest.json (lint-negatives.mjs runs them), and the lint's unit tests (node --test)
+├── fixtures/layout/                 # the layout audit's tests (node --test): one bad and one good page per rule
+├── fixtures/docs/                   # the documents held to the tree (node --test): commands, paths, counts, this diagram
 ├── fixtures/harness/               # tests of the scripts as a set (node --test): without a browser (it cannot launch; the package is missing) and with a lock or screen that is not there, every script exits 2 or 5 and names what is missing, never 0 or 1; scripts are enrolled by reading scripts/
 ├── fixtures/mutation/              # mutation-run's own tests; the lists of planted breaks themselves sit beside the suites they prove, named for the suite
 ├── fixtures/verify/                # verify --check's tests: FRESH, STALE, FAILING, INCONCLUSIVE, UNMEASURED on a two-screen project with stub gates
@@ -60,6 +64,13 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
     ├── taste-and-composition.md     # craft heuristics within the system's vocabulary
     ├── delegation.md                # build-then-attack: running capture/repair/verify with cheap agents
     ├── behavior-kit.md              # making a screen work without changing how it looks: wrapping our markup in the vendored runtime, styling from state, proving it
+    ├── scope-contract.md · surface-classes.md · measurement-discipline.md   # the scope contract; touch and pointer surfaces; numbers from renders, not from memory
+    ├── ia-and-navigation.md · modern-css.md · color-science.md · variations.md   # information architecture; modern CSS capabilities; colour for the capture and the gates; variations
+    ├── dataviz-craft.md · diagram-craft.md   # charts and dashboards; diagrams
+    ├── motion-craft.md · motion-media.md · device-mockups.md   # motion craft; films and presenter-paced decks; a screen on a phone, a tablet or a notebook
+    ├── slides-and-decks.md · event-screens.md   # decks; agenda and speaker slides
+    ├── print-collateral.md · print-guides.md · multi-page-print.md · large-format-textile.md   # print collateral; the guide page that travels with a file; brochures and booklets; banners, walls, backdrops
+    ├── eval-harness.md              # ranking configurations, not artifacts
     └── microcopy-*.md               # copy patterns, voice/jargon/localisation, a11y+i18n
 
 ~/.claude/skills/<system-name>/      # ONE PER DESIGN SYSTEM — e.g. acme-banking

@@ -372,6 +372,23 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 - **Proof:** `fixtures/capture/letter-spacing.test.mjs` (7 cases, in CI). Run against the
   previous `capture-figma.mjs`, 5 of the 7 fail; the two that pass are the px and zero cases
   the old code already handled.
+- **CONTRACT.md's tree diagram had fallen behind the tree** (class: documentation correction).
+  It named 10 of the 29 files in `references/` and none of `fixtures/lint/`, `fixtures/layout/`
+  or `docs/`; two more test folders had been added without it in the two releases before. Nothing
+  failed, because nothing read the diagram against the tree. It now names every folder and every
+  reference, and the test below holds it there.
+  **Proof:** `fixtures/docs/doc-claims.test.mjs` (10 cases) holds what the root documents say
+  about the tree: every command names a script that exists and flags its source knows (the
+  contract guard held this for CONTRACT.md alone); every engine path in backticks exists; every
+  "<number> <rules, rounds, gates, scripts…>" is bound to a measure and equals it, a count
+  nobody bound fails, and so does a binding no sentence uses any more; the diagram and the tree
+  name the same folders and references; and four sentences of the README (its steps, its Node
+  floor against `setup-check.mjs` and the public build, its exit codes against the table, its
+  gate order against `verify.mjs`). The documents are enrolled by listing the root; the
+  changelog is left out because history rightly names what is gone. 12 of 12 false sentences
+  planted in the README and 7 of 7 in CONTRACT.md were caught. It cannot tell whether a
+  sentence is true in any way that is not a name, a flag, a path, a count or an order. The
+  practice of holding a README's numbers to the repository follows ux-ui-agent-skills (NOTICE).
 - **Three scripts exited 1 when the browser package was not installed** (`scripts/render.mjs`,
   `operability-audit.mjs`, `motion.mjs`; class: exit-code correction). Each imported the package
   at the top of the file, so a machine without it got Node's own uncaught module error: a stack
