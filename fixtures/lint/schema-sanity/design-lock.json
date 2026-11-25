@@ -4,7 +4,7 @@
     "capturedAt": "2026-10-03",
     "provenance": {
       "generatedAt": "2026-10-03T00:00:00Z",
-      "lockTokensHash": "sha256:4ea56a4eab5f753988791b80d03a52a8d570a9b79c8840cc96de260897a7248d",
+      "lockTokensHash": "sha256:0870926202cb7df7d5f62f11fac4563c7ef4824c8f8de8f59b1f3940aa3d6ec9",
       "artifacts": {
         "tokens.dtcg.json": "sha256:707a9e6c454b997fca975081039662ae3adc8e03770d8bd2e8e2a0df34d5de47"
       }
@@ -51,6 +51,23 @@
       "easings": {
         "standard": "cubic-bezier(0.2, 0, 0, 1)"
       }
+    },
+    "opacity": [
+      0.4,
+      0.72,
+      0.9
+    ],
+    "blur": [
+      8,
+      24
+    ],
+    "zIndex": {
+      "sticky": 100,
+      "overlay": 1000
+    },
+    "breakpoints": {
+      "md": 768,
+      "lg": 1024
     }
   },
   "fonts": [

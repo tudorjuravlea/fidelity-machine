@@ -179,6 +179,38 @@
           },
           "description": "level → exact box-shadow string. Pick ONE strategy; never mix."
         },
+        "opacity": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Optional. The complete allowed opacity scale, 0 to 1, e.g. [0.4, 0.72]. 0 and 1 are always allowed. Where declared, any other literal opacity is drift (lint: token-scales, WARN)."
+        },
+        "blur": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Optional. The complete allowed blur radii in px for filter and backdrop-filter blur(), e.g. [8, 24]. 0 is always allowed. Where declared, any other literal blur(<n>px) is drift (lint: token-scales, WARN)."
+        },
+        "zIndex": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Optional. layer role → z-index, e.g. sticky: 100, overlay: 1000, toast: 1100. auto, 0, 1 and -1 are always allowed (order inside one component is not a layer). Where declared, any other literal z-index is drift (lint: token-scales, WARN)."
+        },
+        "breakpoints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "Optional. name → width in px where the layout changes, e.g. md: 768, lg: 1024. Where declared, a width or inline-size condition of @media or @container at any other px value is drift (lint: token-scales, WARN); one pixel under a breakpoint (max-width: 767px or 767.98px) is that breakpoint."
+        },
         "motion": {
           "type": "object",
           "additionalProperties": false,

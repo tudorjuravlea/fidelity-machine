@@ -57,6 +57,8 @@ jobs:
       - run: node scripts/mutation-run.mjs fixtures/harness/missing-input.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/verify/verify-check.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/lint/raw-colour-notations.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/lint/token-scales.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/lint/token-scales-schema.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/layout/layout-rules.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/layout/mirror.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/layout/mirror-render.mutations.mjs

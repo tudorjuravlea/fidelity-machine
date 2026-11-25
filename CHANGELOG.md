@@ -6,6 +6,34 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 ## Unreleased
 
 ### Added
+- **Four more scales a lock can declare** (schema: additive, all optional; lint section
+  `token-scales`, WARN, the class of `tokens-only-spacing`). `tokens.opacity` (a list, 0 to 1),
+  `tokens.blur` (a list in px), `tokens.zIndex` (layer role → integer) and `tokens.breakpoints`
+  (name → px). Where a lock declares one, a literal value off it is drift, reported once per
+  value and file with its line, the nearest value on the scale (by role name for layers and
+  breakpoints) and the whole scale. Always allowed: opacity 0 and 1, blur 0, z-index `auto`,
+  0, 1 and -1 (order inside one component is not a layer), and the pixel just under a breakpoint
+  (`max-width: 767px` and `767.98px` are the breakpoint at 768). Breakpoints are read from
+  `@media` and `@container`, in the colon and the range syntax; a height, a resolution and a
+  width in a declaration are not breakpoints. A family the lock does not declare is not judged
+  and one SKIP row names every such family.
+  **The rule for the schema:** a token family enters it only with a gate that reads it. Sizing
+  roles, states, gradients and chart palettes were on the same list and are NOT added: nothing
+  reads them. The target-size check takes its floor from the surface, not the lock; the
+  rendered `colour-unbound` rule already holds a gradient's colours to tokens.
+  **Proof:** `fixtures/lint/token-scales.test.mjs` (20 cases, one of them the schema: it takes
+  the families, every one is optional, seven values of the wrong kind are refused); 35 of 35
+  planted breaks caught in the lint and 8 of 8 in the schema; a 34th negative fixture, and the
+  other 33 fixture locks now declare the four scales so that none of them skips.
+  **On real work (read-only):** 53 locks, none declares a family yet, so each gets one SKIP row
+  and no verdict changes. With impossible scales forced on the same trees, the section reads
+  1,644 opacity values (82 distinct), 568 z-index values (15), 108 blur radii (24) and 78
+  breakpoints (15) in 180 files, every one a real value of its kind: that is the drift these
+  scales would hold once a system declares them.
+  **It cannot see:** a value from `var()` or `calc()`, a unit other than px for blur and
+  breakpoints, a utility class, and a style object in script. `capture-figma.mjs` does not emit
+  the new families into the derived token files. The families and the phrase "the gate decides
+  the field" come from the review of ux-ui-agent-skills (NOTICE).
 - **The mirrored render** (`rtl-overflow`, ERROR, in the layout gate). A screen whose `locales`
   (its own, else the lock's `content.locales`) include a right-to-left one (`ar`, `he`, `fa`,
   `ur` and others by language, any tag with an `Arab` or `Hebr` script subtag) is laid out a

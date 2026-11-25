@@ -296,6 +296,15 @@
       "src": "unreadable-values",
       "minCount": 1,
       "planted": "an inline script assigns a style property from a template literal"
+    },
+    {
+      "id": "token-scales",
+      "section": "token-scales",
+      "level": "WARN",
+      "lock": "token-scales/design-lock.json",
+      "src": "token-scales",
+      "minCount": 1,
+      "planted": ".sub opacity 0.55, off the 0.4/0.72/0.9 opacity scale"
     }
   ],
   "uncovered": []

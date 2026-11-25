@@ -7,7 +7,7 @@
 //                     banned-fonts · contrast · transition-all · a11y ·
 //                     forbidden-substitutes · raw-motion · tabular-nums · text-wrap ·
 //                     radius-arithmetic · scheme-mixing · export-artifacts ·
-//                     phone-runnable (on --src files)
+//                     phone-runnable · token-scales (on --src files)
 //   MICROCOPY GATE    banned-jargon · disclosure-presence · ro-diacritics · button-length ·
 //                     sentence-length · color-only-status · content-lock (plan §5.7 mechanical subset)
 //   GATE INTEGRITY    signatures · imagery-provenance · figid-coverage · provenance ·
@@ -127,7 +127,9 @@ const SECTION_GROUPS = {
     // Appended last for the same reason: every earlier section keeps its report position.
     'export-artifacts',
     // Appended after export-artifacts, again so no earlier section moves.
-    'phone-runnable'],
+    'phone-runnable',
+    // And after phone-runnable.
+    'token-scales'],
   'microcopy': ['banned-jargon', 'disclosure-presence', 'ro-diacritics', 'button-length',
     'sentence-length', 'color-only-status', 'content-lock'],
   // provenance sat outside the registry for a while: its findings sorted last and never reached
@@ -1082,6 +1084,117 @@ function checkSpacing(files, rel, scale) {
         const tm = tok.match(TW_RE);
         if (tm && !onScale(parseFloat(tm[1]))) report(parseFloat(tm[1]), `class "${tok}"`, m.index);
       }
+    }
+  }
+}
+
+// WARN-only, the class of checkSpacing: four more scales a lock MAY declare, each held the way the
+// spacing scale is. A family the lock does not declare is not judged, and one SKIP row names
+// every such family ("unchecked must never read as clean").
+//   tokens.opacity      [0.4, 0.72]            `opacity: <number | %>`; 0 and 1 are always allowed
+//   tokens.blur         [8, 24]  (px)          `blur(<n>px)` in filter and backdrop-filter; 0 always allowed
+//   tokens.zIndex       { overlay: 1000 }      `z-index: <integer>`; auto, 0, 1 and -1 always allowed
+//                                              (order inside one component is not a layer)
+//   tokens.breakpoints  { md: 768 }  (px)      a width or inline-size condition of @media or @container,
+//                                              in the colon and the range syntax; one pixel under a
+//                                              breakpoint (max-width: 767px, 767.98px) is that breakpoint
+// Read in .css files, <style> blocks and style attributes, comments out. Not read, by name: a
+// value from var() or calc(), a unit other than px for blur and breakpoints, a utility class, and
+// a style object in script.
+function checkTokenScales(lock, files, rel) {
+  const t = lock.tokens ?? {};
+  const list = (v) => (Array.isArray(v) ? v.filter((n) => typeof n === 'number' && Number.isFinite(n)) : []);
+  const named = (v) => (v !== null && typeof v === 'object' && !Array.isArray(v)
+    ? Object.entries(v).filter(([, n]) => typeof n === 'number' && Number.isFinite(n)) : []);
+  const scale = { opacity: list(t.opacity), blur: list(t.blur), zIndex: named(t.zIndex), breakpoints: named(t.breakpoints) };
+  const undeclared = Object.keys(scale).filter((k) => scale[k].length === 0);
+  if (undeclared.length) {
+    add('SKIP', 'token-scales', '(lock)',
+      `lock declares no ${undeclared.map((k) => `tokens.${k}`).join(', ')} — values of ${undeclared.length === 1 ? 'that family are' : 'those families are'} not held to a scale until the lock declares one`);
+  }
+  if (undeclared.length === Object.keys(scale).length) return;
+
+  const same = (a, b) => Math.abs(a - b) < 1e-9;
+  const tidy = (n) => String(Number(n.toFixed(4)));
+  const nearestOf = (values, n) => {
+    const best = Math.min(...values.map((v) => Math.abs(v - n)));
+    return values.filter((v) => same(Math.abs(v - n), best));
+  };
+  const nearestNamed = (entries, n, unit) => {
+    const near = nearestOf(entries.map(([, v]) => v), n);
+    return entries.filter(([, v]) => near.includes(v)).map(([name, v]) => `${name} = ${v}${unit}`);
+  };
+  const DECL_RE = /(?<![\w-])(opacity|z-index|filter|backdrop-filter|-webkit-backdrop-filter)\s*:\s*([^;{}]+)/gi;
+  const QUERY_RE = /@(media|container)\b([^{};]*)\{/gi;
+  const WIDTH = '(?:min-width|max-width|width|min-inline-size|max-inline-size|inline-size)';
+  const WIDTH_RES = [
+    new RegExp(`(?<![\\w-])${WIDTH}\\s*:\\s*(\\d*\\.?\\d+)px`, 'gi'),
+    /(?<![\w-])(?:width|inline-size)\s*[<>]=?\s*(\d*\.?\d+)px/gi,
+    /(\d*\.?\d+)px\s*[<>]=?\s*(?:width|inline-size)(?![\w-])/gi,
+  ];
+
+  for (const f of files) {
+    if (f.ext !== '.css' && f.ext !== '.html') continue;
+    const seen = new Set(); // one finding per family and value in a file
+    const report = (family, key, detail, at, suggestion) => {
+      if (seen.has(`${family}:${key}`)) return;
+      seen.add(`${family}:${key}`);
+      add('WARN', 'token-scales', rel(f.abs), detail, lineOf(f.content, at), suggestion);
+    };
+    const scanDecls = (css, base) => {
+      for (const m of css.matchAll(DECL_RE)) {
+        const prop = m[1].toLowerCase();
+        const raw = m[2].trim();
+        const value = raw.replace(/\s*!important\s*$/i, '');
+        const at = base + m.index;
+        if (prop === 'opacity' && scale.opacity.length) {
+          const v = value.match(/^(\d*\.?\d+)(%?)$/);
+          if (!v) continue;
+          const n = v[2] ? parseFloat(v[1]) / 100 : parseFloat(v[1]);
+          if (same(n, 0) || same(n, 1) || scale.opacity.some((x) => same(x, n))) continue;
+          report('opacity', tidy(n), `opacity ${tidy(n)} (opacity: ${raw}) is off the lock's opacity scale`, at,
+            `nearest: ${nearestOf(scale.opacity, n).join(' or ')}; full scale [${scale.opacity.join(', ')}] (0 and 1 are always allowed)`);
+        } else if (prop === 'z-index' && scale.zIndex.length) {
+          if (!/^-?\d+$/.test(value)) continue;
+          const n = parseInt(value, 10);
+          if (Math.abs(n) <= 1 || scale.zIndex.some(([, x]) => x === n)) continue;
+          report('zIndex', n, `z-index ${n} (z-index: ${raw}) is off the lock's layer scale`, at,
+            `nearest: ${nearestNamed(scale.zIndex, n, '').map((x) => `tokens.zIndex.${x}`).join(' or ')}; full scale [${scale.zIndex.map(([k, x]) => `${k} ${x}`).join(', ')}] (auto, 0, 1 and -1 are always allowed)`);
+        } else if (prop.endsWith('filter') && scale.blur.length) {
+          for (const b of value.matchAll(/(?<![\w-])blur\(\s*(\d*\.?\d+)px\s*\)/gi)) {
+            const n = parseFloat(b[1]);
+            if (same(n, 0) || scale.blur.some((x) => same(x, n))) continue;
+            report('blur', tidy(n), `blur ${tidy(n)}px (${prop}: ${raw}) is off the lock's blur scale`, at,
+              `nearest: ${nearestOf(scale.blur, n).join('px or ')}px; full scale [${scale.blur.join(', ')}] px (0 is always allowed)`);
+          }
+        }
+      }
+    };
+    const scanQueries = (css, base) => {
+      if (!scale.breakpoints.length) return;
+      for (const m of css.matchAll(QUERY_RE)) {
+        for (const re of WIDTH_RES) {
+          for (const w of m[2].matchAll(re)) {
+            const n = parseFloat(w[1]);
+            // On the scale, or the last pixel under it: max-width 767px and 767.98px both mean "below 768".
+            if (scale.breakpoints.some(([, b]) => b - n >= -1e-9 && b - n <= 1 + 1e-9)) continue;
+            report('breakpoints', tidy(n), `breakpoint ${tidy(n)}px (@${m[1].toLowerCase()} ${m[2].trim().replace(/\s+/g, ' ')}) is off the lock's breakpoints`, base + m.index,
+              `nearest: ${nearestNamed(scale.breakpoints, n, 'px').map((x) => `tokens.breakpoints.${x}`).join(' or ')}; all [${scale.breakpoints.map(([k, x]) => `${k} ${x}`).join(', ')}] px`);
+          }
+        }
+      }
+    };
+    if (f.ext === '.css') {
+      const css = stripCssComments(f.content);
+      scanDecls(css, 0);
+      scanQueries(css, 0);
+    } else {
+      for (const b of styleBlocks(f.content)) {
+        const css = stripCssComments(b.css);
+        scanDecls(css, b.offset);
+        scanQueries(css, b.offset);
+      }
+      for (const m of f.content.matchAll(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) scanDecls(m[1] ?? m[2] ?? '', m.index);
     }
   }
 }
@@ -3725,6 +3838,7 @@ function main() {
   checkSchemeMixing(lock, lockDir, srcDir, files, cssFiles, rel);
   checkExportArtifacts(files, rel);
   checkPhoneRunnable(htmlFiles, cssFiles, rel);
+  checkTokenScales(lock, files, rel);
 
   // ---- MICROCOPY GATE
   checkBannedJargon(lock, htmlFiles, rel);
