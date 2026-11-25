@@ -582,7 +582,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Locales this screen must render without overflow; verify runs the LONGEST one. Default from content.locales."
+            "description": "Locales this screen must render without overflow; verify runs the LONGEST one. Default from content.locales. A right-to-left locale here (ar, he, fa, ur, or a tag with an Arab/Hebr script) makes render.mjs lay the screen out mirrored as well; the layout gate fails on what leaves the frame only then (rtl-overflow)."
           },
           "lockedStrings": {
             "type": "array",

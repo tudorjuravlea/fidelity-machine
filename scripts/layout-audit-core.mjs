@@ -26,6 +26,8 @@
 //   text-clipped            WARN   a box that cuts its own words (overflow hidden/clip) with no ellipsis or clamp
 //   control-overlap         WARN   two controls in one layer sharing more than 25 % of the smaller one's area
 //   colour-unbound          WARN   a painted colour that did not move when every colour token on the page was changed
+//   rtl-overflow            ERROR  what leaves the frame or is cut only when the page is mirrored (auditMirror, below;
+//                                  run only for a screen whose lock lists a right-to-left locale)
 // Opt-outs: `data-layout-ignore` on an element skips it and everything under it. Anything whose
 // geometry is animating when the audit runs is DEFERRED (reported, not judged): a deferred item
 // makes the run inconclusive (exit 6), never a pass.
@@ -479,4 +481,133 @@ export function auditLayout(opts = {}) {
   const frames = all.filter((e) => e.tagName === 'IFRAME' && visible(e)).length;
   if (frames) manual.push(`${frames} visible iframe(s) were not inspected; audit their documents separately.`);
   return { findings, deferred, manual, checked, opts: { ...opts } };
+}
+
+// ---------------------------------------------------------------- the mirrored render
+//
+// A screen whose lock lists a right-to-left locale has to lay out mirrored. render.mjs lays the
+// page out a second time with dir="rtl" on <html> and reports what leaves the frame or is cut
+// ONLY then: the usual cause is a physical margin, padding or offset where a logical one was
+// meant. What is lost in both directions (a drawer parked off the frame) is not something the
+// flip adds, and a box that scrolls sideways cuts nothing: what is past its edge is reached by
+// scrolling.
+//   rtl-overflow            ERROR  one finding per page: the elements that lose more than 2 px of
+//                                  their width when mirrored, with the pixels each loses
+// The measure reads boxes, not scroll widths, so a page that hides its own sideways overflow
+// hides nothing from it.
+
+const RTL_LANGUAGES = new Set(['ar', 'he', 'iw', 'fa', 'ur', 'ps', 'sd', 'ug', 'yi', 'dv', 'ckb']);
+const RTL_SCRIPTS = new Set(['arab', 'hebr', 'thaa', 'syrc', 'nkoo', 'adlm']);
+
+// The first right-to-left locale in a lock's list, or null. A script subtag decides when there is
+// one (`ks-Arab` is mirrored, `ar-Latn` is not); otherwise the language does.
+export function mirrorLocale(locales) {
+  if (!Array.isArray(locales)) return null;
+  for (const locale of locales) {
+    if (typeof locale !== 'string') continue;
+    const [language, ...rest] = locale.toLowerCase().split(/[-_]/);
+    const script = rest.find((p) => /^[a-z]{4}$/.test(p));
+    if (script ? RTL_SCRIPTS.has(script) : RTL_LANGUAGES.has(language)) return locale;
+  }
+  return null;
+}
+
+// Run INSIDE the page (self-contained, like auditLayout). It flips the page and puts it back.
+export async function auditMirror(opts = {}) {
+  const findings = [];
+  const manual = [];
+  const checked = { mirrored: 0 };
+  const html = document.documentElement;
+  if (!document.body) return { findings, manual: ['no <body> to mirror'], checked };
+  if (getComputedStyle(html).direction === 'rtl') {
+    manual.push('The page is already right to left: it was not flipped, and the layout audit measured it as written.');
+    return { findings, manual, checked };
+  }
+  const TOLERANCE = 2;
+  const name = (el) => {
+    const id = el.id ? `#${el.id}` : '';
+    const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '';
+    const text = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    return `${el.tagName.toLowerCase()}${id}${cls}${text ? ` "${text}"` : ''}`;
+  };
+  const SEEN = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="switch"], [role="checkbox"], [role="radio"], img, svg, canvas, video';
+  const subjects = [...document.body.querySelectorAll('*')].filter((el) => {
+    if (el.closest('[data-layout-ignore]')) return false;
+    return el.matches(SEEN) || [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  });
+  // Pixels of the element's width that cannot be seen: outside the frame, or outside a box that
+  // cuts (overflow hidden or clip; one that scrolls does not cut). null = not rendered.
+  const lost = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1 || getComputedStyle(el).visibility === 'hidden') return null;
+    let left = 0, right = html.clientWidth;
+    for (let a = el.parentElement; a && a !== html; a = a.parentElement) {
+      const overflow = getComputedStyle(a).overflowX;
+      if (overflow === 'hidden' || overflow === 'clip') {
+        const b = a.getBoundingClientRect();
+        left = Math.max(left, b.left + a.clientLeft);
+        right = Math.min(right, b.left + a.clientLeft + a.clientWidth);
+      }
+    }
+    return Math.min(r.width, Math.max(0, left - r.left) + Math.max(0, r.right - right));
+  };
+  // Two frames for the new layout, then any transition the flip started is taken to its end: the
+  // mirrored layout is where it lands, not a frame on the way there.
+  const settle = async () => {
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    for (const a of document.getAnimations()) {
+      if (typeof CSSTransition !== 'undefined' && a instanceof CSSTransition) { try { a.finish(); } catch { /* already over */ } }
+    }
+    await new Promise((done) => requestAnimationFrame(done));
+  };
+
+  // What is moving by itself (the same reading auditLayout defers on): its two measurements
+  // would differ because it moved, not because the page was mirrored.
+  const geometryProp = /^(?:transform|translate|rotate|scale|width|height|min|max|block|inline|grid|flex|gap|row|column|padding|margin|top|left|right|bottom|font|line)/i;
+  const movers = () => document.getAnimations().filter((a) => a.playState === 'running').map((a) => {
+    const target = a.effect && a.effect.target;
+    if (!(target instanceof Element)) return null;
+    try { return a.effect.getKeyframes().some((k) => Object.keys(k).some((prop) => geometryProp.test(prop))) ? target : null; } catch { return target; }
+  }).filter(Boolean);
+  const still = (el, moving) => !moving.some((t) => t === el || t.contains(el) || el.contains(t));
+
+  const movingBefore = movers();
+  const before = subjects.map(lost);
+  const pageBefore = html.scrollWidth - html.clientWidth;
+  const had = html.getAttribute('dir');
+  html.setAttribute('dir', 'rtl');
+  await settle();
+  const reached = getComputedStyle(document.body).direction === 'rtl';
+  const moving = [...movingBefore, ...movers()];
+  const after = reached ? subjects.map(lost) : [];
+  const pageAfter = html.scrollWidth - html.clientWidth;
+  if (had === null) html.removeAttribute('dir'); else html.setAttribute('dir', had);
+  await settle();
+
+  if (!reached) {
+    manual.push('The body states its own direction, so dir="rtl" on <html> did not reach the page: nothing was mirrored.');
+    return { findings, manual, checked };
+  }
+  const added = [];
+  let moved = 0;
+  subjects.forEach((el, i) => {
+    if (before[i] === null || after[i] === null) return;
+    if (!still(el, moving)) { moved += 1; return; }
+    checked.mirrored += 1;
+    if (after[i] - before[i] > TOLERANCE) added.push({ el, lostPx: Math.round(after[i]), lostBeforePx: Math.round(before[i]) });
+  });
+  if (added.length) {
+    added.sort((a, b) => b.lostPx - a.lostPx);
+    const shown = added.slice(0, 5).map((a) => `${name(a.el)} ${a.lostPx}px`).join(', ');
+    findings.push({
+      rule: 'rtl-overflow',
+      level: 'ERROR',
+      element: name(added[0].el),
+      message: `rtl-overflow: ${added.length} element(s) lose up to ${added[0].lostPx}px of their width only when the page is mirrored (dir="rtl", for locale ${opts.locale ?? 'unnamed'}): ${shown}${added.length > 5 ? ` (+${added.length - 5} more)` : ''}. The usual cause is a physical margin, padding or offset (left/right) where a logical one (inline-start/end) was meant.`,
+      evidence: { locale: opts.locale ?? null, tolerancePx: TOLERANCE, pageOverflowPx: { ltr: pageBefore, rtl: pageAfter }, elements: added.slice(0, 20).map((a) => ({ element: name(a.el), lostPx: a.lostPx, lostBeforePx: a.lostBeforePx })) },
+    });
+  }
+  if (moved) manual.push(`${moved} element(s) were moving when the page was mirrored and were not judged: settle the page and render again.`);
+  manual.push(`Mirroring was measured by setting dir="rtl" on the page as written (${checked.mirrored} element(s)): the copy stays in its own language, so a translation that runs longer is not measured; a layout that fits but did not mirror (a physical margin on the wrong side, an icon that should point the other way) is not seen; a layout a script computed at load is not recomputed.`);
+  return { findings, manual, checked };
 }

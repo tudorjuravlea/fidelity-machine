@@ -36,7 +36,7 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { auditLayout } from './layout-audit-core.mjs';
+import { auditLayout, auditMirror, mirrorLocale } from './layout-audit-core.mjs';
 
 // Loaded at run time so that a machine without the package gets a setup error (exit 2) and the
 // way to fix it, not an uncaught module error: Node exits 1 on those, and 1 means a fidelity
@@ -583,6 +583,17 @@ async function main() {
     // page has the boxes; judged by layout-audit.mjs from the dump. A page read, so it sits before
     // the final offline gate like every other read. The function is serialised into the page.
     const layoutAudit = await page.evaluate(auditLayout, { screenId: screen.id });
+
+    // The mirrored render: only for a screen whose locales (its own, or the lock's) include a
+    // right-to-left one. It runs after the capture and the layout audit, flips the page, measures
+    // and puts it back; its findings join the layout dump and layout-audit.mjs judges them.
+    const rtlLocale = mirrorLocale(screen.locales ?? lock.content?.locales);
+    if (rtlLocale) {
+      const mirrored = await page.evaluate(auditMirror, { locale: rtlLocale });
+      layoutAudit.findings.push(...mirrored.findings);
+      layoutAudit.manual.push(...mirrored.manual);
+      layoutAudit.checked.mirrored = mirrored.checked.mirrored;
+    }
 
     // Offline gate, final pass: after the capture and the last page read, before anything is
     // written. A request the page started after readiness (a timer, a late element) may already

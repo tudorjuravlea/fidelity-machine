@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>rtl-overflow: cut inside a box, and the page hides its own overflow</title>
+<style>
+  html, body { overflow-x: hidden; }
+  body { margin: 0; font: 16px/1.5 sans-serif; }
+  .tile { width: 300px; overflow: hidden; margin: 24px auto; }
+  /* 280 wide in a 300 box with a 100 right margin: fits left to right, cut on the left mirrored. */
+  .tile .value { width: 280px; margin-right: 100px; }
+</style>
+</head>
+<body>
+  <main><div class="tile"><p class="value" id="value">1,284.50 due on the first of the month</p></div></main>
+</body>
+</html>

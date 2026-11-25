@@ -6,6 +6,30 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 ## Unreleased
 
 ### Added
+- **The mirrored render** (`rtl-overflow`, ERROR, in the layout gate). A screen whose `locales`
+  (its own, else the lock's `content.locales`) include a right-to-left one (`ar`, `he`, `fa`,
+  `ur` and others by language, any tag with an `Arab` or `Hebr` script subtag) is laid out a
+  second time with `dir="rtl"`, after the capture and the layout audit, and put back. What
+  leaves the frame or is cut by a box ONLY when mirrored is one finding per page, naming up to
+  five elements with the pixels each loses. The usual cause is a physical margin, padding or
+  offset where a logical one was meant. Boxes are read, not scroll widths, so a page that hides
+  its own sideways overflow hides nothing from it. Not findings: what is lost in both
+  directions (a drawer parked off the frame), what a sideways scroller holds, what is not
+  shown, what is opted out, and what is moving by itself (said in `manual[]`). A transition the
+  flip starts is taken to its end before measuring. A page already right to left is not
+  flipped. No schema change: `locales` was already there, and said "must render without
+  overflow".
+  **Proof:** `fixtures/layout/mirror.test.mjs` (12 cases, three of them through `render.mjs`
+  and `layout-audit.mjs` on a throwaway lock); 24 of 24 planted breaks caught in the measure and
+  6 of 6 in the renderer.
+  **On real work (read-only, forced):** 660 pages, none of whose locks lists a right-to-left
+  locale, so no verdict changes today. Forced, 63 pages lose something when mirrored, 43 ms a
+  page on average.
+  **It cannot see:** a translation that runs longer (the copy stays in its own language), a
+  layout that fits but did not mirror (a physical margin on the wrong side, an icon that should
+  point the other way), and a layout a script computed at load. The paired render and "fail
+  only on what the flip adds" follow ux-ui-agent-skills (NOTICE), which reads the page's scroll
+  width and so is blind to a page that hides its overflow.
 - **The guidance is held to the lint** (`fixtures/docs/doctrine.test.mjs`). A reference is what
   a model reads before it writes a screen and the lint is what judges the screen after; when the
   first shows as the way to do it what the second fails, every screen pays for it. Every piece

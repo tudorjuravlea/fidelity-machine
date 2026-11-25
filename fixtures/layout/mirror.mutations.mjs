@@ -1,0 +1,33 @@
+// Planted breaks for the mirrored render's measure (fixtures/layout/mirror.test.mjs).
+//   node scripts/mutation-run.mjs fixtures/layout/mirror.mutations.mjs
+export default {
+  target: 'scripts/layout-audit-core.mjs',
+  copy: ['scripts', 'fixtures/layout', 'package.json'],
+  test: ['node', '--test', 'fixtures/layout/mirror.test.mjs'],
+  mutations: [
+    { name: 'a right-to-left language is forgotten', find: "'ar', 'he', 'iw',", replace: "'ar', 'iw'," },
+    { name: 'the script subtag no longer decides', find: 'if (script ? RTL_SCRIPTS.has(script) : RTL_LANGUAGES.has(language)) return locale;', replace: 'if (RTL_LANGUAGES.has(language)) return locale;' },
+    { name: 'an underscore locale is not split', find: 'locale.toLowerCase().split(/[-_]/)', replace: 'locale.toLowerCase().split(/-/)' },
+    { name: 'a language is matched by how it starts', find: 'RTL_SCRIPTS.has(script) : RTL_LANGUAGES.has(language)) return locale;', replace: 'RTL_SCRIPTS.has(script) : [...RTL_LANGUAGES].some((l) => language.startsWith(l))) return locale;' },
+    { name: 'a page already right to left is flipped anyway', find: "if (getComputedStyle(html).direction === 'rtl') {", replace: 'if (false) {' },
+    { name: 'the tolerance swallows the finding', find: 'const TOLERANCE = 2;', replace: 'const TOLERANCE = 200;' },
+    { name: 'what was lost before the flip counts as added by it', find: 'if (after[i] - before[i] > TOLERANCE)', replace: 'if (after[i] > TOLERANCE)' },
+    { name: 'a box that cuts is not seen: only the frame is', find: "if (overflow === 'hidden' || overflow === 'clip') {", replace: 'if (false) {' },
+    { name: 'a box that scrolls is treated as one that cuts', find: "if (overflow === 'hidden' || overflow === 'clip') {", replace: "if (overflow === 'hidden' || overflow === 'clip' || overflow === 'auto') {" },
+    { name: 'what is not shown is judged', find: " || getComputedStyle(el).visibility === 'hidden') return null;", replace: ') return null;' },
+    { name: 'the opt-out is ignored', find: "    if (el.closest('[data-layout-ignore]')) return false;\n    return el.matches(SEEN)", replace: '    return el.matches(SEEN)' },
+    { name: 'text is not a subject: only controls and pictures are', find: "return el.matches(SEEN) || [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());", replace: 'return el.matches(SEEN);' },
+    { name: 'a loss is not capped at the element\'s own width', find: 'return Math.min(r.width, Math.max(0, left - r.left) + Math.max(0, r.right - right));', replace: 'return Math.max(0, left - r.left) + Math.max(0, r.right - right);' },
+    { name: 'only the left edge of the frame is watched', find: 'Math.max(0, left - r.left) + Math.max(0, r.right - right));', replace: 'Math.max(0, left - r.left));' },
+    { name: 'only the right edge of the frame is watched', find: 'Math.max(0, left - r.left) + Math.max(0, r.right - right));', replace: 'Math.max(0, r.right - right));' },
+    { name: 'a transition the flip started is left running', find: 'try { a.finish(); } catch { /* already over */ }', replace: 'try { a.pause(); } catch { /* already over */ }' },
+    { name: 'the page is left mirrored', find: "  if (had === null) html.removeAttribute('dir'); else html.setAttribute('dir', had);\n", replace: '' },
+    { name: 'the flip is never made', find: "  html.setAttribute('dir', 'rtl');\n", replace: '' },
+    { name: 'a body with its own direction is measured as if mirrored', find: "const reached = getComputedStyle(document.body).direction === 'rtl';", replace: 'const reached = true;' },
+    { name: 'what is moving by itself is judged', find: '    if (!still(el, moving)) { moved += 1; return; }\n', replace: '' },
+    { name: 'the smallest loss leads the finding', find: 'added.sort((a, b) => b.lostPx - a.lostPx);', replace: 'added.sort((a, b) => a.lostPx - b.lostPx);' },
+    { name: 'the finding is a warning', find: "      rule: 'rtl-overflow',\n      level: 'ERROR',", replace: "      rule: 'rtl-overflow',\n      level: 'WARN'," },
+    { name: 'the locale is not carried in the evidence', find: 'evidence: { locale: opts.locale ?? null,', replace: 'evidence: { locale: null,' },
+    { name: 'what the measure cannot see is not said', find: '  manual.push(`Mirroring was measured by setting', replace: '  if (false) manual.push(`Mirroring was measured by setting' },
+  ],
+};

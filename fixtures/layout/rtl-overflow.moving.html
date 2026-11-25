@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>rtl-overflow: something on the page is moving</title>
+<style>
+  body { margin: 0; font: 16px/1.5 sans-serif; }
+  .still { width: 400px; margin-inline-end: 100px; }
+  .still p { margin: 0; }
+  /* It slides out of the frame and back all the time. Two measurements a few frames apart differ
+     because it moved, not because the page was mirrored. */
+  .ticker { position: absolute; top: 200px; left: 400px; width: 300px; animation: slide 0.23s linear infinite alternate; }
+  .ticker p { margin: 0; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(400px); } }
+</style>
+</head>
+<body>
+  <main>
+    <div class="still"><p id="still">Your balance is ready to view.</p></div>
+    <div class="ticker"><p id="ticker">Rates updated a moment ago</p></div>
+  </main>
+</body>
+</html>

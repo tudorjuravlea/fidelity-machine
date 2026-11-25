@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>rtl-overflow: the mirrored layout arrives through a transition</title>
+<style>
+  body { margin: 0; font: 16px/1.5 sans-serif; }
+  .card { position: relative; left: 0; width: 400px; padding: 16px; transition: left 6s linear; }
+  .card button { display: block; width: 200px; height: 44px; }
+  /* Mirrored, the card is pushed 100 px past the right edge of the frame, and it gets there
+     through a six-second transition: measured at once the loss reads zero, at the end 84 px
+     (the 100 px push less the card's 16 px of padding). */
+  [dir="rtl"] .card { left: 100px; }
+</style>
+</head>
+<body>
+  <main><div class="card"><button id="go" type="button">Open the statement</button></div></main>
+</body>
+</html>

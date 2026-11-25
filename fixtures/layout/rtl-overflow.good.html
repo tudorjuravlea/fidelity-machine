@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>rtl-overflow: good</title>
+<style>
+  body { margin: 0; font: 16px/1.5 sans-serif; }
+  .card { width: 640px; margin-inline-end: 160px; }
+  .card p { margin: 0; }
+  .card button { display: block; width: 100%; height: 44px; }
+  /* Off the frame in both directions: the same loss either way is not something the flip adds. */
+  .drawer { position: absolute; left: -320px; top: 0; width: 300px; }
+  /* A strip that scrolls sideways: what is past its edge is reached by scrolling. */
+  .strip { display: flex; gap: 12px; overflow-x: auto; width: 400px; }
+  .strip button { flex: 0 0 180px; height: 44px; }
+  /* Mirrored, this paragraph sticks 80 px out of its box on the left, and the box scrolls to it. */
+  .scroller { overflow-x: auto; width: 400px; }
+  .scroller p { width: 380px; margin: 0 100px 0 0; }
+  /* Not shown at all, and opted out: neither is judged, though both would leave the frame mirrored. */
+  .unseen { visibility: hidden; width: 700px; margin: 0 200px 0 0; }
+  .opted p { width: 700px; margin: 0 200px 0 0; }
+</style>
+</head>
+<body>
+  <main>
+    <div class="card"><p id="copy">Your balance is ready to view.</p><button id="go" type="button">Open the statement</button></div>
+    <nav class="drawer" aria-label="Sections"><a href="#one">Accounts</a></nav>
+    <div class="strip"><button type="button">January</button><button type="button">February</button><button type="button">March</button><button type="button">April</button></div>
+    <div class="scroller"><p>Statements from the last twelve months</p></div>
+    <p class="unseen">Not shown</p>
+    <div class="opted" data-layout-ignore><p>A decorative band the audit was told to leave alone</p></div>
+  </main>
+</body>
+</html>

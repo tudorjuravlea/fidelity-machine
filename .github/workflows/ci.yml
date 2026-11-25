@@ -58,6 +58,8 @@ jobs:
       - run: node scripts/mutation-run.mjs fixtures/verify/verify-check.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/lint/raw-colour-notations.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/layout/layout-rules.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/layout/mirror.mutations.mjs
+      - run: node scripts/mutation-run.mjs fixtures/layout/mirror-render.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/clicks.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/contrast.mutations.mjs
       - run: node scripts/mutation-run.mjs fixtures/operable/motion.mutations.mjs
