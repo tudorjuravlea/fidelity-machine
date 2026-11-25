@@ -378,6 +378,11 @@ function parseArgs(argv) {
   }
   if (!a.tasks) fail2('--tasks is required');
   if (!a.lock) fail2('--lock is required');
+  // The input files are checked before anything is spawned: a mistyped path must not cost a model
+  // call, and its message must name the path, not the model.
+  for (const [flag, file] of [['--tasks', a.tasks], ['--lock', a.lock]]) {
+    if (!fs.existsSync(path.resolve(file))) fail2(`${flag} file not found: ${path.resolve(file)}`);
+  }
   if (!['temptation', 'neutral', 'all'].includes(a.suite)) {
     fail2(`--suite must be temptation|neutral|all, got '${a.suite}'`);
   }

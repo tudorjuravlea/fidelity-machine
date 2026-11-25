@@ -35,8 +35,18 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
 import { DEFAULT_MAX_STOPS, auditPage, probeClickListeners } from './operability-core.mjs';
+
+// Loaded at run time so that a machine without the package gets a setup error (exit 2) and the
+// way to fix it, not an uncaught module error: Node exits 1 on those, and 1 means a fidelity
+// finding here (CONTRACT.md §Exit codes).
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch (err) {
+  console.error(`operability-audit.mjs: exit 2 (setup/usage error): the browser package is not installed (${err?.code ?? err?.message ?? err}). Run scripts/setup-check.mjs for the install command.`);
+  process.exit(2);
+}
 
 const USAGE = `usage: node operability-audit.mjs --lock <path/to/design-lock.json> [--screen <id>] [--strict] [--no-patterns] [--max-stops <n>] [--ready-timeout <ms>]
 exit codes: 0 pass · 1 operability finding · 2 setup/usage error · 5 render failure · 6 inconclusive (nothing judged)`;

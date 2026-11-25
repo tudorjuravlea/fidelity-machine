@@ -36,8 +36,18 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 import { auditLayout } from './layout-audit-core.mjs';
+
+// Loaded at run time so that a machine without the package gets a setup error (exit 2) and the
+// way to fix it, not an uncaught module error: Node exits 1 on those, and 1 means a fidelity
+// finding here (CONTRACT.md §Exit codes).
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch (err) {
+  console.error(`render.mjs: exit 2 (setup/usage error): the browser package is not installed (${err?.code ?? err?.message ?? err}). Run scripts/setup-check.mjs for the install command.`);
+  process.exit(2);
+}
 
 // Determinism constants (CONTRACT §Determinism invariant 3).
 const FROZEN_EPOCH_MS = Date.UTC(2026, 0, 15, 10, 0, 0); // 2026-01-15T10:00:00Z

@@ -372,6 +372,30 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 - **Proof:** `fixtures/capture/letter-spacing.test.mjs` (7 cases, in CI). Run against the
   previous `capture-figma.mjs`, 5 of the 7 fail; the two that pass are the px and zero cases
   the old code already handled.
+- **Three scripts exited 1 when the browser package was not installed** (`scripts/render.mjs`,
+  `operability-audit.mjs`, `motion.mjs`; class: exit-code correction). Each imported the package
+  at the top of the file, so a machine without it got Node's own uncaught module error: a stack
+  trace and exit 1, which this contract reserves for a fidelity finding. The package is now
+  loaded at run time and its absence is exit 2 with the script to run for the install command.
+  A browser that is installed and cannot launch was already 2 or 5.
+  **Proof:** `fixtures/harness/no-browser.test.mjs` (12 cases). Both states are staged with a
+  module-resolve hook passed through `NODE_OPTIONS`, so the children a script spawns inherit it
+  (passed as a flag it stopped at the first process, and `motion.mjs --self-test` then passed
+  on a real browser its children found). Every script in `scripts/` that loads the browser
+  package is enrolled by reading its source, with a floor of three so an empty match cannot
+  pass; a new one must be given an invocation or a written excuse. 3 of 3 planted breaks caught.
+  The stand-in for a package that imports and cannot launch follows ux-ui-agent-skills (NOTICE).
+- **A lock that is not there was a finding in one script and cost a model call in another**
+  (`scripts/contract-guard.mjs`, `scripts/eval-correction.mjs`; class: exit-code correction).
+  `contract-guard.mjs --lock <missing>` reported an ERROR and exited 1; it is now exit 2, "could
+  not look". `eval-correction.mjs` ran its real-mode model preflight before reading `--tasks`
+  and `--lock`, so a mistyped path spent a call and came back with the model's message instead
+  of the path; the two files are now checked first.
+  **Proof:** `fixtures/harness/missing-input.test.mjs` (23 cases): every script that mentions
+  `--lock` (14 driven, 2 excused with a reason) must exit 2 on a lock that is not there and
+  name the path, with no stack trace and no model call (a recording stand-in for the model CLI
+  sits first on `PATH`); the 8 that take `--screen` must exit 2 on an unknown id and name it.
+  The other 12 already did. 2 of 2 planted breaks caught.
 - **`raw-hex` let a colour through when it was written as a keyword or a modern colour function**
   (class: verdict-changing for source that paints with `navy`, `gray`, `oklch(...)` and the like;
   no lock changes). Planted in a copy of the golden screen, none of these was reported:

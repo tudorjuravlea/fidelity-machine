@@ -19,6 +19,9 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── RELEASING.md · SECURITY.md       # release discipline (human half of release-check) + security policy
 ├── package.json + node_modules/     # runtime deps: pixelmatch, pngjs, playwright (browsers cached globally); @ui-sdk/react and @ui-sdk/core at one exact version, bundled into React component fixtures and held to runtime/ui-sdk's version by ui-sdk.mjs verify
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
+├── fixtures/harness/               # tests of the scripts as a set (node --test): without a browser (it cannot launch; the package is missing) and with a lock or screen that is not there, every script exits 2 or 5 and names what is missing, never 0 or 1; scripts are enrolled by reading scripts/
+├── fixtures/mutation/              # mutation-run's own tests; the lists of planted breaks themselves sit beside the suites they prove, named for the suite
+├── fixtures/verify/                # verify --check's tests: FRESH, STALE, FAILING, INCONCLUSIVE, UNMEASURED on a two-screen project with stub gates
 ├── fixtures/capture/                # capture-figma's unit tests (node --test): composite parsing, incl. the letter-spacing unit refusal; scope routing; the runtime/figma scripts run under a mock of the Plugin API with their output fed to capture-figma, and the read-only guard that scans them
 ├── fixtures/operable/               # the operability audit's tests (node --test): one bad and one good page per rule, the judge's unit cases, the CLI's exit codes
 ├── fixtures/motion/                 # the motion verb's self-test: a lock with motion and devices tokens, a golden film, a golden deck, a golden devices film, one negative per gate (manifest.json)

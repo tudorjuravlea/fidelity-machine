@@ -30,11 +30,21 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
 import pixelmatch from 'pixelmatch';
 import pngjs from 'pngjs';
 import { PIXELMATCH_THRESHOLD } from './pixelmatch-threshold.mjs';
 import { recordBoxes, analyseContinuity } from './continuity-core.mjs';
+
+// Loaded at run time so that a machine without the package gets a setup error (exit 2) and the
+// way to fix it, not an uncaught module error: Node exits 1 on those, and 1 means a fidelity
+// finding here (CONTRACT.md §Exit codes).
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch (err) {
+  console.error(`motion.mjs: exit 2 (setup/usage error): the browser package is not installed (${err?.code ?? err?.message ?? err}). Run scripts/setup-check.mjs for the install command.`);
+  process.exit(2);
+}
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const ENGINE = path.dirname(path.dirname(SCRIPT));

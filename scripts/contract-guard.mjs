@@ -98,6 +98,8 @@ function parseArgs(argv) {
     else if (a === '--lock') {
       if (!argv[i + 1]) die2('--lock needs a path');
       args.lock = argv[++i];
+      // A lock that is not there cannot be judged: that is "could not look" (2), not a finding (1).
+      if (!fs.existsSync(path.resolve(args.lock))) die2(`lock passed via --lock does not exist: ${path.resolve(args.lock)}`);
     }
     else die2(`unknown argument '${a}'`);
   }
