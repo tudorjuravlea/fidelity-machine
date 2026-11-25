@@ -22,7 +22,7 @@ template. Fix a script → every system benefits; add a system → scaffold + ca
 ├── fixtures/golden/                 # engine self-test fixture + fault-injection target
 ├── fixtures/lint/                   # one negative fixture per lint section with manifest.json (lint-negatives.mjs runs them), and the lint's unit tests (node --test)
 ├── fixtures/layout/                 # the layout audit's tests (node --test): one bad and one good page per rule
-├── fixtures/docs/                   # the documents held to the tree (node --test): commands, paths, counts, this diagram
+├── fixtures/docs/                   # the documents held to the tree (node --test): commands, paths, counts, this diagram; and the guidance held to the lint: no reference, template or guide shows code the lint fails without saying it is wrong
 ├── fixtures/harness/               # tests of the scripts as a set (node --test): without a browser (it cannot launch; the package is missing) and with a lock or screen that is not there, every script exits 2 or 5 and names what is missing, never 0 or 1; scripts are enrolled by reading scripts/
 ├── fixtures/mutation/              # mutation-run's own tests; the lists of planted breaks themselves sit beside the suites they prove, named for the suite
 ├── fixtures/verify/                # verify --check's tests: FRESH, STALE, FAILING, INCONCLUSIVE, UNMEASURED on a two-screen project with stub gates

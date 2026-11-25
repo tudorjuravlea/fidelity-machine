@@ -6,6 +6,27 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 ## Unreleased
 
 ### Added
+- **The guidance is held to the lint** (`fixtures/docs/doctrine.test.mjs`). A reference is what
+  a model reads before it writes a screen and the lint is what judges the screen after; when the
+  first shows as the way to do it what the second fails, every screen pays for it. Every piece
+  of code the teaching documents show (the references, the skill template and scaffold, the
+  guide, the FAQ, the README: 53 files, enrolled by walking the tree) goes through the real
+  `adherence-lint.mjs`: fenced css, html and script blocks, inline spans that are CSS
+  declarations, inline spans that are a tag. No pattern is copied into the test, so a new lint
+  section joins by being named. An ERROR from a section that forbids a construct in any design
+  system (raw colour, `transition: all`, raw motion, banned fonts, placeholder copy, radius
+  arithmetic, scheme mixing, accessibility, export artifacts) is allowed only where the line,
+  the three lines above a fence or the heading says it is what not to do. Two examples the
+  guidance shows as wrong on purpose are named as canaries: if the lint stops firing on either,
+  the examples no longer reach it.
+  **Found:** nothing. No document teaches what the lint fails today.
+  **Proof:** 9 of 9 planted breaks caught (a reference made to teach each of eight failing
+  constructs, and a canary removed).
+  **It cannot see:** advice given in words, a bare value outside a declaration (`ease-in`, a
+  hex on its own), a WARN (work the lint lets through), and a contradiction with a rule that
+  depends on the lock (an off-scale spacing value, an unknown token name). Findings about a
+  whole file (no focus rule in it, a skipped heading level) are left out by the lint's own
+  wording, since an example is a fragment. The idea follows ux-ui-agent-skills (NOTICE).
 
 - **Planted breaks, kept and run** (`scripts/mutation-run.mjs`, `fixtures/mutation/`, CONTRACT
   §Invocation contract). A test that has never failed has not been tested, and the lists of
