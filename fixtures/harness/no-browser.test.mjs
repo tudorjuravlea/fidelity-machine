@@ -21,6 +21,8 @@ const SCRIPTS = path.join(ENGINE, 'scripts');
 const HOOK = { 'cannot launch': path.join(HERE, 'no-browser', 'register.mjs'), 'not installed': path.join(HERE, 'no-package', 'register.mjs') };
 
 // How to make each script reach for the browser. `golden` is a throwaway copy of the golden capture.
+// A script not listed that takes --lock is given the golden lock and nothing else, so a script a
+// tree adds beside these is driven from its first commit; one that takes no lock must be listed.
 const INVOKE = {
   'render.mjs': (golden) => ['--lock', path.join(golden, 'design-lock.json'), '--screen', 'home'],
   'operability-audit.mjs': (golden) => ['--lock', path.join(golden, 'design-lock.json'), '--screen', 'home'],
@@ -31,8 +33,12 @@ const NOT_DRIVEN = {
   'eval-correction.mjs': 'opens a browser only to screenshot a model\'s output, after a model call this suite does not make',
 };
 
+const sourceOf = (f) => readFileSync(path.join(SCRIPTS, f), 'utf8');
 const loadsBrowser = readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs')
-  && /(?:from\s+|import\(\s*)['"]playwright['"]/.test(readFileSync(path.join(SCRIPTS, f), 'utf8'))).sort();
+  && /(?:from\s+|import\(\s*)['"]playwright['"]/.test(sourceOf(f))).sort();
+const byLockAlone = (golden) => ['--lock', path.join(golden, 'design-lock.json')];
+const argsFor = (f) => INVOKE[f] ?? (/['"]--lock['"]/.test(sourceOf(f)) ? byLockAlone : null);
+const driven = loadsBrowser.filter((f) => !(f in NOT_DRIVEN) && argsFor(f));
 
 function run(script, state, args) {
   const env = { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(HOOK[state]).href}` };
@@ -48,7 +54,7 @@ function withGolden(fn) {
 
 test('every script that loads the browser package is either driven here or excused with a reason', () => {
   assert.ok(loadsBrowser.length >= 3, `found only ${loadsBrowser.join(', ') || 'none'}: the pattern that finds them is wrong`);
-  const unknown = loadsBrowser.filter((f) => !(f in INVOKE) && !(f in NOT_DRIVEN));
+  const unknown = loadsBrowser.filter((f) => !argsFor(f) && !(f in NOT_DRIVEN));
   assert.deepEqual(unknown, [], `add an invocation (INVOKE) or a reason (NOT_DRIVEN) for: ${unknown.join(', ')}`);
   for (const f of [...Object.keys(INVOKE), ...Object.keys(NOT_DRIVEN)]) assert.ok(loadsBrowser.includes(f), `${f} is listed here and no longer loads the browser package`);
 });
@@ -63,10 +69,10 @@ test('the stand-ins do what they say: the package imports and cannot launch, or 
   assert.match(b.stderr, /ERR_MODULE_NOT_FOUND|Cannot find package/);
 });
 
-for (const script of Object.keys(INVOKE)) {
+for (const script of driven) {
   for (const state of Object.keys(HOOK)) {
     test(`${script}, browser ${state}: exits 2 or 5 and says where to look, with no verdict and no stack trace`, () => {
-      const r = withGolden((golden) => run(script, state, INVOKE[script](golden)));
+      const r = withGolden((golden) => run(script, state, argsFor(script)(golden)));
       assert.equal(r.signal, null, r.out);
       assert.ok(r.status === 2 || r.status === 5, `exit ${r.status}: ${r.out.slice(-400)}`);
       assert.match(r.out, /setup-check/, 'the message names the script that prints the fix');
@@ -75,7 +81,7 @@ for (const script of Object.keys(INVOKE)) {
     });
   }
   test(`${script}, browser not installed: a missing dependency is exit 2`, () => {
-    const r = withGolden((golden) => run(script, 'not installed', INVOKE[script](golden)));
+    const r = withGolden((golden) => run(script, 'not installed', argsFor(script)(golden)));
     assert.equal(r.status, 2, r.out.slice(-400));
   });
 }

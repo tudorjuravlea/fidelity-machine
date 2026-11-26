@@ -6,6 +6,14 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 ## Unreleased
 
 ### Added
+- **Three tests no longer assume this tree's own fixtures** (found by carrying the engine into a
+  tree that vendors it). The no-browser harness drives any script that loads the browser package
+  and takes `--lock` with the golden lock alone, listed or not, so a script a tree adds beside
+  the engine's is held from its first commit; the UI SDK wrap test reads the call-to-action
+  button from the golden page instead of quoting its words; the token-scales schema test
+  validates the `tokens` part of the schema, so a tree whose schema differs elsewhere holds the
+  four families the same way. No behaviour of any script changes. Planted breaks re-run: 3 of 3
+  and 8 of 8.
 - **`capture-figma.mjs` derives and emits the four optional scales.** Variables named
   `opacity|alpha/…`, `blur/…`, `z-index|zindex|z/<role>` and `breakpoint/<name>` become
   `tokens.opacity`, `tokens.blur`, `tokens.zIndex` and `tokens.breakpoints`. An opacity may be a

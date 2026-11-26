@@ -163,8 +163,9 @@ test('wrapping the golden screen\'s button in the runtime changes its behaviour 
       assert.equal(run('link', '--lock', lock).status, 0);
       const file = path.join(dir, 'screen-home.html');
       const html = readFileSync(file, 'utf8');
-      const button = '<button class="btn" data-slot="cta">Send money</button>';
-      assert.ok(html.includes(button) && html.includes('</head>'));
+      // Read from the page, not written here: a tree whose golden screen carries other words has the same button.
+      const button = html.match(/<button class="btn" data-slot="cta">[^<]*<\/button>/)?.[0];
+      assert.ok(button && html.includes('</head>'), 'the golden screen has its call-to-action button');
       writeFileSync(file, html
         .replace('</head>', '<script type="module" src="ui-sdk/web.js"></script>\n</head>')
         .replace(button, `<ui-button>${button}</ui-button>`)

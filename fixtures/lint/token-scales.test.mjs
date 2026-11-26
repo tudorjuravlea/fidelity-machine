@@ -170,7 +170,11 @@ test('the schema takes the four families as the fixtures write them, and refuses
   const { default: addFormats } = await import('ajv-formats');
   const ajv = new Ajv({ allErrors: true, strict: false });
   addFormats(ajv);
-  const validate = ajv.compile(JSON.parse(readFileSync(path.join(HERE, '..', '..', 'design-lock.schema.json'), 'utf8')));
+  // The tokens part of the schema, with the definitions it points at: this test is about four
+  // families of tokens, and a tree whose schema differs elsewhere holds them the same way.
+  const schema = JSON.parse(readFileSync(path.join(HERE, '..', '..', 'design-lock.schema.json'), 'utf8'));
+  const validateTokens = ajv.compile({ $defs: schema.$defs, ...schema.properties.tokens });
+  const validate = (lock) => { const ok = validateTokens(lock.tokens); validate.errors = validateTokens.errors; return ok; };
   const fixture = JSON.parse(readFileSync(path.join(HERE, 'token-scales', 'design-lock.json'), 'utf8'));
   for (const f of FAMILIES) assert.ok(fixture.tokens[f], `the fixture lock declares tokens.${f}`);
   assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
