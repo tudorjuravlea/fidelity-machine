@@ -204,7 +204,9 @@ test('known gap of the vendored version: a radio group inside ui-field is left w
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   } });
   const hits = of(r, 'unnamed-group');
-  assert.equal(hits.length, 1, JSON.stringify(lines(r)));
+  // The message carries what the audit saw, not only what it found: this assertion failed once on a
+  // Linux runner with no finding at all, and `[]` could not say whether the group was there to judge.
+  assert.equal(hits.length, 1, JSON.stringify({ findings: lines(r), checked: r.checked, deferred: r.deferred, manual: r.manual }));
   assert.match(hits[0].element, /^ui-radio-group/);
   assert.deepEqual(of(r, 'pattern-radio-group'), [], 'the upstream checker passes the same group');
 });
