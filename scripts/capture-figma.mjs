@@ -65,6 +65,15 @@
  *                                                      "150ms") → duration, an easing → easing; a
  *                                                      unitless number ("motion/scale/press:
  *                                                      0.98") is warned + skipped, never ms.
+ *     opacity|opacities|alpha       → tokens.opacity   0..1, "40%", or a number over 1 up to 100 read
+ *                                                      as a percentage (Figma's own form; said in a
+ *                                                      warning). Collected into the sorted scale.
+ *     blur|blurs                    → tokens.blur      px ("8px" or 8), collected into the sorted scale.
+ *     z-index|zindex|z              → tokens.zIndex    slot = remaining segments kebab-joined,
+ *                                                      value = an integer.
+ *     breakpoint|breakpoints        → tokens.breakpoints
+ *                                                      slot = remaining segments kebab-joined,
+ *                                                      value = a width in px above 0.
  *   A duration slot "ease-x" next to an easing slot "x" would both be --motion-ease-x in
  *   tokens.css: the duration is warned + skipped.
  *   Fallback: an unprefixed name whose VALUE looks like a color routes to colors (full path as
@@ -97,6 +106,10 @@ const FAMILY_OF = new Map(Object.entries({
   motion: 'motion',
   duration: 'duration', durations: 'duration',
   easing: 'easing', easings: 'easing', curve: 'easing',
+  opacity: 'opacity', opacities: 'opacity', alpha: 'opacity',
+  blur: 'blur', blurs: 'blur',
+  'z-index': 'zindex', zindex: 'zindex', z: 'zindex',
+  breakpoint: 'breakpoint', breakpoints: 'breakpoint',
 }));
 const EASING_KEYWORDS = new Set(['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'step-start', 'step-end']);
 const STEP_POSITIONS = new Set(['jump-start', 'jump-end', 'jump-none', 'jump-both', 'start', 'end']);
@@ -279,10 +292,16 @@ Derived outputs (hand-editing banned — re-run this script instead):
                               that is not a slot in tokens.colors is warned and left out),
                               --device-ground-path (path() of the lock's freeform in a 0..1 box, or the plain half),
                               --device-tilt: <n>deg, --device-zoom-max: <n>.
+                              With the optional scales: --opacity-<percent> (0.4 -> --opacity-40),
+                              --blur-<px>, --z-<role>, --breakpoint-<name>: <px>px (for script and
+                              calc(); a media query cannot read a custom property). An entry that
+                              is not one safe declaration is warned and left out.
   assets/tailwind.tokens.cjs  module.exports = { colors, spacing, borderRadius, fontFamily },
                               every value referencing the CSS vars above; plus, when the lock
                               has tokens.motion, transitionDuration { <slot>: 'var(--motion-<slot>)' }
-                              and transitionTimingFunction { <slot>: 'var(--motion-ease-<slot>)' }.
+                              and transitionTimingFunction { <slot>: 'var(--motion-ease-<slot>)' };
+                              and, with the optional scales, opacity, blur and zIndex reading the
+                              variables above and screens { <name>: '<px>px' }.
   Both are written into "assets/" NEXT TO the emitted lock (per-project artifacts live next to
   the project's design-lock.json — CONTRACT.md). With --out at the skill root this is exactly
   the skill's assets/tokens.css.
@@ -320,6 +339,24 @@ function parsePx(v) {
  * requireUnit: a bare number is refused — used where nothing but the value says "this is a time"
  * (a unitless 300 under "motion/" is as likely a spring stiffness, a scale or an opacity).
  */
+// A length that is px and nothing else: 8, "8px", "4.5px". "0.5rem" and "48em" are not (parsePx
+// above reads any leading number, which is right for Figma's unitless spacing and wrong here).
+function parseStrictPx(v) {
+  const m = /^(\d*\.?\d+)\s*(?:px)?$/i.exec(String(v).trim());
+  return m ? parseFloat(m[1]) : null;
+}
+
+// An opacity as a fraction: 0.4, "40%", or a number over 1 up to 100, which is how Figma stores an
+// opacity variable. Returns { value, asPercent } or null; the caller says which reading it took.
+function parseOpacity(v) {
+  const m = /^(\d*\.?\d+)\s*(%?)$/.exec(String(v).trim());
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!m[2] && n <= 1) return { value: n, asPercent: false };
+  if (n > 100) return null;
+  return { value: Number((n / 100).toFixed(4)), asPercent: !m[2] };
+}
+
 function parseMs(v, requireUnit = false) {
   const m = /^(\d*\.?\d+)\s*(ms|s)?$/i.exec(String(v).trim());
   if (!m || (requireUnit && !m[2])) return null;
@@ -485,9 +522,10 @@ function isReferenceRamp(name) {
 // --- token derivation ---------------------------------------------------
 
 // Plugin API Variable.scopes -> the token family the author declared for it. Scopes with no lock
-// family (WIDTH_HEIGHT, OPACITY, TEXT_CONTENT, …) and ALL_SCOPES say nothing and are ignored.
+// family (WIDTH_HEIGHT, TEXT_CONTENT, EFFECT_FLOAT, which is a shadow's blur as often as a layer's, …)
+// and ALL_SCOPES say nothing and are ignored.
 const SCOPE_FAMILY = new Map(Object.entries({
-  CORNER_RADIUS: 'radius', GAP: 'spacing',
+  CORNER_RADIUS: 'radius', GAP: 'spacing', OPACITY: 'opacity',
   ALL_FILLS: 'color', FRAME_FILL: 'color', SHAPE_FILL: 'color', TEXT_FILL: 'color', STROKE_COLOR: 'color', EFFECT_COLOR: 'color',
   FONT_FAMILY: 'typography', FONT_STYLE: 'typography', FONT_WEIGHT: 'typography', FONT_SIZE: 'typography', LINE_HEIGHT: 'typography', LETTER_SPACING: 'typography',
 }));
@@ -502,6 +540,15 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit, variableScopes = {}
   const typoRoles = {}; // role -> partial spec
   const elevation = {};
   const durationsMs = {}; const easings = {};
+  const opacity = new Set(); const blur = new Set();
+  const zIndex = {}; const breakpoints = {};
+  const putOpacity = (value, name) => {
+    const o = parseOpacity(value);
+    if (o === null) { warn(`"${name}": "${value}" is not an opacity (0 to 1, a percentage, or a number up to 100) — skipped`); return false; }
+    if (o.asPercent) warn(`"${name}": ${value} is over 1, so it is read as ${value}% (opacity ${o.value}), which is how Figma stores an opacity variable`);
+    opacity.add(o.value);
+    return true;
+  };
   let unmapped = 0;
   let referenceRamps = 0;
 
@@ -581,6 +628,21 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit, variableScopes = {}
         warn(`"${name}": unknown typography property "${rest[rest.length - 1]}" — skipped`);
         unmapped++;
       }
+    } else if (family === 'opacity') {
+      if (!putOpacity(value, name)) unmapped++;
+    } else if (family === 'blur') {
+      const n = parseStrictPx(value);
+      if (n === null) { warn(`"${name}": blur "${value}" is not a px value — skipped`); unmapped++; }
+      else blur.add(n);
+    } else if (family === 'zindex') {
+      const slot = kebab(rest.join('-'));
+      if (!slot || !/^-?\d+$/.test(value)) { warn(`"${name}": a z-index needs a role and an integer value — skipped`); unmapped++; }
+      else zIndex[slot] = parseInt(value, 10);
+    } else if (family === 'breakpoint') {
+      const slot = kebab(rest.join('-'));
+      const n = parseStrictPx(value);
+      if (!slot || n === null || n <= 0) { warn(`"${name}": a breakpoint needs a name and a width in px above 0 — skipped`); unmapped++; }
+      else breakpoints[slot] = n;
     } else if (family === 'elevation') {
       const slot = kebab(rest.join('-')) || 'default';
       // Real captures emit Effect(...) composites here; verbatim box-shadow strings pass through.
@@ -650,6 +712,9 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit, variableScopes = {}
     } else if (declared.has('spacing') && parsePx(value) !== null) {
       spacing.add(parsePx(value)); scopeRouted++;
       warn(`"${name}": joined the spacing scale by its GAP scope (no family in the name)`);
+    } else if (declared.has('opacity') && parseOpacity(value) !== null) {
+      putOpacity(value, name); scopeRouted++;
+      warn(`"${name}": joined the opacity scale by its OPACITY scope (no family in the name)`);
     } else {
       warn(`"${name}": no family prefix matched and value is not a color — unmapped`);
       unmapped++;
@@ -708,6 +773,12 @@ function deriveTokens(variableDefs, warn, letterSpacingUnit, variableScopes = {}
   if (Object.keys(radii).length > 0) tokens.radii = radii;
   if (Object.keys(typography).length > 0) tokens.typography = typography;
   if (Object.keys(elevation).length > 0) tokens.elevation = elevation;
+  // The four optional scales, in the schema's order; absent when the capture holds none, so a
+  // system that never declared them gets the lock and the derived files it always got.
+  if (opacity.size > 0) tokens.opacity = [...opacity].sort((a, b) => a - b);
+  if (blur.size > 0) tokens.blur = [...blur].sort((a, b) => a - b);
+  if (Object.keys(zIndex).length > 0) tokens.zIndex = zIndex;
+  if (Object.keys(breakpoints).length > 0) tokens.breakpoints = breakpoints;
   // tokens.css names a duration --motion-<slot> and an easing --motion-ease-<slot>, so a duration
   // slot "ease-x" and an easing slot "x" would declare the same property and the later one would
   // silently win. Refuse the duration and say so: the author renames one of the two.
@@ -813,6 +884,33 @@ export function deviceEntries(tokens) {
   return { declared: true, colours, values, warnings };
 }
 
+// tokens.opacity / blur / zIndex / breakpoints → what the three derived files write. Like
+// motionEntries, an entry that could not be one safe CSS declaration is left out (a lock may have
+// been edited by hand before --derive), and here each one is named in a warning. A list value is
+// keyed by its own number: opacity by its percentage (0.4 → 40, 0.725 → 72-5), blur by its px.
+// Pure; the warnings come back for the caller to print.
+export function scaleEntries(tokens) {
+  const warnings = [];
+  const key = (n) => String(Number(n.toFixed(2))).replace('.', '-');
+  const list = (family, ok, toKey) => (Array.isArray(tokens?.[family]) ? tokens[family] : []).filter((v) => {
+    if (typeof v === 'number' && Number.isFinite(v) && ok(v)) return true;
+    warnings.push(`tokens.${family} holds ${JSON.stringify(v)}, which is not a value of that scale — left out of the derived files`);
+    return false;
+  }).map((v) => [toKey(v), v]);
+  const named = (family, ok) => Object.entries(tokens?.[family] !== null && typeof tokens?.[family] === 'object' && !Array.isArray(tokens[family]) ? tokens[family] : {}).filter(([k, v]) => {
+    if (/^[A-Za-z0-9_-]+$/.test(k) && typeof v === 'number' && Number.isFinite(v) && ok(v)) return true;
+    warnings.push(`tokens.${family}[${JSON.stringify(k)}] = ${JSON.stringify(v)} is not one safe declaration — left out of the derived files`);
+    return false;
+  });
+  return {
+    opacity: list('opacity', (v) => v >= 0 && v <= 1, (v) => key(v * 100)),
+    blur: list('blur', (v) => v >= 0, key),
+    zIndex: named('zIndex', Number.isInteger),
+    breakpoints: named('breakpoints', (v) => v > 0),
+    warnings,
+  };
+}
+
 function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
   const out = [];
   out.push(`/* tokens.css — DERIVED from ${lockRef} ("${lockName}", captured ${capturedAt})`);
@@ -862,6 +960,23 @@ function emitTokensCss(tokens, lockName, capturedAt, lockRef) {
     for (const [prop, slot] of devices.colours) out.push(`  --device-${prop}: var(--${slot});`);
     for (const [prop, v] of devices.values) out.push(`  --device-${prop}: ${v};`);
   }
+  const scales = scaleEntries(tokens);
+  if (scales.opacity.length > 0) {
+    out.push('  /* opacity scale (suffix = percent) */');
+    for (const [k, v] of scales.opacity) out.push(`  --opacity-${k}: ${v};`);
+  }
+  if (scales.blur.length > 0) {
+    out.push('  /* blur scale (suffix = px) */');
+    for (const [k, v] of scales.blur) out.push(`  --blur-${k}: ${v}px;`);
+  }
+  if (scales.zIndex.length > 0) {
+    out.push('  /* layers (tokens.zIndex) */');
+    for (const [k, v] of scales.zIndex) out.push(`  --z-${k}: ${v};`);
+  }
+  if (scales.breakpoints.length > 0) {
+    out.push('  /* breakpoints, for script and for calc(): a media query cannot read a custom property, so @media states the px itself */');
+    for (const [k, v] of scales.breakpoints) out.push(`  --breakpoint-${k}: ${v}px;`);
+  }
   out.push('}');
   const dark = tokens.colors?.dark ?? {};
   if (Object.keys(dark).length > 0) {
@@ -892,6 +1007,13 @@ function emitTailwindTokens(tokens, lockName, capturedAt, lockRef) {
   const { durations, easings } = motionEntries(tokens);
   if (durations.length > 0) tw.transitionDuration = Object.fromEntries(durations.map(([n]) => [n, `var(--motion-${n})`]));
   if (easings.length > 0) tw.transitionTimingFunction = Object.fromEntries(easings.map(([n]) => [n, `var(--motion-ease-${n})`]));
+  // The four optional scales, again only when present. screens carries the px itself: a media
+  // query cannot read a custom property.
+  const scales = scaleEntries(tokens);
+  if (scales.opacity.length > 0) tw.opacity = Object.fromEntries(scales.opacity.map(([k]) => [k, `var(--opacity-${k})`]));
+  if (scales.blur.length > 0) tw.blur = Object.fromEntries(scales.blur.map(([k]) => [k, `var(--blur-${k})`]));
+  if (scales.zIndex.length > 0) tw.zIndex = Object.fromEntries(scales.zIndex.map(([k]) => [k, `var(--z-${k})`]));
+  if (scales.breakpoints.length > 0) tw.screens = Object.fromEntries(scales.breakpoints.map(([k, v]) => [k, `${v}px`]));
   return [
     `/* tailwind.tokens.cjs — DERIVED from ${lockRef} ("${lockName}", captured ${capturedAt})`,
     ' * by scripts/capture-figma.mjs. HAND-EDITING BANNED (CONTRACT.md): edit the lock',
@@ -986,6 +1108,13 @@ function emitDtcg(tokens, lockName, capturedAt, lockRef) {
     }
     if (Array.isArray(tokens.devices.kinds)) out.devices.kinds = { $value: tokens.devices.kinds };
   }
+
+  const scales = scaleEntries(tokens);
+  const group = (type, entries, value) => Object.assign({ $type: type }, Object.fromEntries(entries.map(([k, v]) => [k, { $value: value(v) }])));
+  if (scales.opacity.length) out.opacity = group('number', scales.opacity, (v) => v);
+  if (scales.blur.length) out.blur = group('dimension', scales.blur, (v) => `${v}px`);
+  if (scales.zIndex.length) out.zIndex = group('number', scales.zIndex, (v) => v);
+  if (scales.breakpoints.length) out.breakpoint = group('dimension', scales.breakpoints, (v) => `${v}px`);
   return JSON.stringify(out, null, 2) + '\n';
 }
 
@@ -1093,7 +1222,7 @@ if (args.derive) {
   for (const w of written) console.log(`  assets:  ${w}`);
   console.log(`  hashed:  ${hashedRefs} referenced asset(s) (fonts[].files, screens[].referenceImage) into meta.provenance.artifacts`);
   console.log(`  tokens hash: ${provenance.lockTokensHash}`);
-  for (const w of deviceEntries(dLock.tokens).warnings) console.warn(`  warning: ${w}`);
+  for (const w of [...deviceEntries(dLock.tokens).warnings, ...scaleEntries(dLock.tokens).warnings]) console.warn(`  warning: ${w}`);
   process.exit(0);
 }
 
@@ -1237,7 +1366,7 @@ console.log(
 );
 derived.written.forEach((p, i) => console.log(`  ${i === 0 ? 'assets: ' : '        '} ${p}`));
 console.log(`  tokens hash: ${derived.provenance.lockTokensHash}`);
-for (const w of deviceEntries(lock.tokens).warnings) warn(w);
+for (const w of [...deviceEntries(lock.tokens).warnings, ...scaleEntries(lock.tokens).warnings]) warn(w);
 if (unmapped > 0) console.log(`  unmapped variableDefs entries: ${unmapped} (see warnings)`);
 if (scopeRouted > 0 || scopeDisagreements > 0) console.log(`  scopes:  ${scopeRouted} routed by declared scope · ${scopeDisagreements} name/scope disagreement(s) (see warnings)`);
 if (warnings.length > 0) {

@@ -6,6 +6,24 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
 ## Unreleased
 
 ### Added
+- **`capture-figma.mjs` derives and emits the four optional scales.** Variables named
+  `opacity|alpha/…`, `blur/…`, `z-index|zindex|z/<role>` and `breakpoint/<name>` become
+  `tokens.opacity`, `tokens.blur`, `tokens.zIndex` and `tokens.breakpoints`. An opacity may be a
+  fraction, a percentage, or a number over 1 and up to 100, which is how Figma stores an opacity
+  variable: that one is read as a percentage and a warning says so. A variable scoped `OPACITY`
+  with no family in its name joins the scale by its scope. Blur and breakpoints take px only
+  (`0.5rem` and `48em` are skipped with a warning, not read as numbers). The three derived files
+  carry them only when the lock does: `--opacity-<percent>`, `--blur-<px>`, `--z-<role>` and
+  `--breakpoint-<name>` in `tokens.css`; `opacity`, `blur`, `zIndex` and `screens` in
+  `tailwind.tokens.cjs` (`screens` holds the px itself, because a media query cannot read a custom
+  property); four typed groups in `tokens.dtcg.json`. On `--derive`, an entry of a hand-edited
+  lock that could not be one safe declaration (a role name with a space or a brace, an opacity
+  over 1, a negative blur) is left out and named in a warning.
+  **No change for a lock without the scales:** the motion fixture, which ships its derived
+  files, re-derives byte for byte, so recorded provenance hashes stay valid.
+  **Proof:** the token-scales test under `fixtures/capture/` (15 cases); 32 of 32 planted breaks
+  caught. One older test used `OPACITY` as its example of a scope with no lock family; it now
+  uses `WIDTH_HEIGHT`.
 - **Four more scales a lock can declare** (schema: additive, all optional; lint section
   `token-scales`, WARN, the class of `tokens-only-spacing`). `tokens.opacity` (a list, 0 to 1),
   `tokens.blur` (a list in px), `tokens.zIndex` (layer role → integer) and `tokens.breakpoints`
@@ -31,8 +49,7 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   breakpoints (15) in 180 files, every one a real value of its kind: that is the drift these
   scales would hold once a system declares them.
   **It cannot see:** a value from `var()` or `calc()`, a unit other than px for blur and
-  breakpoints, a utility class, and a style object in script. `capture-figma.mjs` does not emit
-  the new families into the derived token files. The families and the phrase "the gate decides
+  breakpoints, a utility class, and a style object in script. The families and the phrase "the gate decides
   the field" come from the review of ux-ui-agent-skills (NOTICE).
 - **The mirrored render** (`rtl-overflow`, ERROR, in the layout gate). A screen whose `locales`
   (its own, else the lock's `content.locales`) include a right-to-left one (`ar`, `he`, `fa`,

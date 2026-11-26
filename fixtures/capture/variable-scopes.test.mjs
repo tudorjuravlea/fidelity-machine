@@ -58,7 +58,7 @@ test('a name family that disagrees with the declared scopes is warned, routed by
 });
 
 test('ALL_SCOPES and a scope the lock has no family for say nothing', () => {
-  const r = capture({ ...base, 'Radius/Pill': 999, 'spacing/md': 16 }, { variableScopes: { 'Radius/Pill': ['ALL_SCOPES'], 'spacing/md': ['OPACITY'] } });
+  const r = capture({ ...base, 'Radius/Pill': 999, 'spacing/md': 16 }, { variableScopes: { 'Radius/Pill': ['ALL_SCOPES'], 'spacing/md': ['WIDTH_HEIGHT'] } });
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stdout, /disagreement/);
   assert.equal(r.lock.tokens.radii.pill, 999);
