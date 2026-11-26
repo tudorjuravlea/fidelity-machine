@@ -188,7 +188,11 @@ test('a React component fixture takes its behaviour from the pinned React build,
   const lockDir = path.join(skill, 'captures', 'golden');
   cpSync(path.join(ENGINE, 'fixtures', 'golden'), lockDir, { recursive: true });
   mkdirSync(path.join(lockDir, 'assets'), { recursive: true });
-  writeFileSync(path.join(lockDir, 'assets', 'tokens.css'), ':root { --surface1: #ffffff; --text1: #1c1b18; --text2: #6b675e; --accent: #0f5132; }\n');
+  // The capture's stylesheet declares a face for every font file the golden lock names (none in
+  // this tree's golden; a tree whose golden carries a font has a builder that asks for it).
+  const faces = (JSON.parse(readFileSync(path.join(lockDir, 'design-lock.json'), 'utf8')).fonts ?? [])
+    .flatMap((f) => (f.files ?? []).map((rel) => `@font-face { font-family: "${f.family}"; src: url("../${rel}") format("woff2"); }\n`)).join('');
+  writeFileSync(path.join(lockDir, 'assets', 'tokens.css'), `${faces}:root { --surface1: #ffffff; --text1: #1c1b18; --text2: #6b675e; --accent: #0f5132; }\n`);
   cpSync(path.join(ENGINE, 'fixtures', 'ui-sdk', 'react'), path.join(skill, 'library', 'fixtures'), { recursive: true });
   writeFileSync(path.join(skill, 'library', 'fixtures', 'settings.fixture.tsx'), REACT_FIXTURE);
   const lockPath = path.join(lockDir, 'design-lock.json');
