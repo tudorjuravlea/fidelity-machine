@@ -487,6 +487,15 @@ lock-impacting changes are classified per CONTRACT.md §Change classes.
   planted in the README and 7 of 7 in CONTRACT.md were caught. It cannot tell whether a
   sentence is true in any way that is not a name, a flag, a path, a count or an order. The
   practice of holding a README's numbers to the repository follows ux-ui-agent-skills (NOTICE).
+- **The planted-break runner could not run inside a workspace** (`scripts/mutation-run.mjs`;
+  class: correction, found by carrying the engine into a tree that vendors it). It linked the
+  root's own `node_modules` into the copy; in an npm workspace most packages are hoisted to a
+  parent folder, the suite in the copy could not import them, and every list stopped with "the
+  suite fails before any break is planted" (exit 2, the honest answer, and no proof). The copy
+  now gets one link per package from every `node_modules` Node itself would search from the
+  root, nearest first.
+  **Proof:** one more case in `fixtures/mutation/` (a package and a scoped package in a parent
+  folder's `node_modules`), red before the change; 10 cases.
 - **Three scripts exited 1 when the browser package was not installed** (`scripts/render.mjs`,
   `operability-audit.mjs`, `motion.mjs`; class: exit-code correction). Each imported the package
   at the top of the file, so a machine without it got Node's own uncaught module error: a stack

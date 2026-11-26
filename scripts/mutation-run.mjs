@@ -29,10 +29,11 @@
 //       a break that leaves the target unparseable (it proves nothing), or a suite that is already
 //       red on the untouched copy
 //
-// The copy gets a `node_modules` link to the root's own, so a suite that imports the pinned
-// browser runs there as it does here. Nothing is installed and nothing leaves the machine.
+// The copy gets a `node_modules` of links to the packages the root can see (its own and any a
+// workspace hoisted to a parent folder), so a suite that imports the pinned browser runs there as
+// it does here. Nothing is installed and nothing leaves the machine.
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -66,6 +67,26 @@ function parseArgs(argv) {
   }
   if (!args.list) die2(`no list given\n${usage()}`);
   return args;
+}
+
+// The copy's node_modules: one link per package, from every node_modules folder Node itself would
+// search from the root, nearest first. In a workspace npm hoists packages to a parent folder, and
+// the copy sits in a temp folder from which nothing of that can be reached by walking up.
+function linkModules(root, dest) {
+  const link = (from, to) => { if (!existsSync(to)) symlinkSync(from, to, 'dir'); };
+  for (let dir = root; ; dir = path.dirname(dir)) {
+    const modules = path.join(dir, 'node_modules');
+    if (existsSync(modules)) {
+      mkdirSync(dest, { recursive: true });
+      for (const name of readdirSync(modules)) {
+        if (name.startsWith('.')) continue;
+        if (!name.startsWith('@')) { link(path.join(modules, name), path.join(dest, name)); continue; }
+        mkdirSync(path.join(dest, name), { recursive: true });
+        for (const scoped of readdirSync(path.join(modules, name))) link(path.join(modules, name, scoped), path.join(dest, name, scoped));
+      }
+    }
+    if (path.dirname(dir) === dir) break;
+  }
 }
 
 const occurrences = (text, find) => (find === '' ? 0 : text.split(find).length - 1);
@@ -102,8 +123,7 @@ async function main() {
     }
     const target = path.join(work, list.target);
     if (!existsSync(target)) die2(`the target ${list.target} is not inside any copied path (${list.copy.join(', ')})`);
-    const modules = path.join(args.root, 'node_modules');
-    if (existsSync(modules)) symlinkSync(modules, path.join(work, 'node_modules'), 'dir');
+    linkModules(args.root, path.join(work, 'node_modules'));
 
     const [cmd, ...rest] = list.test;
     // NODE_TEST_CONTEXT is dropped: with it a nested `node --test` reports to its parent runner and

@@ -97,3 +97,28 @@ test('--only runs one break by name; an unknown name is a usage error', () => {
   const none = run([breakAdd], { extra: ['--only', 'nope'] });
   assert.equal(none.status, 2, none.out);
 });
+
+test('a package hoisted to a parent folder\'s node_modules is found by the suite in the copy, as it is in the tree', () => {
+  // The shape of a workspace: <parent>/node_modules/dep, and the tree under test in <parent>/pkg.
+  const parent = mkdtempSync(path.join(tmpdir(), 'mutation-hoist-'));
+  try {
+    const root = path.join(parent, 'pkg');
+    mkdirSync(path.join(parent, 'node_modules', 'dep'), { recursive: true });
+    mkdirSync(path.join(parent, 'node_modules', '@scope', 'two'), { recursive: true });
+    writeFileSync(path.join(parent, 'node_modules', 'dep', 'package.json'), '{"name":"dep","type":"module","exports":"./index.js"}');
+    writeFileSync(path.join(parent, 'node_modules', 'dep', 'index.js'), 'export const one = 1;\n');
+    writeFileSync(path.join(parent, 'node_modules', '@scope', 'two', 'package.json'), '{"name":"@scope/two","type":"module","exports":"./index.js"}');
+    writeFileSync(path.join(parent, 'node_modules', '@scope', 'two', 'index.js'), 'export const two = 2;\n');
+    mkdirSync(path.join(root, 'lib'), { recursive: true });
+    mkdirSync(path.join(root, 't'));
+    writeFileSync(path.join(root, 'lib', 'calc.mjs'), "import { one } from 'dep';\nimport { two } from '@scope/two';\nexport const three = () => one + two;\n");
+    writeFileSync(path.join(root, 't', 'calc.test.mjs'), "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { three } from '../lib/calc.mjs';\ntest('three', () => assert.equal(three(), 3));\n");
+    const list = { target: 'lib/calc.mjs', copy: ['lib', 't'], test: ['node', '--test', 't/calc.test.mjs'], mutations: [{ name: 'three is one', find: 'one + two', replace: 'one' }] };
+    writeFileSync(path.join(root, 'calc.mutations.mjs'), `export default ${JSON.stringify(list)};\n`);
+    const r = spawnSync(process.execPath, [CLI, path.join(root, 'calc.mutations.mjs'), '--root', root], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /1 of 1 planted breaks caught/);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
